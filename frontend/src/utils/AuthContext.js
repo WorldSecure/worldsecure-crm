@@ -1,5 +1,5 @@
+import api from '../utils/api';  // ← זה החדש
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import axios from 'axios';
 
 const AuthContext = createContext();
 
@@ -13,17 +13,15 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      
-      // If we have token but no user, fetch user data
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
       if (!user) {
-        axios.get('/api/auth/me')
+        api.get('/api/auth/me')
           .then(response => {
             setUser(response.data);
             sessionStorage.setItem('user', JSON.stringify(response.data));
           })
           .catch(() => {
-            // Token is invalid, logout
             logout();
           });
       }
@@ -33,15 +31,15 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await axios.post('/api/auth/login', { email, password });
+      const response = await api.post('/api/auth/login', { email, password });
       const { token: newToken, user: userData } = response.data;
-      
+
       setToken(newToken);
       setUser(userData);
       sessionStorage.setItem('token', newToken);
       sessionStorage.setItem('user', JSON.stringify(userData));
-      axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
-      
+      api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+
       return { success: true };
     } catch (error) {
       return { success: false, error: error.response?.data?.error || 'Login failed' };
@@ -50,7 +48,7 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (username, email, password) => {
     try {
-      await axios.post('/api/auth/register', { username, email, password });
+      await api.post('/api/auth/register', { username, email, password });
       return { success: true };
     } catch (error) {
       return { success: false, error: error.response?.data?.error || 'Registration failed' };
@@ -62,7 +60,7 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     sessionStorage.removeItem('token');
     sessionStorage.removeItem('user');
-    delete axios.defaults.headers.common['Authorization'];
+    delete api.defaults.headers.common['Authorization'];
   };
 
   return (
