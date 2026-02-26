@@ -1,0 +1,473 @@
+
+<!DOCTYPE html>
+<html dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <title>Proposta de Preços No: 4</title>
+  <style>
+    * { box-sizing: border-box; }
+    body > *:first-child { border-top: none !important; margin-top: 0 !important; padding-top: 0 !important; }
+    body::before { display: none !important; }
+    hr:first-of-type { display: none !important; }
+    @media print {
+      .no-print { display: none; }
+      .doc-footer { display: block !important; }
+      @page { margin: 1.5cm 2cm; size: A4; }
+    }
+    .button-container {
+      text-align: center;
+      margin-bottom: 20px;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px;
+    }
+    .btn-print, .btn-email, .btn-close {
+      padding: 12px 24px;
+      margin: 0 8px;
+      font-size: 16px;
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+      font-weight: 600;
+    }
+    .btn-print { background: #3498db; color: white; }
+    .btn-print:hover { background: #2980b9; }
+    .btn-email { background: #27ae60; color: white; }
+    .btn-email:hover { background: #229954; }
+    .btn-close { background: #95a5a6; color: white; }
+    .btn-close:hover { background: #7f8c8d; }
+
+    .doc-footer {
+      display: block;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      border-top: 1px solid #ddd;
+      padding: 6px 0;
+      text-align: center;
+      font-size: 8pt;
+      color: #888;
+      background: white;
+    }
+    body { 
+      font-family: Arial, sans-serif; 
+      max-width: 21cm; 
+      margin: 0 auto; 
+      padding: 20px;
+      font-size: 11pt;
+      direction: ltr;
+      border-top: none;
+    }
+    .header { 
+      display: flex; 
+      justify-content: space-between; 
+      margin-bottom: 20px;
+      align-items: flex-start;
+      border-top: none !important;
+      padding-top: 0;
+    }
+    .company-info {
+      flex: 1;
+    }
+    .company-info h2 {
+      margin: 0;
+      font-size: 16pt;
+      font-weight: bold;
+    }
+    .company-info p {
+      margin: 3px 0;
+      font-size: 10pt;
+    }
+    .date-section {
+      text-align: right;
+      font-weight: bold;
+      font-size: 11pt;
+    }
+    .title-section {
+      text-align: center;
+      margin: 20px 0;
+    }
+    .title-section h1 {
+      margin: 5px 0;
+      font-size: 14pt;
+      font-weight: bold;
+    }
+    .client-section {
+      margin: 15px 0;
+    }
+    .client-section p {
+      margin: 3px 0;
+      font-weight: bold;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    th {
+      background-color: #f0f0f0;
+      padding: 10px;
+      text-align: left;
+      border: 1px solid #000;
+      font-weight: bold;
+      font-size: 10pt;
+    }
+    td {
+      padding: 8px;
+      border: 1px solid #000;
+      font-size: 10pt;
+    }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    .total-row {
+      background-color: #f9f9f9;
+      font-weight: bold;
+      font-size: 12pt;
+    }
+    .footer-section {
+      margin-top: 30px;
+    }
+    .footer-section h3 {
+      font-size: 12pt;
+      font-weight: bold;
+      margin: 10px 0 5px 0;
+    }
+    .footer-section p {
+      margin: 2px 0;
+      font-size: 10pt;
+    }
+    .footer-section ul {
+      margin: 5px 0;
+      padding-left: 20px;
+    }
+    .footer-section li {
+      margin: 2px 0;
+      font-size: 10pt;
+      font-weight: bold;
+    }
+    .bank-details {
+      margin-top: 15px;
+      font-size: 10pt;
+    }
+    .bank-details p {
+      margin: 2px 0;
+    }
+
+    .email-modal-overlay { display:none; position:fixed; top:0;left:0;right:0;bottom:0; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center; }
+    .email-modal-overlay.open { display:flex !important; }
+    .email-modal-box { background:white; border-radius:10px; padding:1.5rem; width:420px; max-width:95vw; box-shadow:0 10px 40px rgba(0,0,0,0.3); }
+    .email-modal-box h3 { margin:0 0 1rem; font-size:1.1rem; }
+    .ac-wrap { position: relative !important; margin-bottom: 1rem; overflow: visible !important; }
+    .ac-wrap input { width: 100%; padding: 0.6rem; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; font-size: 0.95rem; font-family: inherit; }
+    .ac-list { position: fixed !important; background: white !important; border: 1px solid #ccc; border-radius: 8px; max-height: 220px; overflow-y: auto; z-index: 999999 !important; box-shadow: 0 6px 16px rgba(0,0,0,0.2); display: none; min-width: 300px; }
+    .ac-item { padding: 0.5rem 0.85rem; cursor: pointer; border-bottom: 1px solid #f0f0f0; display: block; }
+    .ac-item:hover, .ac-item.ac-active { background: #e8f4fd; }
+    .ac-name { display: block; font-weight: 600; color: #222; font-size: 0.88rem; }
+    .ac-email { display: block; color: #777; font-size: 0.8rem; margin-top: 1px; }
+    .email-modal-box label { display:block; font-weight:600; font-size:0.9rem; margin-bottom:0.3rem; }
+    .email-modal-box input, .email-modal-box textarea { width:100%; padding:0.5rem; border:1px solid #ddd; border-radius:5px; margin-bottom:0.8rem; box-sizing:border-box; font-family:inherit; font-size:0.9rem; }
+    .email-modal-box textarea { height:70px; resize:vertical; }
+    #email-status { font-size:0.85rem; min-height:1.2rem; margin-bottom:0.5rem; }
+  </style>
+</head>
+<body>
+  <div class="button-container no-print">
+    <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar como PDF</button>
+    <button class="btn-email" onclick="document.getElementById('emailModal').classList.add('open')">✉️ Enviar por Email</button>
+    <button class="btn-close" onclick="window.close()">❌ Fechar</button>
+  </div>
+
+  <div class="header">
+    <div class="company-info">
+      <img src="http://localhost:3001/uploads/1771758740570_LOGO NEW.png" alt="Logo" style="max-height: 100px; max-width: 250px;">
+      <h2>WorldSecure LTD</h2>
+      <p><strong>NIF:</strong> 514568237</p>
+      <p><strong>Address:</strong> Nahal-Dan 19/11 Qiryat-Ono 55450 Israel</p>
+    </div>
+    <div class="date-section">
+      13/02/2026
+    </div>
+  </div>
+
+  <div class="client-section">
+    <p>Client Name: Forças Especiais de Angola (FAA)</p>
+  </div>
+
+  <div class="title-section">
+    <h1>Proposta de Preços No: 4</h1>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 8%;">Nº</th>
+        <th style="width: 47%;">Descrição do item</th>
+        <th style="width: 10%;" class="text-center">QTY</th>
+        <th style="width: 17%;" class="text-right">Preço (EURO)</th>
+        <th style="width: 18%;" class="text-right">Total (EURO)</th>
+      </tr>
+    </thead>
+    <tbody>
+      
+        <tr>
+          <td class="text-center">01</td>
+          <td>Luvas táticas</td>
+          <td class="text-center">300</td>
+          <td class="text-right">€ 97.00</td>
+          <td class="text-right">€ 29,100.00</td>
+        </tr>
+      
+        <tr>
+          <td class="text-center">02</td>
+          <td>Colete salva-vidas (Laranja)</td>
+          <td class="text-center">200</td>
+          <td class="text-right">€ 165.00</td>
+          <td class="text-right">€ 33,000.00</td>
+        </tr>
+      
+        <tr>
+          <td class="text-center">03</td>
+          <td>Colete Salva-vidas (Preto)</td>
+          <td class="text-center">200</td>
+          <td class="text-right">€ 165.00</td>
+          <td class="text-right">€ 33,000.00</td>
+        </tr>
+      
+        <tr>
+          <td class="text-center">04</td>
+          <td>Barco inflável Zudiac</td>
+          <td class="text-center">10</td>
+          <td class="text-right">€ 5,750.00</td>
+          <td class="text-right">€ 57,500.00</td>
+        </tr>
+      
+        <tr>
+          <td class="text-center">05</td>
+          <td>Colete Tático- Modelo E8+ (Com Bolsas Táticas e Placas à Prova de Balas)</td>
+          <td class="text-center">50</td>
+          <td class="text-right">€ 3,420.00</td>
+          <td class="text-right">€ 171,000.00</td>
+        </tr>
+      
+        <tr>
+          <td class="text-center">06</td>
+          <td>Placa balística nível 3</td>
+          <td class="text-center">700</td>
+          <td class="text-right">€ 500.00</td>
+          <td class="text-right">€ 350,000.00</td>
+        </tr>
+      
+        <tr>
+          <td class="text-center">07</td>
+          <td>Capacete de combate rápido</td>
+          <td class="text-center">50</td>
+          <td class="text-right">€ 2,750.00</td>
+          <td class="text-right">€ 137,500.00</td>
+        </tr>
+      
+        <tr>
+          <td class="text-center">08</td>
+          <td>Protetores de Joelho</td>
+          <td class="text-center">300</td>
+          <td class="text-right">€ 93.00</td>
+          <td class="text-right">€ 27,900.00</td>
+        </tr>
+      
+        <tr>
+          <td class="text-center">09</td>
+          <td>Caiaque</td>
+          <td class="text-center">10</td>
+          <td class="text-right">€ 2,950.00</td>
+          <td class="text-right">€ 29,500.00</td>
+        </tr>
+      
+        <tr>
+          <td class="text-center">10</td>
+          <td>Corda de descida rápida (Forças Especiais)</td>
+          <td class="text-center">100</td>
+          <td class="text-right">€ 14.50</td>
+          <td class="text-right">€ 1,450.00</td>
+        </tr>
+      
+        <tr>
+          <td class="text-center">11</td>
+          <td>Motor Yamaha F15</td>
+          <td class="text-center">10</td>
+          <td class="text-right">€ 10,800.00</td>
+          <td class="text-right">€ 108,000.00</td>
+        </tr>
+      
+        <tr>
+          <td class="text-center">12</td>
+          <td>Cilindro de mergulho alumínio 12L</td>
+          <td class="text-center">15</td>
+          <td class="text-right">€ 1,950.00</td>
+          <td class="text-right">€ 29,250.00</td>
+        </tr>
+      
+    </tbody>
+  </table>
+
+  <div style="text-align: right; margin: 20px 0;">
+    <p style="font-size: 14pt; font-weight: bold;">
+      Total (EURO): € 1,007,200.00
+    </p>
+  </div>
+
+  <div class="footer-section">
+    <h3>Observações</h3>
+    <ul>
+      <li>Esta proforma tem a validade de 30 dias.</li>
+      <li>Todos os preços são CIF</li>
+    </ul>
+
+    
+
+    <div class="bank-details">
+      <p><strong>Bank Name:</strong> Bank Leumi LE Israel B.M. Concord Branch</p>
+      <p><strong>Bank Address:</strong> David Ben Gurion 9, 18th Floor, Bnei Brak, Israel</p>
+      <p><strong>Swift Code:</strong> LUMIILITTLV</p>
+      <p><strong>IBAN:</strong> IL60 0108 5500 0003 7690 096</p>
+    </div>
+  </div>
+
+
+  <div class="email-modal-overlay no-print" id="emailModal">
+    <div class="email-modal-box">
+      <h3>✉️ Enviar por Email</h3>
+      <label>Endereço de Email</label>
+      <div class="ac-wrap">
+      <input type="text" id="emailTo" placeholder="example@domain.com" autocomplete="off"
+        oninput="acFilter(this.value)"
+        onfocus="acFilter(this.value)"
+        onblur="setTimeout(function(){var b=document.getElementById('acList');if(b)b.style.display='none'},200)"
+        onkeydown="acKey(event)">
+      <div id="acList" class="ac-list"></div>
+    </div>
+      <label>Assunto</label>
+      <input type="text" id="emailSubject" value="Documento em anexo">
+      <label>Mensagem</label>
+      <textarea id="emailBody">Segue em anexo o documento para sua análise.</textarea>
+      <div id="email-status"></div>
+      <div style="display:flex;gap:0.75rem;justify-content:flex-end">
+        <button onclick="document.getElementById('emailModal').classList.remove('open')" style="padding:0.5rem 1rem;background:#95a5a6;color:white;border:none;border-radius:5px;cursor:pointer">Cancelar</button>
+        <button onclick="sendDocumentEmail()" style="padding:0.5rem 1rem;background:#27ae60;color:white;border:none;border-radius:5px;cursor:pointer">📤 Enviar</button>
+      </div>
+    </div>
+  </div>
+  <script>
+  window._authToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiZW1haWwiOiJhbWl0QHdvcmxkLXNlY3VyZS5jb20iLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3NzE3NjA1MjUsImV4cCI6MTc3MTg0NjkyNX0.U-595B0_oFFo3UXrNp1VRaKamG-oeRzKuz7BQhN7fDA';
+  var _ac = [];
+  var _acIdx = -1;
+  (function loadContacts() {
+    var tok = (window._authToken || localStorage.getItem('token') || '');
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/api/email-contacts');
+    xhr.setRequestHeader('Authorization', 'Bearer ' + tok);
+    xhr.onload = function() {
+      if (xhr.status === 200) {
+        try { _ac = JSON.parse(xhr.responseText); } catch(e) {}
+      }
+    };
+    xhr.send();
+  })();
+
+  function acFilter(val) {
+    var box = document.getElementById('acList');
+    _acIdx = -1;
+    if (!val) { box.style.display = 'none'; return; }
+    var q = val.toLowerCase();
+    // פצל לקוחות עם כמה מיילים לפריטים נפרדים
+    var expanded = [];
+    for (var j = 0; j < _ac.length; j++) {
+      var c = _ac[j];
+      if (!c.email) continue;
+      var emails = c.email.split(/[;,]/).map(function(e){ return e.trim(); }).filter(Boolean);
+      for (var k = 0; k < emails.length; k++) {
+        expanded.push({ name: c.name, email: emails[k], type: c.type });
+      }
+    }
+    var matches = expanded.filter(function(c) {
+      return c.name.toLowerCase().indexOf(q) >= 0 || c.email.toLowerCase().indexOf(q) >= 0;
+    }).slice(0, 10);
+    if (!matches.length) { box.style.display = 'none'; return; }
+    var html = '';
+    for (var i = 0; i < matches.length; i++) {
+      var c = matches[i];
+      html += '<div class="ac-item" data-email="' + c.email.replace(/"/g, '&quot;') + '" data-i="' + i + '"' +
+        ' onmousedown="acSelect(this.dataset.email)">' +
+        '<span class="ac-name">' + c.name + '</span>' +
+        '<span class="ac-email">' + c.email + '</span>' +
+        '</div>';
+    }
+    box.innerHTML = html;
+    var inp = document.getElementById('emailTo');
+    var rect = inp.getBoundingClientRect();
+    box.style.top = (rect.bottom + 2) + 'px';
+    box.style.left = rect.left + 'px';
+    box.style.width = rect.width + 'px';
+    box.style.display = 'block';
+  }
+
+  function acSelect(email) {
+    document.getElementById('emailTo').value = email;
+    document.getElementById('acList').style.display = 'none';
+  }
+
+  function acKey(e) {
+    var box = document.getElementById('acList');
+    var items = box.querySelectorAll('.ac-item');
+    if (!items.length) return;
+    if (e.key === 'ArrowDown') { _acIdx = Math.min(_acIdx + 1, items.length - 1); }
+    else if (e.key === 'ArrowUp') { _acIdx = Math.max(_acIdx - 1, 0); }
+    else if (e.key === 'Enter' && _acIdx >= 0) {
+      e.preventDefault();
+      acSelect(items[_acIdx].getAttribute('data-email'));
+      return;
+    } else return;
+    for (var i = 0; i < items.length; i++) {
+      items[i].style.background = i === _acIdx ? '#e8f4fd' : '';
+    }
+    items[_acIdx].scrollIntoView({ block: 'nearest' });
+  }
+
+  window._docType = 'proforma';
+  window._docId = '4';
+  window._docLang = 'pt';
+  async function sendDocumentEmail() {
+    const to = document.getElementById('emailTo').value;
+    const subject = document.getElementById('emailSubject').value;
+    const body = document.getElementById('emailBody').value;
+    const status = document.getElementById('email-status');
+    if (!to) { status.style.color='red'; status.textContent='נא הכנס כתובת מייל'; return; }
+    status.style.color='#555'; status.textContent='⏳ שולח...';
+    const token = window._authToken || localStorage.getItem('token') || sessionStorage.getItem('token');
+    try {
+      const res = await fetch('/api/send-email', {
+        method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+        body: JSON.stringify({ to, subject, body, docType: window._docType, docId: window._docId, docLang: window._docLang, lcNumber: window._lcNumber, docContact: window._docContact })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        status.style.color='green'; 
+        const lang = window._docLang || 'en';
+        status.textContent='✅ ' + (lang==='en'?'Email sent successfully!':lang==='pt'?'Email enviado com sucesso!':'המייל נשלח בהצלחה!');
+        setTimeout(()=>document.getElementById('emailModal').classList.remove('open'), 3000);
+      } else {
+        status.style.color='red';
+        status.textContent = data.error?.includes('SMTP') ? '⚠️ יש להגדיר SMTP בהגדרות החברה' : '❌ '+data.error;
+      }
+    } catch(e) { 
+      console.error('Email send error:', e);
+      status.style.color='red'; 
+      status.textContent='❌ שגיאה: ' + (e.message || 'שגיאה בשליחה'); 
+    }
+  }
+  </script>
+  <div class="doc-footer">
+    WorldSecure LTD &nbsp;&bull;&nbsp; info@world-secure.com
+  </div>
+</body>
+</html>
+    

@@ -1,0 +1,620 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { useLanguage } from '../utils/LanguageContext';
+import { useAuth } from '../utils/AuthContext';
+
+const getProductName = (product, lang) => {
+  if (lang === 'en') return product.name;
+  if (lang === 'he' && product.name_he) return product.name_he;
+  if (lang === 'pt' && product.name_pt) return product.name_pt;
+  return product.name; // fallback לאנגלית אם אין תרגום
+};
+
+const getCategoryName = (product, lang) => {
+  if (lang === 'he' && product.category_name_he) return product.category_name_he;
+  if (lang === 'pt' && product.category_name_pt) return product.category_name_pt;
+  return product.category_name || '-';
+};
+
+const formatNumber = (num) => {
+  if (!num || num === '') return '';
+  return parseFloat(num).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+};
+
+function Products() {
+  const { t, language } = useLanguage();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortField, setSortField] = useState('name');
+  const [sortDirection, setSortDirection] = useState('asc');
+  const [priceHistory, setPriceHistory] = useState([]);
+  const [showAddPrice, setShowAddPrice] = useState(false);
+  const [newPrice, setNewPrice] = useState({ price: '', currency: 'ILS', effective_date: new Date().toISOString().split('T')[0] });
+  
+  const [formData, setFormData] = useState({
+    sku: '',
+    name: '',
+    description: '',
+    category_id: '',
+    price: '',
+    currency: 'ILS',
+    unit: 'unit',
+    quantity: 0,
+    min_quantity: 0
+  });
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // ESC key handler for modal
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape' && showModal) {
+        setShowModal(false);
+      }
+    };
+    
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [showModal]);
+
+
+  const fetchData = async () => {
+    try {
+      const [productsRes, categoriesRes] = await Promise.all([
+        axios.get('/api/products'),
+        axios.get('/api/categories')
+      ]);
+      
+      setProducts(productsRes.data);
+      setCategories(categoriesRes.data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      setLoading(false);
+    }
+  };
+
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const getSortedProducts = () => {
+    let filtered = products.filter(product =>
+      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.sku.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    return filtered.sort((a, b) => {
+      let aValue, bValue;
+      
+      if (sortField === 'category') {
+        aValue = (a.category_name || '').toLowerCase();
+        bValue = (b.category_name || '').toLowerCase();
+      } else {
+        aValue = (a[sortField] || '').toString().toLowerCase();
+        bValue = (b[sortField] || '').toString().toLowerCase();
+      }
+
+      if (sortDirection === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    try {
+      // תרגום אוטומטי אם השם השתנה או מוצר חדש
+      let name_he = editingProduct?.name_he || null;
+      let name_pt = editingProduct?.name_pt || null;
+      let name_en = formData.name; // ברירת מחדל - name הוא אנגלית
+      const nameChanged = !editingProduct || editingProduct.name !== formData.name;
+
+      if (nameChanged) {
+        try {
+          const transRes = await axios.post('/api/products/translate', {
+            name: formData.name,
+            sourceLang: language  // שולח את שפת המערכת הנוכחית
+          });
+          name_he = transRes.data.he || null;
+          name_pt = transRes.data.pt || null;
+          name_en = transRes.data.en || formData.name;
+        } catch (e) {
+          console.warn('Translation failed, saving without translation');
+          // שמור את השם בשדה הנכון לפי שפת המקור
+          if (language === 'he') name_he = formData.name;
+          if (language === 'pt') name_pt = formData.name;
+        }
+      }
+
+      // name (אנגלית) תמיד נשמר
+      const finalName = language === 'en' ? formData.name : name_en;
+      const payload = { ...formData, name: finalName, name_he, name_pt };
+
+      if (editingProduct) {
+        await axios.put(`/api/products/${editingProduct.id}`, payload);
+      } else {
+        await axios.post('/api/products', payload);
+      }
+      
+      alert(t('success'));
+      setShowModal(false);
+      resetForm();
+      fetchData();
+    } catch (error) {
+      alert(t('error') + ': ' + (error.response?.data?.error || error.message));
+    }
+  };
+
+  const handleEdit = async (product) => {
+    setEditingProduct(product);
+    setFormData({
+      sku: product.sku,
+      name: product.name,
+      description: product.description || '',
+      category_id: product.category_id || '',
+      price: product.price || '',
+      currency: product.currency || 'ILS',
+      unit: product.unit,
+      quantity: product.quantity,
+      min_quantity: product.min_quantity
+    });
+    setShowAddPrice(false);
+    setNewPrice({ price: '', currency: product.currency || 'ILS', effective_date: new Date().toISOString().split('T')[0] });
+    try {
+      const res = await axios.get(`/api/products/${product.id}/price-history`);
+      setPriceHistory(res.data);
+    } catch(e) { setPriceHistory([]); }
+    setShowModal(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm(t('confirm_delete'))) return;
+    
+    try {
+      await axios.delete(`/api/products/${id}`);
+      alert(t('success'));
+      fetchData();
+    } catch (error) {
+      alert(t('error') + ': ' + (error.response?.data?.error || error.message));
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      sku: '',
+      name: '',
+      description: '',
+      category_id: '',
+      price: '',
+      currency: 'ILS',
+      unit: 'unit',
+      quantity: 0,
+      min_quantity: 0
+    });
+    setEditingProduct(null);
+  };
+
+  const getUnitTranslation = (unit) => {
+    const unitMap = {
+      'unit': 'unit_piece',
+      'box': 'unit_box',
+      'carton': 'unit_carton',
+      'kg': 'unit_kg',
+      'liter': 'unit_liter',
+      'meter': 'unit_meter'
+    };
+    return t(unitMap[unit] || 'unit_piece');
+  };
+
+  const sortedProducts = getSortedProducts();
+
+  if (loading) {
+    return <div className="loading"><div className="spinner"></div></div>;
+  }
+
+  const SortIcon = ({ field }) => {
+    if (sortField !== field) return <span style={{ opacity: 0.3 }}>⬍</span>;
+    return sortDirection === 'asc' ? '▲' : '▼';
+  };
+
+  return (
+    <div>
+      <div className="page-header">
+        <h2>{t('products')}</h2>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <h3 className="card-title">{t('products')}</h3>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            {isAdmin && (
+              <button
+                className="btn btn-secondary"
+                onClick={async () => {
+                  if (!window.confirm('תרגם אוטומטית את כל המוצרים שאין להם תרגום?')) return;
+                  try {
+                    const res = await axios.post('/api/products/translate-existing');
+                    alert(`✅ ${res.data.message}`);
+                    fetchData();
+                  } catch (e) {
+                    alert('שגיאה בתרגום: ' + e.message);
+                  }
+                }}
+              >
+                🌐 {t('translate_products') || 'תרגם מוצרים'}
+              </button>
+            )}
+            <button 
+              className="btn btn-primary"
+              onClick={() => { resetForm(); setShowModal(true); }}
+            >
+              {t('add_product')}
+            </button>
+          </div>
+        </div>
+
+        <div className="form-group" style={{ marginBottom: '1rem' }}>
+          <input
+            type="text"
+            className="form-input"
+            placeholder={t('search')}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+
+        <div className="table-container">
+          <table className="table">
+            <thead>
+              <tr>
+                <th onClick={() => handleSort('sku')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  {t('sku')} <SortIcon field="sku" />
+                </th>
+                <th onClick={() => handleSort('name')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  {t('name')} <SortIcon field="name" />
+                </th>
+                <th onClick={() => handleSort('category')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  {t('category')} <SortIcon field="category" />
+                </th>
+                <th>{t('quantity')}</th>
+                <th>{t('min_quantity')}</th>
+                {isAdmin && <th>{t('price')}</th>}
+                <th>{t('unit')}</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={isAdmin ? "8" : "7"} className="text-center">{t('no_data')}</td>
+                </tr>
+              ) : (
+                sortedProducts.map(product => (
+                  <tr key={product.id}>
+                    <td>{product.sku}</td>
+                    <td>{getProductName(product, language)}</td>
+                    <td>{getCategoryName(product, language)}</td>
+                    <td>
+                      {product.quantity <= product.min_quantity ? (
+                        <span className="badge badge-danger">{product.quantity}</span>
+                      ) : (
+                        <span className="badge badge-success">{product.quantity}</span>
+                      )}
+                    </td>
+                    <td>{product.min_quantity}</td>
+                    {isAdmin && <td>{product.price ? `${parseFloat(product.price).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ${product.currency || 'ILS'}` : '-'}</td>}
+                    <td>{getUnitTranslation(product.unit)}</td>
+                    <td>
+                      <div className="table-actions">
+                        <button 
+                          className="btn btn-secondary"
+                          onClick={() => handleEdit(product)}
+                        >
+                          {t('edit')}
+                        </button>
+                        <button 
+                          className="btn btn-danger"
+                          onClick={() => handleDelete(product.id)}
+                        >
+                          {t('delete')}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {showModal && (
+        <div className="modal-overlay">
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">
+                {editingProduct ? t('edit_product') : t('add_product')}
+              </h3>
+              <button 
+                className="modal-close"
+                onClick={() => setShowModal(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit}>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">{t('sku')} *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={formData.sku}
+                    onChange={(e) => setFormData({...formData, sku: e.target.value})}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">
+                    {t('name')} *
+                    <span style={{ marginRight: '0.5rem', fontSize: '0.8rem', color: '#666', fontWeight: 'normal' }}>
+                      ({language === 'he' ? '🇮🇱 עברית' : language === 'pt' ? '🇵🇹 Português' : '🇬🇧 English'} - {t('auto_translate') || 'יתורגם אוטומטית'})
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={formData.name}
+                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">{t('description')}</label>
+                <textarea
+                  className="form-textarea"
+                  value={formData.description}
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">{t('category')}</label>
+                  <select
+                    className="form-select"
+                    value={formData.category_id}
+                    onChange={(e) => setFormData({...formData, category_id: e.target.value})}
+                  >
+                    <option value="">{t('select_category')}</option>
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">{t('unit')}</label>
+                  <select
+                    className="form-select"
+                    value={formData.unit}
+                    onChange={(e) => setFormData({...formData, unit: e.target.value})}
+                  >
+                    <option value="unit">{t('unit_piece')}</option>
+                    <option value="box">{t('unit_box')}</option>
+                    <option value="carton">{t('unit_carton')}</option>
+                    <option value="kg">{t('unit_kg')}</option>
+                    <option value="liter">{t('unit_liter')}</option>
+                    <option value="meter">{t('unit_meter')}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-row">
+                {isAdmin && (
+                  <div className="form-group">
+                    <label className="form-label">{t('price')}</label>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="form-input"
+                        value={formData.price}
+                        onChange={(e) => setFormData({...formData, price: e.target.value})}
+                        onBlur={(e) => {
+                          if (e.target.value) {
+                            const formatted = parseFloat(e.target.value).toFixed(2);
+                            setFormData({...formData, price: formatted});
+                          }
+                        }}
+                        placeholder="0.00"
+                        style={{ textAlign: 'right', fontFamily: 'monospace', flex: 2 }}
+                      />
+                      <select
+                        className="form-select"
+                        value={formData.currency}
+                        onChange={(e) => setFormData({...formData, currency: e.target.value})}
+                        style={{ flex: 1 }}
+                      >
+                        <option value="ILS">₪ ILS</option>
+                        <option value="USD">$ USD</option>
+                        <option value="EUR">€ EUR</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {/* היסטוריית מחירים - רק בעריכה */}
+                {isAdmin && editingProduct && (
+                  <div className="form-group" style={{ background: '#f8f9fa', borderRadius: '8px', padding: '0.75rem', border: '1px solid #e9ecef' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <label className="form-label" style={{ margin: 0 }}>📈 {t('price_history') || 'היסטוריית מחירים'}</label>
+                      <button type="button"
+                        onClick={() => setShowAddPrice(!showAddPrice)}
+                        style={{ background: '#007bff', color: 'white', border: 'none', borderRadius: '4px', padding: '0.25rem 0.7rem', fontSize: '0.8rem', cursor: 'pointer' }}>
+                        {showAddPrice ? '✕' : `+ ${t('add_price') || 'הוסף מחיר חדש'}`}
+                      </button>
+                    </div>
+
+                    {/* שדה הוספת מחיר */}
+                    {showAddPrice && (
+                      <div style={{ background: 'white', border: '1px solid #dee2e6', borderRadius: '6px', padding: '0.6rem', marginBottom: '0.5rem' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 130px auto', gap: '0.4rem', alignItems: 'flex-end' }}>
+                          <div>
+                            <label style={{ fontSize: '0.75rem', color: '#666', display: 'block', marginBottom: '2px' }}>{t('price') || 'מחיר'}</label>
+                            <input 
+                              type="number" 
+                              step="0.01"
+                              placeholder="0.00" 
+                              className="form-input"
+                              value={newPrice.price}
+                              onChange={e => setNewPrice(p => ({ ...p, price: e.target.value }))}
+                              onBlur={(e) => {
+                                if (e.target.value) {
+                                  const formatted = parseFloat(e.target.value).toFixed(2);
+                                  setNewPrice(p => ({ ...p, price: formatted }));
+                                }
+                              }}
+                              style={{ textAlign: 'right', fontFamily: 'monospace' }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '0.75rem', color: '#666', display: 'block', marginBottom: '2px' }}>{t('currency') || 'מטבע'}</label>
+                            <select className="form-select" value={newPrice.currency} onChange={e => setNewPrice(p => ({ ...p, currency: e.target.value }))}>
+                              <option value="ILS">ILS</option>
+                              <option value="USD">USD</option>
+                              <option value="EUR">EUR</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '0.75rem', color: '#666', display: 'block', marginBottom: '2px' }}>{t('date') || 'תאריך'}</label>
+                            <input type="date" className="form-input"
+                              value={newPrice.effective_date}
+                              onChange={e => setNewPrice(p => ({ ...p, effective_date: e.target.value }))} />
+                          </div>
+                          <button type="button"
+                            onClick={async () => {
+                              if (!newPrice.price) return;
+                              try {
+                                await axios.post(`/api/products/${editingProduct.id}/price-history`, newPrice);
+                                const res = await axios.get(`/api/products/${editingProduct.id}/price-history`);
+                                setPriceHistory(res.data);
+                                setFormData(p => ({ ...p, price: newPrice.price, currency: newPrice.currency }));
+                                setShowAddPrice(false);
+                                setNewPrice({ price: '', currency: newPrice.currency, effective_date: new Date().toISOString().split('T')[0] });
+                              } catch(e) { alert('שגיאה'); }
+                            }}
+                            style={{ background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', padding: '0.35rem 0.7rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+                            💾 {t('save') || 'שמור'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* טבלת היסטוריה */}
+                    {priceHistory.length > 0 ? (
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                        <thead>
+                          <tr style={{ background: '#e9ecef' }}>
+                            <th style={{ padding: '0.3rem 0.6rem', textAlign: 'right', borderBottom: '1px solid #dee2e6' }}>{t('date') || 'תאריך'}</th>
+                            <th style={{ padding: '0.3rem 0.6rem', textAlign: 'right', borderBottom: '1px solid #dee2e6' }}>{t('price') || 'מחיר'}</th>
+                            <th style={{ padding: '0.3rem 0.6rem', textAlign: 'right', borderBottom: '1px solid #dee2e6' }}>{t('currency') || 'מטבע'}</th>
+                            <th style={{ width: '40px', borderBottom: '1px solid #dee2e6' }}></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {priceHistory.map((h, i) => (
+                            <tr key={h.id} style={{ background: i === 0 ? '#e8f5e9' : 'white', borderBottom: '1px solid #f0f0f0' }}>
+                              <td style={{ padding: '0.3rem 0.6rem' }}>{h.effective_date}</td>
+                              <td style={{ padding: '0.3rem 0.6rem', fontWeight: i === 0 ? 700 : 400 }}>
+                                {parseFloat(h.price).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                {i === 0 && <span style={{ marginRight: '0.3rem', color: '#28a745', fontSize: '0.75rem' }}> ✓ {t('current') || 'נוכחי'}</span>}
+                              </td>
+                              <td style={{ padding: '0.3rem 0.6rem', color: '#666' }}>{h.currency}</td>
+                              <td style={{ padding: '0.3rem 0.4rem', textAlign: 'center' }}>
+                                <button type="button" onClick={async () => {
+                                  if (!window.confirm(t('confirm_delete') || 'למחוק?')) return;
+                                  await axios.delete(`/api/products/${editingProduct.id}/price-history/${h.id}`);
+                                  const res = await axios.get(`/api/products/${editingProduct.id}/price-history`);
+                                  setPriceHistory(res.data);
+                                }} style={{ background: 'none', border: 'none', color: '#dc3545', cursor: 'pointer', fontSize: '0.85rem' }}>🗑️</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div style={{ color: '#aaa', fontSize: '0.82rem', textAlign: 'center', padding: '0.5rem' }}>
+                        {t('no_price_history') || 'אין היסטוריית מחירים'}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label className="form-label">{t('quantity')}</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    value={formData.quantity}
+                    onChange={(e) => setFormData({...formData, quantity: e.target.value})}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">{t('min_quantity')}</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    value={formData.min_quantity}
+                    onChange={(e) => setFormData({...formData, min_quantity: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button 
+                  type="button" 
+                  className="btn btn-secondary"
+                  onClick={() => setShowModal(false)}
+                >
+                  {t('cancel')}
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  {t('save')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default Products;
