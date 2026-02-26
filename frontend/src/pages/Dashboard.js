@@ -186,7 +186,8 @@ function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {lowStockProducts.map(product => (
+                {Array.isArray(lowStockProducts) && lowStockProducts.map(product => (
+
                   <tr key={product.id}>
                     <td>{product.sku}</td>
                     <td>{product.name}</td>
