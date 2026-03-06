@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: worldsecure-frontend
+    env: static
+    buildCommand: cd frontend && npm run build
+    staticPublishPath: frontend/build
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
