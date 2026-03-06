@@ -887,7 +887,78 @@ app.get('/api/email-contacts', authenticateToken, async (req, res) => {
     res.json(r.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+// ── SYNC ENDPOINT (מקבל נתונים מהמחשב המקומי) ────────────────────────────────
+app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
+  const { entity } = req.params;
+  const { rows } = req.body;
+  const allowed = ['customers', 'products', 'suppliers'];
+  if (!allowed.includes(entity)) return res.status(400).json({ error: 'Invalid entity' });
+  if (!rows || !Array.isArray(rows)) return res.status(400).json({ error: 'rows array required' });
 
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    if (entity === 'customers') {
+      for (const r of rows) {
+        await client.query(`
+          INSERT INTO customers (id, name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes, created_at)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+          ON CONFLICT (id) DO UPDATE SET
+            name=$2, contact_person=$3, address=$4, phone=$5, email=$6,
+            tax_id=$7, country=$8, is_sensitive=$9, notes=$10`,
+          [r.id, r.name, r.contact_person, r.address, r.phone, r.email,
+           r.tax_id, r.country, r.is_sensitive ? true : false, r.notes, r.created_at]);
+      }
+      if (rows.length > 0) {
+        const ids = rows.map(r => r.id);
+        await client.query(`DELETE FROM customers WHERE id NOT IN (${ids.map((_,i)=>`$${i+1}`).join(',')})`, ids);
+      }
+    }
+
+    if (entity === 'products') {
+      for (const r of rows) {
+        await client.query(`
+          INSERT INTO products (id, sku, name, name_he, name_pt, description, category_id, price, currency, unit, quantity, min_quantity, created_at)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+          ON CONFLICT (id) DO UPDATE SET
+            sku=$2, name=$3, name_he=$4, name_pt=$5, description=$6,
+            category_id=$7, price=$8, currency=$9, unit=$10, quantity=$11, min_quantity=$12`,
+          [r.id, r.sku, r.name, r.name_he, r.name_pt, r.description,
+           r.category_id, r.price, r.currency, r.unit, r.quantity, r.min_quantity, r.created_at]);
+      }
+      if (rows.length > 0) {
+        const ids = rows.map(r => r.id);
+        await client.query(`DELETE FROM products WHERE id NOT IN (${ids.map((_,i)=>`$${i+1}`).join(',')})`, ids);
+      }
+    }
+
+    if (entity === 'suppliers') {
+      for (const r of rows) {
+        await client.query(`
+          INSERT INTO suppliers (id, name, address, phone, email, tax_id, country, contact_person, notes, created_at)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+          ON CONFLICT (id) DO UPDATE SET
+            name=$2, address=$3, phone=$4, email=$5,
+            tax_id=$6, country=$7, contact_person=$8, notes=$9`,
+          [r.id, r.name, r.address, r.phone, r.email,
+           r.tax_id, r.country, r.contact_person, r.notes, r.created_at]);
+      }
+      if (rows.length > 0) {
+        const ids = rows.map(r => r.id);
+        await client.query(`DELETE FROM suppliers WHERE id NOT IN (${ids.map((_,i)=>`$${i+1}`).join(',')})`, ids);
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json({ message: `${entity} synced`, count: rows.length });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
 // ── Health Check ──────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
