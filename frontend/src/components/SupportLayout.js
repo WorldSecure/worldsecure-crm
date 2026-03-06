@@ -38,14 +38,18 @@ function SupportLayout() {
               <span className="sidebar-icon">📊</span>
               {t('dashboard')}
             </Link>
+
+            <Link to="/support/management" className={isActive('/support/management')} style={
+              location.pathname === '/support/management'
+                ? { background: '#2196F3', color: 'white' }
+                : {}
+            }>
+              <span className="sidebar-icon">📞</span>
+              {t('support_management') || 'Support Management'}
+            </Link>
             
             {hasModuleAccess('warehouse') && (
               <>
-                <Link to="/support/products" className={isActive('/support/products')}>
-                  <span className="sidebar-icon">📦</span>
-                  {t('products')}
-                </Link>
-                
                 <Link to="/support/suppliers" className={isActive('/support/suppliers')}>
                   <span className="sidebar-icon">🏭</span>
                   {t('suppliers')}
@@ -63,10 +67,19 @@ function SupportLayout() {
               {t('settings')}
             </Link>
             
-            <Link to="/support/users" className={isActive('/support/users')}>
-              <span className="sidebar-icon">👤</span>
-              {t('users')}
-            </Link>
+            {user?.role === 'admin' && (
+              <Link to="/support/users" className={isActive('/support/users')}>
+                <span className="sidebar-icon">👤</span>
+                {t('users')}
+              </Link>
+            )}
+
+            {user?.role === 'admin' && (
+              <Link to="/support/activity-log" className={isActive('/support/activity-log')}>
+                <span className="sidebar-icon">📝</span>
+                {t('activity_log')}
+              </Link>
+            )}
           </nav>
         </aside>
 
