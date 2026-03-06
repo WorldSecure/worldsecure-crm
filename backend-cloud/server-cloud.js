@@ -924,8 +924,9 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
           ON CONFLICT (id) DO UPDATE SET
             sku=$2, name=$3, name_he=$4, name_pt=$5, description=$6,
             category_id=$7, price=$8, currency=$9, unit=$10, quantity=$11, min_quantity=$12`,
-          [r.id, r.sku, r.name, r.name_he, r.name_pt, r.description,
-           r.category_id, r.price || null, r.currency, r.unit, r.quantity || 0, r.min_quantity || 0, r.created_at]);
+          [r.id, r.sku, r.name, r.name_he||null, r.name_pt||null, r.description||null,
+ r.category_id||null, r.price||null, r.currency||'ILS', r.unit||'unit',
+ parseInt(r.quantity)||0, parseInt(r.min_quantity)||0, r.created_at]);
       }
       if (rows.length > 0) {
         const ids = rows.map(r => r.id);
