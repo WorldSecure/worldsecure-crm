@@ -20,6 +20,7 @@ import Settings from './pages/Settings';
 import ActivityLog from './pages/ActivityLog';
 import Users from './pages/Users';
 import SupportDashboard from './pages/SupportDashboard';
+import SupportManagement from './pages/SupportManagement';
 import './App.css';
 
 // Header חדש עם הרשאות
@@ -52,7 +53,7 @@ const NewHeader = ({ activeTab }) => {
   return (
     <div style={{
       width: '100%', 
-      background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)', 
+      background: 'linear-gradient(135deg, #0a3d6b 0%, #1a6fa8 100%)', 
       padding: '1rem',
       minHeight: '120px'
     }}>
@@ -97,9 +98,9 @@ const NewHeader = ({ activeTab }) => {
               fontSize: '1rem'
             }}
           >
-            <option value="he" style={{background: '#334155', color: 'white'}}>עברית</option>
-            <option value="en" style={{background: '#334155', color: 'white'}}>English</option>
-            <option value="pt" style={{background: '#334155', color: 'white'}}>Português</option>
+            <option value="he" style={{background: '#0a3d6b', color: 'white'}}>עברית</option>
+            <option value="en" style={{background: '#0a3d6b', color: 'white'}}>English</option>
+            <option value="pt" style={{background: '#0a3d6b', color: 'white'}}>Português</option>
           </select>
           
           {/* כפתור יציאה */}
@@ -128,7 +129,7 @@ const NewHeader = ({ activeTab }) => {
       <div style={{ display: 'flex', gap: '1.5rem' }}>
         {hasModuleAccess('warehouse') && (
           <a href="/" style={activeTab === 'warehouse' 
-            ? buttonActiveStyle('#10b981', '#059669') 
+            ? buttonActiveStyle('#0a3d6b', '#083264') 
             : buttonInactiveStyle()
           }>
             📦 {language === 'he' ? 'ניהול מחסן' : language === 'pt' ? 'ARMAZÉM' : 'WAREHOUSE'}
@@ -137,7 +138,7 @@ const NewHeader = ({ activeTab }) => {
         
         {hasModuleAccess('sales') && (
           <a href="/sales-portal" style={activeTab === 'sales' 
-            ? buttonActiveStyle('#8b5cf6', '#7c3aed') 
+            ? buttonActiveStyle('#cc0000', '#a80000') 
             : buttonInactiveStyle()
           }>
             💰 {language === 'he' ? 'ניהול מכירות' : language === 'pt' ? 'VENDAS' : 'SALES'}
@@ -146,7 +147,7 @@ const NewHeader = ({ activeTab }) => {
         
         {hasModuleAccess('support') && (
           <a href="/support" style={activeTab === 'support' 
-            ? buttonActiveStyle('#3b82f6', '#2563eb') 
+            ? buttonActiveStyle('#1a6fa8', '#135d8f') 
             : buttonInactiveStyle()
           }>
             📞 {language === 'he' ? 'תמיכה' : language === 'pt' ? 'SUPORTE' : 'SUPPORT'}
@@ -216,7 +217,7 @@ function AppRoutes() {
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)' }}>
       <NewHeader activeTab={getActiveTab()} />
       
-      <main style={{ margin: '0 auto', padding: '3rem', marginTop: '-3rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<Navigate to="/dashboard" />} />
@@ -229,7 +230,7 @@ function AppRoutes() {
             <Route path="reports" element={<Reports />} />
             <Route path="settings" element={<AdminRoute><Settings /></AdminRoute>} />
             <Route path="users" element={<Users />} />
-            <Route path="activity-log" element={<ActivityLog />} />
+            <Route path="activity-log" element={<AdminRoute><ActivityLog /></AdminRoute>} />
           </Route>
 
           <Route path="/sales-portal" element={<SalesLayout />}>
@@ -243,22 +244,25 @@ function AppRoutes() {
             <Route path="sales-reports" element={<SalesReports />} />
             <Route path="settings" element={<AdminRoute><Settings /></AdminRoute>} />
             <Route path="users" element={<Users />} />
+            <Route path="activity-log" element={<AdminRoute><ActivityLog /></AdminRoute>} />
           </Route>
 
           <Route path="/support" element={<SupportLayout />}>
             <Route index element={<Navigate to="/support/dashboard" />} />
             <Route path="dashboard" element={<SupportDashboard />} />
+            <Route path="management" element={<SupportManagement />} />
             <Route path="products" element={<Products />} />
             <Route path="suppliers" element={<Suppliers />} />
             <Route path="customers" element={<Customers />} />
             <Route path="settings" element={<AdminRoute><Settings /></AdminRoute>} />
             <Route path="users" element={<Users />} />
+            <Route path="activity-log" element={<AdminRoute><ActivityLog /></AdminRoute>} />
           </Route>
 
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
         </Routes>
-      </main>
+      </div>
     </div>
   );
 }
