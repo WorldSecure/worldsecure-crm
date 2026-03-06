@@ -891,7 +891,7 @@ app.get('/api/email-contacts', authenticateToken, async (req, res) => {
 app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
   const { entity } = req.params;
   const { rows } = req.body;
-  const allowed = ['customers', 'products', 'suppliers'];
+  const allowed = ['customers', 'products', 'suppliers', 'settings', 'inbound', 'outbound'];
   if (!allowed.includes(entity)) return res.status(400).json({ error: 'Invalid entity' });
   if (!rows || !Array.isArray(rows)) return res.status(400).json({ error: 'rows array required' });
 
