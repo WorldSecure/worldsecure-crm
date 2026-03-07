@@ -165,10 +165,10 @@ async function syncOutboundToCloud() {
 }
 
 async function syncSupportToCloud() {
-  const tickets = await sqliteAll('SELECT * FROM support_tickets ORDER BY id');
-  const history = await sqliteAll('SELECT * FROM support_ticket_history ORDER BY id');
-  if (!tickets.length) return;
-  const result = await apiRequest('POST', '/api/sync/support', { tickets, history });
+  const tickets  = await sqliteAll('SELECT * FROM support_tickets ORDER BY id');
+  const history  = await sqliteAll('SELECT * FROM support_ticket_history ORDER BY id');
+  const localIds = tickets.map(t => t.id);
+  const result = await apiRequest('POST', '/api/sync/support', { tickets, history, localIds });
   if (result.status === 200) log(`  ↳ support: ${tickets.length} tickets synced`);
   else log(`  ⚠ support: ${JSON.stringify(result.body)}`);
 }
