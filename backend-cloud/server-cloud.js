@@ -1292,6 +1292,19 @@ app.post('/api/test-smtp', authenticateToken, async (req, res) => {
   res.json({ message: 'SMTP test not configured' });
 });
 
+// ── One-time migration endpoint ───────────────────────────────────────────────
+app.post('/api/admin/run-migrations', async (req, res) => {
+  try {
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS module_warehouse BOOLEAN DEFAULT TRUE`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS module_sales BOOLEAN DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS module_service BOOLEAN DEFAULT TRUE`);
+    await pool.query(`UPDATE users SET module_warehouse=TRUE, module_sales=FALSE, module_service=TRUE WHERE module_warehouse IS NULL`);
+    res.json({ message: 'Migrations complete' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Health Check ──────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
