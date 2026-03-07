@@ -2,13 +2,43 @@
 <html lang="he" dir="rtl">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
-    <meta name="description" content="Warehouse Management CRM System" />
-    <title>מערכת ניהול מחסן</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+
+    <!-- PWA -->
+    <meta name="theme-color" content="#1a3a5c" />
+    <meta name="application-name" content="WorldSecure" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- Apple PWA -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="WorldSecure" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
+    <!-- Windows PWA -->
+    <meta name="msapplication-TileColor" content="#1a3a5c" />
+    <meta name="msapplication-TileImage" content="/icons/icon-144x144.png" />
+
+    <meta name="description" content="WorldSecure CRM - Warehouse & Support Management" />
+
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png" />
+
+    <title>WorldSecure</title>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
+
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/service-worker.js')
+            .then(reg => console.log('✅ SW registered:', reg.scope))
+            .catch(err => console.log('❌ SW error:', err));
+        });
+      }
+    </script>
   </body>
 </html>
