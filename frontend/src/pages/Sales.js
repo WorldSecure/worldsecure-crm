@@ -21,13 +21,16 @@ function Sales() {
   const [formData, setFormData] = useState({
     customer_id: '',
     notes: '',
-    items: []
+    items: [],
+    qr_code_id: null
   });
+
+  const [qrCodes, setQrCodes] = useState([]);
 
   const [currentItem, setCurrentItem] = useState({
     product_id: '',
     quantity: 1,
-    unit_price: 0
+    unit_price: ''
   });
 
   const [editingItemIndex, setEditingItemIndex] = useState(null);
@@ -131,15 +134,23 @@ function Sales() {
 
   const fetchData = async () => {
     try {
-      const [quotesRes, customersRes, productsRes] = await Promise.all([
+      const [quotesRes, customersRes, productsRes, qrRes] = await Promise.all([
         axios.get('/api/quotes'),
         axios.get('/api/customers'),
-        axios.get('/api/products')
+        axios.get('/api/products'),
+        axios.get('/api/qr-codes').catch(() => ({ data: [] }))
       ]);
       
       setQuotes(quotesRes.data);
       setCustomers(customersRes.data);
       setProducts(productsRes.data);
+      // המר פורמט DB לפורמט dropdown
+      const qrList = (qrRes.data || []).map(qr => ({
+        id: qr.id,
+        type: qr.type,
+        title: qr.title || `QR #${qr.id} - ${qr.type}`
+      }));
+      setQrCodes(qrList);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -269,7 +280,7 @@ function Sales() {
     setCurrentItem({
       product_id: '',
       quantity: 1,
-      unit_price: 0
+      unit_price: ''
     });
   };
 
@@ -325,7 +336,8 @@ function Sales() {
           customer_name: customer.name,
           currency: selectedCurrency,
           items: formData.items,
-          notes: formData.notes
+          notes: formData.notes,
+          qr_code_id: formData.qr_code_id
         });
       } else {
         // Create new quote
@@ -334,7 +346,8 @@ function Sales() {
           customer_name: customer.name,
           currency: selectedCurrency,
           items: formData.items,
-          notes: formData.notes
+          notes: formData.notes,
+          qr_code_id: formData.qr_code_id
         });
       }
 
@@ -351,12 +364,13 @@ function Sales() {
     setFormData({
       customer_id: '',
       notes: '',
-      items: []
+      items: [],
+      qr_code_id: null
     });
     setCurrentItem({
       product_id: '',
       quantity: 1,
-      unit_price: 0
+      unit_price: ''
     });
     setEditingItemIndex(null);
     setEditingQuoteId(null);
@@ -1009,25 +1023,16 @@ function Sales() {
                   <div className="form-group" style={{ flex: 1 }}>
                     <label className="form-label">{t('unit_price')} ({selectedCurrency})</label>
                     <input
-                      type="text"
+                      type="number"
+                      step="0.01"
+                      min="0"
                       className="form-input"
                       value={currentItem.unit_price}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/,/g, ''); // Remove commas
-                        if (val === '' || !isNaN(val)) {
-                          setCurrentItem({...currentItem, unit_price: val});
+                      onChange={(e) => setCurrentItem({...currentItem, unit_price: e.target.value})}
+                      onBlur={(e) => {
+                        if (e.target.value) {
+                          setCurrentItem({...currentItem, unit_price: parseFloat(e.target.value).toFixed(2)});
                         }
-                      }}
-                      onBlur={() => {
-                        // Format with commas on blur
-                        if (currentItem.unit_price) {
-                          const formatted = formatNumber(currentItem.unit_price);
-                          setCurrentItem({...currentItem, unit_price: parseFloat(currentItem.unit_price).toFixed(2)});
-                        }
-                      }}
-                      onFocus={(e) => {
-                        // Remove commas on focus for easier editing
-                        e.target.value = currentItem.unit_price;
                       }}
                       placeholder="0.00"
                       style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: '1rem' }}
@@ -1110,6 +1115,23 @@ function Sales() {
                   placeholder={t('additional_notes')}
                   rows="3"
                 />
+              </div>
+
+              {/* QR Code Selection */}
+              <div className="form-group" style={{ marginTop: '1rem' }}>
+                <label className="form-label">📱 {t('add_qr_code') || 'הוסף קוד QR'}</label>
+                <select
+                  className="form-input"
+                  value={formData.qr_code_id || ''}
+                  onChange={(e) => setFormData({...formData, qr_code_id: e.target.value ? parseInt(e.target.value) : null})}
+                >
+                  <option value="">{qrCodes.length === 0 ? (t('no_qr_codes_created') || 'לא יוצרו קודי QR עדיין') : (t('select_qr_code') || 'בחר קוד QR')}</option>
+                  {qrCodes.map((qr, index) => (
+                    <option key={qr.id} value={qr.id}>
+                      QR #{index + 1} - {qr.type}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="modal-footer">

@@ -9,7 +9,6 @@ function SalesLayout() {
   const location = useLocation();
 
   useEffect(() => {
-    // כותרת הטאב
     document.title = 'ניהול מכירות - WorldSecure';
   }, []);
 
@@ -19,8 +18,6 @@ function SalesLayout() {
 
   return (
     <div className="app">
-      {/* Header removed - now in App.js */}
-
       <div className="main-layout">
         <aside className="sidebar">
           <nav>
@@ -68,6 +65,13 @@ function SalesLayout() {
               <Link to="/sales-portal/users" className={isActive('/sales-portal/users')}>
                 <span className="sidebar-icon">👤</span>
                 {t('users')}
+              </Link>
+            )}
+
+            {user?.role === 'admin' && (
+              <Link to="/sales-portal/activity-log" className={isActive('/sales-portal/activity-log')}>
+                <span className="sidebar-icon">📝</span>
+                {t('activity_log')}
               </Link>
             )}
           </nav>

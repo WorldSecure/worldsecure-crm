@@ -14,6 +14,8 @@ function Dashboard() {
   const [stockAlerts, setStockAlerts] = useState([]);
   const [salesStats, setSalesStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [warehouseAlerts, setWarehouseAlerts] = useState([]);
+  const [completingAlert, setCompletingAlert] = useState(null);
 
   // Check if we're in Sales Portal
   const isSalesPortal = location.pathname.startsWith('/sales-portal');
@@ -34,20 +36,31 @@ function Dashboard() {
         setLowStockProducts(lowStockRes.data);
       } else {
         // Warehouse Dashboard
-        const [statsRes, lowStockRes, alertsRes] = await Promise.all([
+        const [statsRes, lowStockRes, alertsRes, warehouseAlertsRes] = await Promise.all([
           axios.get('/api/dashboard/stats'),
           axios.get('/api/products/low-stock'),
-          axios.get('/api/stock-alerts')
+          axios.get('/api/stock-alerts'),
+          axios.get('/api/warehouse-alerts')
         ]);
         setStats(statsRes.data);
         setLowStockProducts(lowStockRes.data);
         setStockAlerts(alertsRes.data);
+        setWarehouseAlerts(warehouseAlertsRes.data);
       }
       setLoading(false);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       setLoading(false);
     }
+  };
+
+  const handleCompleteAlert = async (alertId) => {
+    try {
+      setCompletingAlert(alertId);
+      await axios.put(`/api/warehouse-alerts/${alertId}/complete`);
+      setWarehouseAlerts(prev => prev.filter(a => a.id !== alertId));
+    } catch(e) { console.error(e); }
+    finally { setCompletingAlert(null); }
   };
 
   if (loading) {
@@ -186,8 +199,7 @@ function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {Array.isArray(lowStockProducts) && lowStockProducts.map(product => (
-
+                {lowStockProducts.map(product => (
                   <tr key={product.id}>
                     <td>{product.sku}</td>
                     <td>{product.name}</td>
@@ -204,6 +216,53 @@ function Dashboard() {
           </div>
         </div>
       )}
+      {/* Warehouse Alerts from Support */}
+      {warehouseAlerts.length > 0 && (
+        <div className="card" style={{ border:'2px solid #e67e22', backgroundColor:'#fff8f0', marginBottom:'1.5rem' }}>
+          <div className="card-header" style={{ background:'linear-gradient(135deg,#e67e22,#ca6f1e)', borderRadius:'8px 8px 0 0', padding:'1rem 1.5rem' }}>
+            <h3 className="card-title" style={{ color:'white', margin:0 }}>
+              {t('urgent_dispatches')} 🚨 ({warehouseAlerts.length})
+            </h3>
+          </div>
+          <div className="table-container" style={{ overflowX:'visible' }}>
+            <table className="table" style={{ tableLayout:'fixed', width:'100%' }}>
+              <thead>
+                <tr>
+                  <th>{t('ticket_number')}</th>
+                  <th>{t('customer')}</th>
+                  <th>{t('product')}</th>
+                  <th>{t('quantity')}</th>
+                  <th>{t('requested_by')}</th>
+                  <th>{t('date')}</th>
+                  <th>{t('actions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {warehouseAlerts.map(alert => (
+                  <tr key={alert.id} style={{ background:'#fff3e0' }}>
+                    <td style={{ fontWeight:700 }}>{alert.ticket_number}</td>
+                    <td style={{ wordBreak:'break-word' }}>{alert.customer_name}</td>
+                    <td style={{ wordBreak:'break-word' }}>{alert.product_name}</td>
+                    <td><span style={{ background:'#e67e22', color:'white', padding:'0.2rem 0.6rem', borderRadius:'8px', fontWeight:700 }}>{alert.quantity}</span></td>
+                    <td>{alert.requested_by_name}</td>
+                    <td>{alert.created_at ? new Date(alert.created_at).toLocaleDateString() : '-'}</td>
+                    <td>
+                      <button
+                        onClick={() => handleCompleteAlert(alert.id)}
+                        disabled={completingAlert === alert.id}
+                        style={{ background:'#27ae60', color:'white', border:'none', borderRadius:'8px', padding:'0.4rem 0.9rem', fontWeight:700, cursor:'pointer', fontSize:'0.85rem' }}
+                      >
+                        {completingAlert === alert.id ? t('loading') : `✅ ${t('dispatched')}`}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Stock Alerts - Order Shortages */}
       {stockAlerts.length > 0 && (
         <div className="card" style={{ 

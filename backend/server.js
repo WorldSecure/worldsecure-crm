@@ -271,7 +271,7 @@ app.post('/api/test-smtp', authenticateToken, async (req, res) => {
     });
 
     await transporter.verify();
-    res.json({ success: true, message: `✅ החיבור הצליח! שולח: ${company.smtp_user}` });
+    res.json({ success: true, message: `✅ החיבור הצליח! שולח: ${company.smtp_user}`, sender: company.smtp_user });
   } catch (err) {
     let msg = err.message;
     if (msg.includes('535') || msg.includes('Authentication')) {
@@ -689,6 +689,8 @@ app.put('/api/products/:id', authenticateToken, (req, res) => {
       if (err) {
         return res.status(500).json({ error: err.message });
       }
+      // Auto-resolve stock alerts if quantity now sufficient
+      autoResolveStockAlerts(id);
       logActivity(req.user.id, 'UPDATE_PRODUCT', 'product', id, req.body);
       res.json({ message: 'Product updated' });
     }
@@ -851,8 +853,8 @@ app.post('/api/inbound', authenticateToken, (req, res) => {
   const { supplier_id, supplier_type, casual_supplier_name, items, notes } = req.body;
   
   db.run(
-    'INSERT INTO inbound_transactions (supplier_id, supplier_type, casual_supplier_name, notes, user_id) VALUES (?, ?, ?, ?, ?)',
-    [supplier_id, supplier_type, casual_supplier_name, notes, req.user.id],
+    'INSERT INTO inbound_transactions (supplier_id, supplier_type, casual_supplier_name, notes, user_id, qr_code_id) VALUES (?, ?, ?, ?, ?, ?)',
+    [supplier_id, supplier_type, casual_supplier_name, notes, req.user.id, req.body.qr_code_id || null],
     function(err) {
       if (err) {
         return res.status(500).json({ error: err.message });
@@ -885,6 +887,8 @@ app.post('/api/inbound', authenticateToken, (req, res) => {
       
       Promise.all(itemPromises)
         .then(() => {
+          // Auto-resolve stock alerts for restocked products
+          items.forEach(item => autoResolveStockAlerts(item.product_id));
           logActivity(req.user.id, 'CREATE_INBOUND', 'inbound', transactionId, { items: items.length });
           res.json({ id: transactionId, message: 'Inbound transaction created' });
         })
@@ -1002,6 +1006,8 @@ app.put('/api/inbound/:id', authenticateToken, (req, res) => {
               
               Promise.all(itemPromises)
                 .then(() => {
+                  // Auto-resolve stock alerts for restocked products
+                  items.forEach(item => autoResolveStockAlerts(item.product_id));
                   logActivity(req.user.id, 'UPDATE_INBOUND', 'inbound', id, { items: items.length });
                   res.json({ id, message: 'Inbound transaction updated' });
                 })
@@ -1056,8 +1062,8 @@ app.post('/api/outbound', authenticateToken, (req, res) => {
   Promise.all(checkPromises)
     .then(() => {
       db.run(
-        'INSERT INTO outbound_transactions (customer_id, customer_type, casual_customer_name, notes, status, user_id) VALUES (?, ?, ?, ?, ?, ?)',
-        [customer_id, customer_type, casual_customer_name, notes, status || 'pending', req.user.id],
+        'INSERT INTO outbound_transactions (customer_id, customer_type, casual_customer_name, notes, status, user_id, qr_code_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [customer_id, customer_type, casual_customer_name, notes, status || 'pending', req.user.id, req.body.qr_code_id || null],
         function(err) {
           if (err) {
             return res.status(500).json({ error: err.message });
@@ -1518,10 +1524,12 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
         SELECT ot.*, c.name as customer_name, c.address as customer_address, 
                c.phone as customer_phone, c.email as customer_email,
                c.contact_person as customer_contact,
-               u.username
+               u.username,
+               qr.image_url as qr_image_url, qr.qr_data as qr_data
         FROM outbound_transactions ot
         LEFT JOIN customers c ON ot.customer_id = c.id
         LEFT JOIN users u ON ot.user_id = u.id
+        LEFT JOIN qr_codes qr ON ot.qr_code_id = qr.id
         WHERE ot.id = ?
       `;
       db.get(query, [id], (err, row) => {
@@ -1569,6 +1577,11 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
       } catch(e) { logoHtml = ''; }
     }
     
+    // Build QR HTML - positioned top-right (RTL-safe)
+    const qrImgHtml = transaction.qr_image_url
+      ? `<img src="${transaction.qr_image_url}" alt="QR Code" style="width: 55px; height: 55px; display: block; ${t.dir === 'rtl' ? 'margin-right: auto;' : 'margin-left: auto;'}">`
+      : '';
+
     // Generate HTML for delivery note
     const html = `
 <!DOCTYPE html>
@@ -1836,13 +1849,20 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
   }
   </script>
 
-  <div style="display: flex; align-items: center; margin-bottom: 20px; border-top: none; padding-top: 0;">
-    ${logoHtml ? logoHtml.replace('<div style="text-align: left; margin-bottom: 20px; position: relative; z-index: 1;">', '<div style="margin-right: 20px;">') : ''}
-    <div class="header" style="margin: 0; flex: 1; display: flex; flex-direction: column; justify-content: center;">
-      <h1 style="margin: 0 0 8px 0; font-size: 32px; font-weight: bold;">${t.title}</h1>
-      <p style="margin: 0; font-size: 18px; color: #555;">${t.documentNumber}: ${id} | ${t.date}: ${formatDate(transaction.transaction_date)}</p>
-    </div>
-  </div>
+  <table style="width: 100%; border: none; margin-bottom: 20px;">
+    <tr>
+      <td style="vertical-align: middle; border: none; padding: 0;">
+        ${logoHtml ? logoHtml.replace('<div style="text-align: left; margin-bottom: 20px; position: relative; z-index: 1;">', '<div>') : ''}
+        <div>
+          <h1 style="margin: 4px 0; font-size: 28px; font-weight: bold;">${t.title}</h1>
+          <p style="margin: 0; font-size: 16px; color: #555;">${t.documentNumber}: ${id} | ${t.date}: ${formatDate(transaction.transaction_date)}</p>
+        </div>
+      </td>
+      <td style="vertical-align: top; text-align: ${t.dir === 'rtl' ? 'left' : 'right'}; border: none; padding: 0; width: 70px;">
+        ${qrImgHtml}
+      </td>
+    </tr>
+  </table>
 
   <div class="info-section">
     <div class="info-box">
@@ -1992,7 +2012,7 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
     `;
     
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  saveDocument('delivery', id, html, lang, req.user?.id || null);
+  saveDocument('delivery', id, html, lang, req.user?.id || null, transaction.customer_type === 'casual' ? transaction.casual_customer_name : transaction.customer_name);
     res.send(html);
     
   } catch (error) {
@@ -2218,10 +2238,12 @@ app.get('/api/inbound/:id/receipt-note', async (req, res) => {
         SELECT it.*, s.name as supplier_name, s.address as supplier_address,
                s.phone as supplier_phone, s.email as supplier_email,
                s.contact_person as supplier_contact,
-               u.username
+               u.username,
+               qr.image_url as qr_image_url, qr.qr_data as qr_data
         FROM inbound_transactions it
         LEFT JOIN suppliers s ON it.supplier_id = s.id
         LEFT JOIN users u ON it.user_id = u.id
+        LEFT JOIN qr_codes qr ON it.qr_code_id = qr.id
         WHERE it.id = ?
       `;
       db.get(query, [id], (err, row) => {
@@ -2253,6 +2275,10 @@ app.get('/api/inbound/:id/receipt-note', async (req, res) => {
     const logoHtml = company.logo_path ?
       `<img src="http://localhost:3001${company.logo_path}" alt="Logo" style="max-height: 120px; max-width: 300px; margin-right: 20px;">` :
       '';
+
+    const qrImgHtml = transaction.qr_image_url
+      ? `<img src="${transaction.qr_image_url}" alt="QR Code" style="width: 55px; height: 55px; display: block; ${t.dir === 'rtl' ? 'margin-right: auto;' : 'margin-left: auto;'}">`
+      : '';
     
     const html = `
 <!DOCTYPE html>
@@ -2340,13 +2366,20 @@ app.get('/api/inbound/:id/receipt-note', async (req, res) => {
     <button class="btn-close" onclick="window.close()">❌ ${lang==='he'?'סגור':lang==='en'?'Close':'Fechar'}</button>
   </div>
 
-  <div class="header-container">
-    ${logoHtml}
-    <div class="header">
-      <h1>${t.title}</h1>
-      <p>${t.documentNumber}: ${id} | ${t.date}: ${formatDate(transaction.transaction_date)}</p>
-    </div>
-  </div>
+  <table style="width: 100%; border: none; margin-bottom: 20px;">
+    <tr>
+      <td style="vertical-align: middle; border: none; padding: 0;">
+        ${logoHtml}
+        <div>
+          <h1 style="margin: 4px 0;">${t.title}</h1>
+          <p style="margin: 0;">${t.documentNumber}: ${id} | ${t.date}: ${formatDate(transaction.transaction_date)}</p>
+        </div>
+      </td>
+      <td style="vertical-align: top; text-align: ${t.dir === 'rtl' ? 'left' : 'right'}; border: none; padding: 0; width: 70px;">
+        ${qrImgHtml}
+      </td>
+    </tr>
+  </table>
   
   <div class="info-section">
     <h3>${t.supplierDetails}</h3>
@@ -2536,7 +2569,7 @@ app.get('/api/inbound/:id/receipt-note', async (req, res) => {
 </html>
     `;
     
-  saveDocument('receipt', id, html, lang, req.user?.id || null);
+  saveDocument('receipt', id, html, lang, req.user?.id || null, transaction.supplier_name || transaction.casual_supplier_name);
     res.send(html);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -2875,8 +2908,8 @@ app.post('/api/quotes', authenticateToken, async (req, res) => {
     // Insert quote
     const quoteId = await new Promise((resolve, reject) => {
       db.run(
-        'INSERT INTO quotes (customer_id, customer_name, currency, total, notes, user_id) VALUES (?, ?, ?, ?, ?, ?)',
-        [customer_id, customer_name, currency, total, notes, user_id],
+        'INSERT INTO quotes (customer_id, customer_name, currency, total, notes, user_id, qr_code_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [customer_id, customer_name, currency, total, notes, user_id, req.body.qr_code_id || null],
         function(err) {
           if (err) reject(err);
           else resolve(this.lastID);
@@ -2948,8 +2981,8 @@ app.put('/api/quotes/:id', authenticateToken, async (req, res) => {
     // Update quote
     await new Promise((resolve, reject) => {
       db.run(
-        'UPDATE quotes SET customer_id = ?, customer_name = ?, currency = ?, total = ?, notes = ? WHERE id = ?',
-        [customer_id, customer_name, currency, total, notes, id],
+        'UPDATE quotes SET customer_id = ?, customer_name = ?, currency = ?, total = ?, notes = ?, qr_code_id = ? WHERE id = ?',
+        [customer_id, customer_name, currency, total, notes, req.body.qr_code_id || null, id],
         (err) => {
           if (err) reject(err);
           else resolve();
@@ -3471,19 +3504,39 @@ app.post('/api/quotes/:id/stages/5/delivery', authenticateToken, (req, res) => {
 
 // בדיקה אם שלב 4 הושלם
 // Save document to filesystem and DB
-function saveDocument(type, referenceId, htmlContent, language, userId) {
+async function saveDocument(type, referenceId, htmlContent, language, userId, entityName) {
   const docsDir = path.join(__dirname, 'documents', type);
   if (!fs.existsSync(docsDir)) {
     fs.mkdirSync(docsDir, { recursive: true });
   }
   
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const filename = `${type}_${referenceId}_${language}_${timestamp}.html`;
+  const safeName = entityName ? '_' + entityName.replace(/[^a-zA-Z0-9֐-׿\s]/g, '').trim().replace(/\s+/g, '_').slice(0, 30) : '';
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const langLabel = language === 'he' ? 'HE_VERSION' : language === 'pt' ? 'PT_VERSION' : 'EN_VERSION';
+  const filename = `${type}${safeName}_${dateStr}_${langLabel}.pdf`;
   const filepath = path.join(docsDir, filename);
   
-  fs.writeFileSync(filepath, htmlContent, 'utf8');
+  try {
+    const puppeteer = require('puppeteer');
+    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+    await page.pdf({ path: filepath, format: 'A4', printBackground: true, margin: { top: '1.5cm', bottom: '1.5cm', left: '2cm', right: '2cm' } });
+    await browser.close();
+  } catch (err) {
+    console.error('PDF generation failed, saving as HTML:', err.message);
+    const htmlFilename = `${type}_${referenceId}_${language}_${timestamp}.html`;
+    const htmlFilepath = path.join(docsDir, htmlFilename);
+    fs.writeFileSync(htmlFilepath, htmlContent, 'utf8');
+    const fileSize = fs.statSync(htmlFilepath).size;
+    const relativePath = `/documents/${type}/${htmlFilename}`;
+    db.run(`INSERT INTO documents (type, reference_id, filename, filepath, language, file_size, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [type, referenceId, htmlFilename, relativePath, language, fileSize, userId]);
+    return relativePath;
+  }
+
   const fileSize = fs.statSync(filepath).size;
-  
   const relativePath = `/documents/${type}/${filename}`;
   db.run(
     `INSERT INTO documents (type, reference_id, filename, filepath, language, file_size, created_by)
@@ -3493,7 +3546,7 @@ function saveDocument(type, referenceId, htmlContent, language, userId) {
       if (err) {
         console.error('Error saving document to DB:', err);
       } else {
-        console.log(`✅ Saved ${type} document: ${filename}`);
+        console.log(`✅ Saved ${type} PDF document: ${filename}`);
       }
     }
   );
@@ -3588,10 +3641,12 @@ app.get('/api/quotes/:id/proforma', async (req, res) => {
     const quote = await new Promise((resolve, reject) => {
       const query = `
         SELECT q.*, c.name as customer_name, c.address as customer_address,
-               c.phone as customer_phone, c.tax_id as customer_tax_id, u.username
+               c.phone as customer_phone, c.tax_id as customer_tax_id, u.username,
+               qr.image_url as qr_image_url, qr.qr_data as qr_data
         FROM quotes q
         LEFT JOIN customers c ON q.customer_id = c.id
         LEFT JOIN users u ON q.user_id = u.id
+        LEFT JOIN qr_codes qr ON q.qr_code_id = qr.id
         WHERE q.id = ?
       `;
       db.get(query, [id], (err, row) => {
@@ -3660,6 +3715,11 @@ app.get('/api/quotes/:id/proforma', async (req, res) => {
     const logoHtml = company.logo_path ?
       `<img src="http://localhost:3001${company.logo_path}" alt="Logo" style="max-height: 100px; max-width: 250px;">` :
       '';
+
+    const qrHtml = quote.qr_image_url ?
+      `<div style="float: right; margin: 0 0 10px 20px;">
+        <img src="${quote.qr_image_url}" alt="QR Code" style="width: 65px; height: 65px; display: block;">
+      </div>` : '';
 
     const html = `
 <!DOCTYPE html>
@@ -3841,16 +3901,21 @@ app.get('/api/quotes/:id/proforma', async (req, res) => {
     <button class="btn-close" onclick="window.close()">❌ ${lang === 'he' ? 'סגור' : lang === 'en' ? 'Close' : 'Fechar'}</button>
   </div>
 
-  <div class="header">
-    <div class="company-info">
-      ${logoHtml}
-      <h2>WorldSecure LTD</h2>
-      <p><strong>${t.nif}:</strong> 514568237</p>
-      <p><strong>${t.address}:</strong> ${t.companyAddress}</p>
-    </div>
-    <div class="date-section">
-      ${formatDate(quote.created_at)}
-    </div>
+  <table style="width: 100%; margin-bottom: 10px; border: none;">
+    <tr>
+      <td style="vertical-align: top; border: none; padding: 0;">
+        ${logoHtml}
+      </td>
+      <td style="vertical-align: top; text-align: ${t.dir === 'rtl' ? 'left' : 'right'}; border: none; padding: 0;">
+        ${quote.qr_image_url ? `<img src="${quote.qr_image_url}" alt="QR" style="width: 45px; height: 45px; display: block; ${t.dir === 'rtl' ? 'margin-right: auto;' : 'margin-left: auto;'} margin-top: -18px;">` : ''}
+        <div style="font-weight: bold; font-size: 11pt; margin-top: 4px;">${formatDate(quote.created_at)}</div>
+      </td>
+    </tr>
+  </table>
+  <div class="company-info" style="margin-bottom: 10px;">
+    <h2>WorldSecure LTD</h2>
+    <p><strong>${t.nif}:</strong> 514568237</p>
+    <p><strong>${t.address}:</strong> ${t.companyAddress}</p>
   </div>
 
   <div class="client-section">
@@ -4047,7 +4112,7 @@ app.get('/api/quotes/:id/proforma', async (req, res) => {
 </html>
     `;
 
-  saveDocument('proforma', id, html, lang, req.user?.id || null);
+  saveDocument('proforma', id, html, lang, req.user?.id || null, quote.customer_name);
     res.send(html);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -4091,9 +4156,11 @@ app.get('/api/quotes/:id/proforma-invoice', async (req, res) => {
   try {
     const quote = await new Promise((resolve, reject) => {
       db.get(`SELECT q.*, c.name as customer_name, c.address as customer_address,
-               c.phone as customer_phone, c.tax_id as customer_tax_id, u.username
+               c.phone as customer_phone, c.tax_id as customer_tax_id, u.username,
+               qr.image_url as qr_image_url
         FROM quotes q LEFT JOIN customers c ON q.customer_id = c.id
-        LEFT JOIN users u ON q.user_id = u.id WHERE q.id = ?`, [id], (err, row) => {
+        LEFT JOIN users u ON q.user_id = u.id
+        LEFT JOIN qr_codes qr ON q.qr_code_id = qr.id WHERE q.id = ?`, [id], (err, row) => {
         if (err) reject(err); else resolve(row);
       });
     });
@@ -4219,14 +4286,21 @@ app.get('/api/quotes/:id/proforma-invoice', async (req, res) => {
     <button class="btn-close" onclick="window.close()">❌ ${lang === 'he' ? 'סגור' : lang === 'en' ? 'Close' : 'Fechar'}</button>
   </div>
 
-  <div class="header">
-    <div class="company-info">
-      ${logoHtml}
-      <h2>WorldSecure LTD</h2>
-      <p><strong>${t.nif}:</strong> 514568237</p>
-      <p><strong>${t.address}:</strong> ${t.companyAddress}</p>
-    </div>
-    <div class="date-section">${formatDate(quote.created_at)}</div>
+  <table style="width: 100%; margin-bottom: 10px; border: none;">
+    <tr>
+      <td style="vertical-align: top; border: none; padding: 0;">
+        ${logoHtml}
+      </td>
+      <td style="vertical-align: top; text-align: right; border: none; padding: 0;">
+        ${quote.qr_image_url ? `<img src="${quote.qr_image_url}" alt="QR" style="width: 45px; height: 45px; display: block; margin-left: auto; margin-top: -18px;">` : ''}
+        <div style="font-weight: bold; font-size: 11pt; margin-top: 4px;">${formatDate(quote.created_at)}</div>
+      </td>
+    </tr>
+  </table>
+  <div class="company-info" style="margin-bottom: 10px;">
+    <h2>WorldSecure LTD</h2>
+    <p><strong>${t.nif}:</strong> 514568237</p>
+    <p><strong>${t.address}:</strong> ${t.companyAddress}</p>
   </div>
   <div class="client-section">
     <p>${t.clientName}: ${quote.customer_name || '-'}</p>
@@ -4409,7 +4483,7 @@ app.get('/api/quotes/:id/proforma-invoice', async (req, res) => {
 </body>
 </html>`;
 
-  saveDocument('proforma-invoice', id, html, lang, req.user?.id || null);
+  saveDocument('proforma-invoice', id, html, lang, req.user?.id || null, quote.customer_name);
     res.send(html);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -4494,8 +4568,20 @@ setInterval(backupDatabase, 24 * 60 * 60 * 1000);
 app.get('/api/backup/download', authenticateToken, function(req, res) {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
   if (!fs.existsSync(DB_PATH)) return res.status(404).json({ error: 'DB not found' });
-  const date = new Date().toISOString().slice(0, 10);
-  res.download(DB_PATH, 'warehouse_backup_' + date + '.db');
+  
+  // שמור עותק בתיקיית backups
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const timestamp = now.getFullYear() + pad(now.getMonth()+1) + pad(now.getDate()) + '_' + pad(now.getHours()) + pad(now.getMinutes());
+  const backupFilename = 'backup_' + timestamp + '.db';
+  const backupPath = path.join(BACKUP_DIR, backupFilename);
+  
+  try {
+    if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    fs.copyFileSync(DB_PATH, backupPath);
+  } catch(e) { console.error('Backup copy error:', e.message); }
+  
+  res.download(DB_PATH, 'warehouse.db');
 });
 
 // רשימת גיבויים זמינים
@@ -4504,13 +4590,13 @@ app.get('/api/backup/list', authenticateToken, function(req, res) {
   if (!fs.existsSync(BACKUP_DIR)) return res.json([]);
   var items = fs.readdirSync(BACKUP_DIR);
   var dbFiles = items
-    .filter(function(f) { return f.startsWith('warehouse_') && f.endsWith('.db'); })
+    .filter(function(f) { return (f.startsWith('warehouse_') || f.startsWith('uploaded_') || f.startsWith('pre_restore_') || f.startsWith('backup_')) && f.endsWith('.db'); })
     .sort().reverse()
     .map(function(f) {
       var stat = fs.statSync(path.join(BACKUP_DIR, f));
       // בדוק אם יש גיבוי uploads מאותו תאריך
-      var dateStr = f.replace('warehouse_', '').replace('.db', '');
-      var hasUploads = fs.existsSync(path.join(BACKUP_DIR, 'uploads_' + dateStr));
+      var dateStr = f.replace('warehouse_', '').replace('uploaded_', '').replace('pre_restore_', '').replace('backup_', '').replace('.db', '');
+      var hasUploads = f.startsWith('uploaded_') || f.startsWith('pre_restore_') || f.startsWith('backup_') || fs.existsSync(path.join(BACKUP_DIR, 'uploads_' + dateStr));
       return { name: f, size: stat.size, date: stat.mtime, hasUploads: hasUploads };
     });
   res.json(dbFiles);
@@ -4531,6 +4617,8 @@ app.post('/api/backup/restore/:filename', authenticateToken, function(req, res) 
     res.json({ message: 'Restored successfully. Please restart the server.' });
   } catch(e) {
     res.status(500).json({ error: e.message });
+  }
+});
 
 // העלאת גיבוי
 app.post('/api/backup/upload', authenticateToken, upload.single('backup'), function(req, res) {
@@ -4569,9 +4657,6 @@ app.post('/api/backup/upload', authenticateToken, upload.single('backup'), funct
     });
   } catch(e) {
     res.status(500).json({ error: e.message });
-  }
-});
-
   }
 });
 
@@ -4827,6 +4912,21 @@ app.post('/api/quotes/:id/check-stock', authenticateToken, async (req, res) => {
   }
 });
 
+// Helper: auto-resolve stock alerts when product stock is sufficient
+function autoResolveStockAlerts(productId) {
+  db.get('SELECT quantity, min_quantity FROM products WHERE id = ?', [productId], (err, product) => {
+    if (err || !product) return;
+    if (product.quantity >= product.min_quantity) {
+      db.run(
+        `UPDATE stock_alerts SET status = 'resolved', resolved_at = datetime('now')
+         WHERE product_id = ? AND status = 'active'`,
+        [productId],
+        (err) => { if (err) console.error('autoResolveStockAlerts error:', err.message); }
+      );
+    }
+  });
+}
+
 // Get active stock alerts
 app.get('/api/stock-alerts', authenticateToken, (req, res) => {
   db.all(
@@ -4855,6 +4955,404 @@ app.post('/api/stock-alerts/:id/resolve', authenticateToken, (req, res) => {
       res.json({ message: 'Alert resolved' });
     }
   );
+});
+
+
+// ===== QR CODES ENDPOINTS =====
+
+// Get all QR codes
+app.get('/api/qr-codes', authenticateToken, (req, res) => {
+  db.all(
+    'SELECT * FROM qr_codes ORDER BY created_at DESC',
+    [],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows);
+    }
+  );
+});
+
+// Create new QR code
+app.post('/api/qr-codes', authenticateToken, (req, res) => {
+  const { type, qr_data, image_url, title } = req.body;
+  
+  db.run(
+    'INSERT INTO qr_codes (type, qr_data, image_url, title, created_by) VALUES (?, ?, ?, ?, ?)',
+    [type, qr_data, image_url, title || null, req.user.id],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      
+      const newId = this.lastID;
+      db.get('SELECT * FROM qr_codes WHERE id = ?', [newId], (err2, row) => {
+        if (err2) return res.status(500).json({ error: err2.message });
+        res.json(row);
+      });
+    }
+  );
+});
+
+// Delete QR code
+app.delete('/api/qr-codes/:id', authenticateToken, (req, res) => {
+  db.run('DELETE FROM qr_codes WHERE id = ?', [req.params.id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'QR code deleted', changes: this.changes });
+  });
+});
+
+
+// ===== SUPPORT TICKETS - MIGRATIONS =====
+db.run(`ALTER TABLE support_tickets ADD COLUMN owner_id INTEGER`, () => {});
+db.run(`ALTER TABLE support_tickets ADD COLUMN owner_name TEXT`, () => {});
+db.run(`ALTER TABLE support_tickets ADD COLUMN cancelled_at TEXT`, () => {});
+db.run(`ALTER TABLE support_tickets ADD COLUMN awaiting_channel TEXT`, () => {});
+db.run(`ALTER TABLE support_tickets ADD COLUMN awaiting_note TEXT`, () => {});
+db.run(`ALTER TABLE support_tickets ADD COLUMN awaiting_deadline TEXT`, () => {});
+db.run(`ALTER TABLE support_tickets ADD COLUMN ticket_number TEXT`, () => {});
+db.run(`ALTER TABLE support_tickets ADD COLUMN customer_id INTEGER`, () => {});
+db.run(`ALTER TABLE support_tickets ADD COLUMN customer_name TEXT`, () => {});
+db.run(`ALTER TABLE support_tickets ADD COLUMN product_id INTEGER`, () => {});
+db.run(`ALTER TABLE support_tickets ADD COLUMN product_name TEXT`, () => {});
+db.run(`ALTER TABLE support_tickets ADD COLUMN description TEXT`, () => {});
+db.run(`ALTER TABLE support_tickets ADD COLUMN priority TEXT DEFAULT 'medium'`, () => {});
+db.run(`ALTER TABLE support_tickets ADD COLUMN created_by INTEGER`, () => {});
+db.run(`ALTER TABLE support_tickets ADD COLUMN created_at TEXT`, () => {});
+db.run(`ALTER TABLE support_tickets ADD COLUMN updated_at TEXT`, () => {});
+db.run(`ALTER TABLE support_tickets ADD COLUMN closed_at TEXT`, () => {});
+db.run(`ALTER TABLE support_ticket_history ADD COLUMN comment TEXT`, () => {});
+db.run(`ALTER TABLE notifications ADD COLUMN needs_ack INTEGER DEFAULT 0`, () => {});
+db.run(`ALTER TABLE notifications ADD COLUMN acked_at TEXT`, () => {});
+
+db.run(`CREATE TABLE IF NOT EXISTS warehouse_alerts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id INTEGER NOT NULL,
+  ticket_number TEXT,
+  customer_name TEXT,
+  product_id INTEGER,
+  product_name TEXT,
+  quantity INTEGER DEFAULT 1,
+  requested_by INTEGER,
+  requested_by_name TEXT,
+  status TEXT DEFAULT 'pending',
+  created_at TEXT DEFAULT (datetime('now')),
+  completed_at TEXT,
+  FOREIGN KEY (ticket_id) REFERENCES support_tickets(id) ON DELETE CASCADE
+)`, () => {});
+
+db.run(`CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  title TEXT,
+  message TEXT,
+  data TEXT,
+  is_read INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+)`, () => {});
+
+db.run(`CREATE TABLE IF NOT EXISTS support_ticket_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id INTEGER NOT NULL,
+  user_id INTEGER,
+  username TEXT,
+  action TEXT NOT NULL,
+  old_status TEXT,
+  new_status TEXT,
+  awaiting_channel TEXT,
+  awaiting_note TEXT,
+  awaiting_deadline TEXT,
+  owner_id INTEGER,
+  owner_name TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (ticket_id) REFERENCES support_tickets(id) ON DELETE CASCADE
+)`, () => {});
+
+db.run(`CREATE TABLE IF NOT EXISTS support_attachments (id INTEGER PRIMARY KEY AUTOINCREMENT, ticket_id INTEGER, filename TEXT, file_path TEXT, file_size INTEGER, uploaded_at TEXT DEFAULT (datetime('now')))`, () => {});
+
+// ===== SUPPORT HISTORY HELPER =====
+const logTicketHistory = (ticketId, userId, username, action, details = {}) => {
+  db.run(`INSERT INTO support_ticket_history 
+    (ticket_id, user_id, username, action, old_status, new_status, awaiting_channel, awaiting_note, awaiting_deadline, owner_id, owner_name, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+    [ticketId, userId, username, action,
+     details.old_status||null, details.new_status||null,
+     details.awaiting_channel||null, details.awaiting_note||null, details.awaiting_deadline||null,
+     details.owner_id||null, details.owner_name||null],
+    () => {}
+  );
+};
+
+// ===== SUPPORT TICKETS =====
+
+app.get('/api/support-tickets', authenticateToken, (req, res) => {
+  const isAdmin = req.user.role === 'admin';
+  const query = isAdmin
+    ? `SELECT t.*, 
+        u1.username as created_by_name,
+        u2.username as owner_name
+       FROM support_tickets t
+       LEFT JOIN users u1 ON t.created_by = u1.id
+       LEFT JOIN users u2 ON t.owner_id = u2.id
+       ORDER BY t.id DESC`
+    : `SELECT t.*,
+        u1.username as created_by_name,
+        u2.username as owner_name
+       FROM support_tickets t
+       LEFT JOIN users u1 ON t.created_by = u1.id
+       LEFT JOIN users u2 ON t.owner_id = u2.id
+       WHERE t.owner_id = ?
+       ORDER BY t.id DESC`;
+  const params = isAdmin ? [] : [req.user.id];
+  db.all(query, params, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+
+app.get('/api/support-tickets/stats', authenticateToken, (req, res) => {
+  const isAdmin = req.user.role === 'admin';
+  const where = isAdmin ? '' : `WHERE t.owner_id = ${req.user.id}`;
+  db.all(`SELECT t.status, COUNT(*) as count FROM support_tickets t ${where} GROUP BY t.status`, [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    const stats = { open: 0, in_progress: 0, closed: 0, pending: 0, total: 0 };
+    (rows||[]).forEach(r => { stats[r.status] = r.count; stats.total += r.count; });
+    if (isAdmin) {
+      db.all(`SELECT u.username, u.id, COUNT(t.id) as total,
+        SUM(CASE WHEN t.status='open' THEN 1 ELSE 0 END) as open_count
+        FROM users u LEFT JOIN support_tickets t ON t.owner_id = u.id
+        GROUP BY u.id HAVING total > 0`, [], (err2, agents) => {
+        res.json({ ...stats, agents: agents||[] });
+      });
+    } else {
+      res.json(stats);
+    }
+  });
+});
+
+app.post('/api/support-tickets', authenticateToken, upload.array('images', 5), (req, res) => {
+  const { customer_id, customer_name, product_id, product_name, subject, description, status, priority, owner_id } = req.body;
+  if (!subject) return res.status(400).json({ error: 'Subject is required' });
+  const ticket_number = 'TKT-' + String(Date.now()).slice(-6);
+  const resolvedOwnerId = owner_id || req.user.id;
+  db.get('SELECT username FROM users WHERE id = ?', [resolvedOwnerId], (err, ownerRow) => {
+    const owner_name = ownerRow?.username || null;
+    db.run(
+      `INSERT INTO support_tickets (ticket_number, customer_id, customer_name, product_id, product_name, subject, description, status, priority, created_by, owner_id, owner_name, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+      [ticket_number, customer_id||null, customer_name||null, product_id||null, product_name||null,
+       subject, description||'', status||'open', priority||'medium', req.user.id, resolvedOwnerId, owner_name],
+      function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        const ticketId = this.lastID;
+        const files = req.files || [];
+        files.forEach(file => {
+          db.run(`INSERT INTO support_attachments (ticket_id, filename, file_path, file_size) VALUES (?, ?, ?, ?)`,
+            [ticketId, file.originalname, '/uploads/' + file.filename, file.size], () => {});
+        });
+        logActivity(req.user.id, 'CREATE_TICKET', 'support_ticket', ticketId, { subject });
+        logTicketHistory(ticketId, req.user.id, req.user.email, 'created', { new_status: status||'open', owner_id: resolvedOwnerId, owner_name });
+        res.json({ id: ticketId, ticket_number });
+      }
+    );
+  });
+});
+
+app.put('/api/support-tickets/:id', authenticateToken, upload.array('images', 5), (req, res) => {
+  const { id } = req.params;
+  const { customer_id, customer_name, product_id, product_name, subject, description, status, priority, owner_id } = req.body;
+  if (!subject) return res.status(400).json({ error: 'Subject is required' });
+  const closedCol = status === 'closed' ? ", closed_at=datetime('now')" : '';
+  const resolveOwner = (cb) => {
+    if (owner_id && req.user.role === 'admin') {
+      db.get('SELECT username FROM users WHERE id = ?', [owner_id], (e, r) => cb(owner_id, r?.username||null));
+    } else {
+      db.get('SELECT owner_id, owner_name FROM support_tickets WHERE id = ?', [id], (e, r) => cb(r?.owner_id||null, r?.owner_name||null));
+    }
+  };
+  resolveOwner((ownerId, ownerName) => {
+    // Get old status/owner before update
+    db.get('SELECT status, owner_id, owner_name FROM support_tickets WHERE id = ?', [id], (err0, oldRow) => {
+      const { awaiting_channel, awaiting_note, awaiting_deadline } = req.body;
+      db.run(
+        `UPDATE support_tickets SET customer_id=?, customer_name=?, product_id=?, product_name=?,
+         subject=?, description=?, status=?, priority=?, owner_id=?, owner_name=?,
+         awaiting_channel=?, awaiting_note=?, awaiting_deadline=?,
+         updated_at=datetime('now')${closedCol} WHERE id=?`,
+        [customer_id||null, customer_name||null, product_id||null, product_name||null,
+         subject, description||'', status||'open', priority||'medium', ownerId, ownerName,
+         awaiting_channel||null, awaiting_note||null, awaiting_deadline||null, id],
+        (err) => {
+          if (err) return res.status(500).json({ error: err.message });
+          const files = req.files || [];
+          files.forEach(file => {
+            db.run(`INSERT INTO support_attachments (ticket_id, filename, file_path, file_size) VALUES (?, ?, ?, ?)`,
+              [id, file.originalname, '/uploads/' + file.filename, file.size], () => {});
+          });
+          logActivity(req.user.id, 'UPDATE_TICKET', 'support_ticket', id, { subject, status });
+          // Log history
+          const histDetails = {
+            old_status: oldRow?.status, new_status: status||'open',
+            owner_id: ownerId, owner_name: ownerName,
+          };
+          if (status === 'awaiting_customer') {
+            histDetails.awaiting_channel = awaiting_channel||null;
+            histDetails.awaiting_note = awaiting_note||null;
+            histDetails.awaiting_deadline = awaiting_deadline||null;
+          }
+          const action = oldRow?.status !== status ? 'status_changed' :
+                         oldRow?.owner_id !== parseInt(ownerId) ? 'owner_changed' : 'updated';
+          logTicketHistory(id, req.user.id, req.user.email, action, histDetails);
+          res.json({ message: 'Ticket updated' });
+        }
+      );
+    });
+  });
+});
+
+app.get('/api/support-tickets/:id/history', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  db.all(`SELECT h.*, u.username as actor_name FROM support_ticket_history h
+    LEFT JOIN users u ON h.user_id = u.id
+    WHERE h.ticket_id = ? ORDER BY h.created_at ASC`, [id], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+
+app.post('/api/support-tickets/:id/comments', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  const { comment } = req.body;
+  if (!comment || !comment.trim()) return res.status(400).json({ error: 'Comment is required' });
+  db.get('SELECT username FROM users WHERE id = ?', [req.user.id], (err, userRow) => {
+    db.run(`INSERT INTO support_ticket_history (ticket_id, user_id, username, action, comment, created_at)
+      VALUES (?, ?, ?, 'comment', ?, datetime('now'))`,
+      [id, req.user.id, userRow?.username || req.user.email, comment.trim()],
+      function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ id: this.lastID });
+      }
+    );
+  });
+});
+
+app.delete('/api/support-tickets/:id', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  db.run('DELETE FROM support_tickets WHERE id = ?', [id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Ticket not found' });
+    logActivity(req.user.id, 'DELETE_TICKET', 'support_ticket', id, {});
+    res.json({ message: 'Ticket deleted' });
+  });
+});
+
+// ===== WAREHOUSE ALERTS =====
+
+// POST - create warehouse alert from support ticket
+app.post('/api/warehouse-alerts', authenticateToken, (req, res) => {
+  const { ticket_id, product_id, product_name, quantity } = req.body;
+  if (!ticket_id || !product_id) return res.status(400).json({ error: 'ticket_id and product_id required' });
+  db.get('SELECT ticket_number, customer_name FROM support_tickets WHERE id = ?', [ticket_id], (err, ticket) => {
+    if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+    db.run(`INSERT INTO warehouse_alerts (ticket_id, ticket_number, customer_name, product_id, product_name, quantity, requested_by, requested_by_name, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+      [ticket_id, ticket.ticket_number, ticket.customer_name, product_id, product_name, quantity||1, req.user.id, req.user.username||req.user.email],
+      function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ id: this.lastID });
+      }
+    );
+  });
+});
+
+// GET - get pending warehouse alerts (for warehouse dashboard)
+app.get('/api/warehouse-alerts', authenticateToken, (req, res) => {
+  db.all(`SELECT * FROM warehouse_alerts WHERE status = 'pending' ORDER BY created_at DESC`, [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+
+// PUT - complete warehouse alert (mark as done)
+app.put('/api/warehouse-alerts/:id/complete', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  db.get('SELECT * FROM warehouse_alerts WHERE id = ?', [id], (err, alert) => {
+    if (!alert) return res.status(404).json({ error: 'Alert not found' });
+    db.run(`UPDATE warehouse_alerts SET status='completed', completed_at=datetime('now') WHERE id=?`, [id], (err2) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      // Log to ticket history
+      logTicketHistory(alert.ticket_id, req.user.id, req.user.username||req.user.email, 'product_dispatched', {
+        new_status: null,
+        awaiting_note: `${alert.product_name} x${alert.quantity}`
+      });
+      // Send needs_ack notification to support user
+      db.run(`INSERT INTO notifications (user_id, type, title, message, data, needs_ack, created_at)
+        VALUES (?, 'warehouse_dispatched', 'warehouse_dispatched', ?, ?, 1, datetime('now'))`,
+        [alert.requested_by,
+         JSON.stringify({ product_name: alert.product_name, quantity: alert.quantity, ticket_number: alert.ticket_number }),
+         JSON.stringify({ ticket_id: alert.ticket_id, alert_id: id, product_name: alert.product_name, quantity: alert.quantity, ticket_number: alert.ticket_number })],
+        () => {}
+      );
+      res.json({ message: 'Alert completed' });
+    });
+  });
+});
+
+// PUT - acknowledge notification (user confirms receipt)
+app.put('/api/notifications/:id/acknowledge', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  db.get('SELECT * FROM notifications WHERE id = ? AND user_id = ?', [id, req.user.id], (err, n) => {
+    if (!n) return res.status(404).json({ error: 'Not found' });
+    db.run(`UPDATE notifications SET is_read=1, needs_ack=0, acked_at=datetime('now') WHERE id=?`, [id], (err2) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      // Log acknowledgement to ticket history
+      try {
+        const data = JSON.parse(n.data || '{}');
+        if (data.ticket_id) {
+          logTicketHistory(data.ticket_id, req.user.id, req.user.username||req.user.email, 'dispatch_acknowledged', {
+            awaiting_note: `${data.product_name} x${data.quantity}`
+          });
+        }
+      } catch(e) {}
+      res.json({ message: 'Acknowledged' });
+    });
+  });
+});
+
+// ===== NOTIFICATIONS =====
+
+app.get('/api/notifications', authenticateToken, (req, res) => {
+  db.all(`SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50`, [req.user.id], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+
+app.get('/api/notifications/pending-ack', authenticateToken, (req, res) => {
+  db.all(`SELECT * FROM notifications WHERE user_id = ? AND needs_ack = 1 AND is_read = 0 ORDER BY created_at DESC`,
+    [req.user.id], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+
+app.get('/api/notifications/unread-count', authenticateToken, (req, res) => {
+  db.get(`SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0`, [req.user.id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ count: row?.count || 0 });
+  });
+});
+
+app.put('/api/notifications/:id/read', authenticateToken, (req, res) => {
+  db.run(`UPDATE notifications SET is_read=1 WHERE id=? AND user_id=?`, [req.params.id, req.user.id], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'Marked as read' });
+  });
+});
+
+app.put('/api/notifications/read-all', authenticateToken, (req, res) => {
+  db.run(`UPDATE notifications SET is_read=1 WHERE user_id=?`, [req.user.id], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'All marked as read' });
+  });
 });
 
 // Start server
@@ -4994,55 +5492,4 @@ app.post('/api/quotes/:id/stages/9/complete', authenticateToken, (req, res) => {
     }
   );
 });
-// QR Codes API endpoint - בטוח + פשוט
-app.get('/api/qr_codes', (req, res) => {
-  console.log('📱 QR API called...');
-  
-  // בדוק כל טבלת QR אפשרית
-  db.all("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%qr%'", (err, tables) => {
-    if (err) {
-      console.error('Error listing QR tables:', err);
-      return res.json([]);
-    }
-    
-    console.log('📱 QR tables found:', tables.map(t => t.name));
-    
-    if (tables.length === 0) {
-      console.log('📱 No QR tables found');
-      return res.json([]);
-    }
-    
-    const firstTable = tables[0].name;
-    db.all(`SELECT * FROM ${firstTable} LIMIT 10`, (err, qrCodes) => {
-      if (err) {
-        console.error(`Error from ${firstTable}:`, err);
-        return res.json([]);
-      }
-      
-      console.log(`📱 Found ${qrCodes.length} QR codes in ${firstTable}`);
-      res.json(qrCodes.map(qr => ({
-        id: qr.id || qr.rowid || Math.random(),
-        title: qr.title || qr.name || `QR ${qr.rowid || '1'}`,
-        image_data: qr.image_data || qr.image_path || qr.qr_url || ''
-      })));
-    });
-  });
-});
 
-// 🔥 BRIDGE: שמור QR מ-Settings ל-DB
-app.post('/api/qr_codes/save-from-settings', express.json(), (req, res) => {
-  const qrGallery = req.body.qrGallery || [];
-  
-  db.serialize(() => {
-    qrGallery.forEach(qr => {
-      if (qr.image) {
-        db.run(`INSERT OR REPLACE INTO qr_codes (id, title, image_data, qr_data) 
-                VALUES (?, ?, ?, ?)`, 
-                [qr.id, `${qr.type.toUpperCase()} QR`, qr.image, qr.qrData || '']);
-      }
-    });
-  });
-  
-  console.log(`💾 Saved ${qrGallery.length} QR codes from Settings to DB`);
-  res.json({ success: true, count: qrGallery.length });
-});

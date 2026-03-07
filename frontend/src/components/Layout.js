@@ -1,12 +1,35 @@
-import React from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../utils/AuthContext';
 import { useLanguage } from '../utils/LanguageContext';
+import axios from 'axios';
 
 function Layout() {
-  const { user } = useAuth();
-  const { t } = useLanguage();
+  const { user, logout } = useAuth();
+  const { t, language, setLanguage } = useLanguage();
   const location = useLocation();
+  const navigate = useNavigate();
+  const [companyLogo, setCompanyLogo] = useState(null);
+
+  useEffect(() => {
+    fetchCompanyLogo();
+  }, []);
+
+  const fetchCompanyLogo = async () => {
+    try {
+      const response = await axios.get('/api/company');
+      if (response.data.logo_path) {
+        setCompanyLogo(`http://localhost:3001${response.data.logo_path}`);
+      }
+    } catch (error) {
+      console.error('Error fetching company logo:', error);
+    }
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   const isActive = (path) => {
     return location.pathname === path ? 'active' : '';
@@ -30,15 +53,15 @@ function Layout() {
 
   return (
     <div className="app">
-      {/* Header removed - now in App.js */}
-
-      <div className="main-layout">
+      <div className="main-layout" style={{ minHeight: '100vh' }}>
         <aside className="sidebar">
           <nav>
             <Link to="/dashboard" className={isActive('/dashboard')}>
               <span className="sidebar-icon">📊</span>
               {t('dashboard')}
             </Link>
+
+
             
             {/* Warehouse Module */}
             {hasModuleAccess('warehouse') && (
@@ -70,13 +93,13 @@ function Layout() {
               </>
             )}
             
-            {/* Reports */}
+            {/* Reports - available to all */}
             <Link to="/reports" className={isActive('/reports')}>
-              <span className="sidebar-icon">📦</span>
-              {t('warehouse_reports') || 'דוחות מחסן'}
+              <span className="sidebar-icon">📈</span>
+              {t('reports')}
             </Link>
             
-                        {/* Settings - admin only */}
+            {/* Settings - admin only */}
             {user?.role === 'admin' && (
               <Link to="/settings" className={isActive('/settings')}>
                 <span className="sidebar-icon">⚙️</span>
@@ -92,11 +115,13 @@ function Layout() {
               </Link>
             )}
             
-            {/* Activity Log - available to all */}
-            <Link to="/activity-log" className={isActive('/activity-log')}>
-              <span className="sidebar-icon">📝</span>
-              {t('activity_log')}
-            </Link>
+            {/* Activity Log - admin only */}
+            {user?.role === 'admin' && (
+              <Link to="/activity-log" className={isActive('/activity-log')}>
+                <span className="sidebar-icon">📝</span>
+                {t('activity_log')}
+              </Link>
+            )}
           </nav>
         </aside>
 

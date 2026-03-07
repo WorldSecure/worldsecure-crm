@@ -46,7 +46,7 @@ function Login() {
         </div>
         
         <h2>{t('app_name')}</h2>
-        <h3 style={{ textAlign: 'center', marginBottom: '1.5rem', color: '#7f8c8d' }}>
+        <h3 style={{ textAlign: 'center', marginBottom: '1.5rem', color: '#7f8c8d', width: '100%', display: 'block' }}>
           {t('login')}
         </h3>
 

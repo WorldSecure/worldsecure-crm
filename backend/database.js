@@ -321,4 +321,22 @@ db.serialize(() => {
     if (err) console.error('Error creating quote_stage_files table:', err);
   });
 
+  // Add qr_code_id to transactions tables if not exists
+  db.run(`ALTER TABLE outbound_transactions ADD COLUMN qr_code_id INTEGER`, () => {});
+  db.run(`ALTER TABLE inbound_transactions ADD COLUMN qr_code_id INTEGER`, () => {});
+  db.run(`ALTER TABLE quotes ADD COLUMN qr_code_id INTEGER`, () => {});
+
+  // QR Codes table
+  db.run(`CREATE TABLE IF NOT EXISTS qr_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL,
+    qr_data TEXT NOT NULL,
+    image_url TEXT NOT NULL,
+    title TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    created_by INTEGER
+  )`, (err) => {
+    if (err) console.error('Error creating qr_codes table:', err);
+  });
+
 module.exports = db;

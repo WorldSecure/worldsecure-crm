@@ -14,8 +14,6 @@ body {
 
 .app {
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
 }
 
 /* Header */
@@ -86,18 +84,15 @@ body {
 /* Main Layout */
 .main-layout {
   display: flex;
-  flex: 1;
-  min-height: 100vh;
+  min-height: calc(100vh - 70px);
 }
 
 /* Sidebar */
 .sidebar {
   width: 250px;
-  min-height: 100vh;
-  background: linear-gradient(180deg, #1a6fa8 0%, #135d8f 100%);
-  box-shadow: 3px 0 12px rgba(10,61,107,0.3);
+  background: white;
+  box-shadow: 2px 0 4px rgba(0,0,0,0.1);
   padding: 1rem 0;
-  flex-shrink: 0;
 }
 
 .sidebar nav {
@@ -107,26 +102,18 @@ body {
 
 .sidebar a {
   padding: 0.8rem 1.5rem;
-  color: rgba(255,255,255,0.88);
+  color: #2c3e50;
   text-decoration: none;
   display: flex;
   align-items: center;
   gap: 0.8rem;
-  transition: all 0.2s ease;
-  border-left: 3px solid transparent;
+  transition: all 0.3s ease;
 }
 
-.sidebar a:hover {
-  background: rgba(255,255,255,0.15);
-  color: white;
-  border-left: 3px solid rgba(255,255,255,0.6);
-}
-
+.sidebar a:hover,
 .sidebar a.active {
-  background: #0a3d6b;
+  background: #3498db;
   color: white;
-  border-left: 3px solid #cc0000;
-  font-weight: 600;
 }
 
 .sidebar-icon {
