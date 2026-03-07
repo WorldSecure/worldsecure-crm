@@ -691,7 +691,7 @@ app.get('/api/outbound/:id/delivery-note', authenticateToken, async (req, res) =
     status.style.color='#555'; status.textContent='⏳ ...';
     const token = window._authToken || sessionStorage.getItem('token') || '';
     try {
-      const res = await fetch('/api/send-email', {
+      const res = await fetch('https://worldsecure-backend.onrender.com/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
         body: JSON.stringify({ to, subject, body, docType, docId, docLang: window._docLang, docContact: window._docContact })
@@ -976,7 +976,7 @@ app.get('/api/inbound/:id/receipt-note', authenticateToken, async (req, res) => 
     status.style.color='#555'; status.textContent='⏳ ...';
     const token = window._authToken || sessionStorage.getItem('token') || '';
     try {
-      const res = await fetch('/api/send-email', {
+      const res = await fetch('https://worldsecure-backend.onrender.com/api/send-email', {
         method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
         body: JSON.stringify({ to, subject, body, docType:'inbound', docId:'${id}', docLang:window._docLang, docContact:window._docContact })
       });
