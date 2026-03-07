@@ -1848,7 +1848,7 @@ ${tx?.notes?`<p><strong>${lang==='he'?'הערות':'Notes'}:</strong> ${tx.notes
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'api-key': company.smtp_pass
+        'api-key': process.env.BREVO_API_KEY || company.smtp_pass
       },
       body: JSON.stringify(emailPayload)
     });
