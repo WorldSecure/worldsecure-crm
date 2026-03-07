@@ -370,7 +370,35 @@ async function syncDocumentsFromCloud() {
 //  הפעלה
 // ════════════════════════════════════════════════════════════════════════════
 
+// ── Pull deletions from cloud and apply locally ───────────────────────────────
+async function pullDeletionsFromCloud() {
+  try {
+    const result = await apiRequest('GET', '/api/sync/pending-deletions');
+    if (result.status !== 200) return;
+    const deletions = result.body;
+    if (!deletions || deletions.length === 0) return;
+
+    const handled = [];
+    for (const d of deletions) {
+      if (d.entity_type === 'support_ticket') {
+        await sqliteRun('DELETE FROM support_ticket_history WHERE ticket_id = ?', [d.entity_id]);
+        await sqliteRun('DELETE FROM support_tickets WHERE id = ?', [d.entity_id]);
+        handled.push(d);
+        log(`  ↳ pulled deletion: support_ticket #${d.entity_id}`);
+      }
+    }
+
+    if (handled.length > 0) {
+      await apiRequest('DELETE', '/api/sync/pending-deletions', { ids: handled });
+      log(`  ↳ cleared ${handled.length} pending deletions from cloud`);
+    }
+  } catch (err) {
+    log(`  ⚠ pullDeletions error: ${err.message}`);
+  }
+}
+
 async function syncAll() {
+  await pullDeletionsFromCloud();
   await syncLocalToCloud();
   await syncCloudToLocal();
 }
