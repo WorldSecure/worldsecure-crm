@@ -356,6 +356,17 @@ async function initDatabase() {
     `);
 
     await client.query('COMMIT');
+
+    // ── MIGRATIONS - הוספת עמודות חסרות לטבלאות קיימות ──────────────────
+    const migrations = [
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_warehouse BOOLEAN DEFAULT TRUE`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_sales BOOLEAN DEFAULT FALSE`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_service BOOLEAN DEFAULT TRUE`,
+    ];
+    for (const sql of migrations) {
+      try { await pool.query(sql); } catch(e) { /* ignore */ }
+    }
+
     console.log('✅ Cloud PostgreSQL database initialized successfully');
   } catch (err) {
     await client.query('ROLLBACK');
