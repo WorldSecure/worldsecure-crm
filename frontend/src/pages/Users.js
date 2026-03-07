@@ -86,9 +86,9 @@ function Users() {
       email: userItem.email,
       password: '',
       role: userItem.role,
-      module_warehouse: userItem.module_warehouse !== 0,
-      module_sales: userItem.module_sales !== 0,
-      module_service: userItem.module_service !== 0
+      module_warehouse: userItem.module_warehouse === true || userItem.module_warehouse === 1,
+      module_sales: userItem.module_sales === true || userItem.module_sales === 1,
+      module_service: userItem.module_service === true || userItem.module_service === 1
     });
     setShowModal(true);
   };
