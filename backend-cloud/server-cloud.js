@@ -137,7 +137,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 // ── Users ─────────────────────────────────────────────────────────────────────
 app.get('/api/users', authenticateToken, async (req, res) => {
   try {
-    const result = await query('SELECT id, username, email, role, created_at FROM users ORDER BY id');
+    const result = await query('SELECT id, username, email, role, module_warehouse, module_sales, module_service, created_at FROM users ORDER BY id');
     res.json(result.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
