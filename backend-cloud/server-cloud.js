@@ -1655,23 +1655,16 @@ app.post('/api/sync/support', authenticateToken, async (req, res) => {
       );
     }
 
-    // מחק מהענן tickets שנמחקו במקומי
-    // localIds = כל ה-IDs שקיימים מקומית כרגע
-    if (Array.isArray(localIds)) {
-      const cloudRows = await client.query(`SELECT id FROM support_tickets`);
-      for (const row of cloudRows.rows) {
-        if (!localIds.includes(row.id)) {
-          // בדוק שזה לא ticket שנמחק בענן וממתין לסינק מקומי
-          const isPending = await client.query(
-            `SELECT 1 FROM pending_deletions WHERE entity_type='support_ticket' AND entity_id=$1`,
-            [row.id]
-          );
-          if (isPending.rowCount === 0) {
-            // לא ב-pending_deletions → נמחק מקומית → מחק מהענן
-            await client.query('DELETE FROM support_ticket_history WHERE ticket_id=$1', [row.id]);
-            await client.query('DELETE FROM support_tickets WHERE id=$1', [row.id]);
-          }
-        }
+    // מחק מהענן רק tickets שנמחקו מקומית באופן מפורש (deletedIds)
+    const { deletedIds } = req.body;
+    if (Array.isArray(deletedIds) && deletedIds.length > 0) {
+      for (const id of deletedIds) {
+        await client.query('DELETE FROM support_ticket_history WHERE ticket_id=$1', [id]);
+        await client.query('DELETE FROM support_tickets WHERE id=$1', [id]);
+        // נקה גם מ-pending_deletions אם קיים
+        await client.query(
+          `DELETE FROM pending_deletions WHERE entity_type='support_ticket' AND entity_id=$1`, [id]
+        );
       }
     }
 

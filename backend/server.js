@@ -5236,11 +5236,21 @@ app.post('/api/support-tickets/:id/comments', authenticateToken, (req, res) => {
 
 app.delete('/api/support-tickets/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
-  db.run('DELETE FROM support_tickets WHERE id = ?', [id], function(err) {
+  db.run('DELETE FROM support_ticket_history WHERE ticket_id = ?', [id], (err) => {
     if (err) return res.status(500).json({ error: err.message });
-    if (this.changes === 0) return res.status(404).json({ error: 'Ticket not found' });
-    logActivity(req.user.id, 'DELETE_TICKET', 'support_ticket', id, {});
-    res.json({ message: 'Ticket deleted' });
+    db.run('DELETE FROM support_tickets WHERE id = ?', [id], function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      if (this.changes === 0) return res.status(404).json({ error: 'Ticket not found' });
+      // שמור ב-deleted_support_tickets כדי שהסינק יידע למחוק גם בענן
+      db.run(`CREATE TABLE IF NOT EXISTS deleted_support_tickets (
+        ticket_id INTEGER PRIMARY KEY,
+        deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`, () => {
+        db.run('INSERT OR REPLACE INTO deleted_support_tickets (ticket_id) VALUES (?)', [id]);
+      });
+      logActivity(req.user.id, 'DELETE_TICKET', 'support_ticket', id, {});
+      res.json({ message: 'Ticket deleted' });
+    });
   });
 });
 

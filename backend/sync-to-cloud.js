@@ -167,10 +167,20 @@ async function syncOutboundToCloud() {
 async function syncSupportToCloud() {
   const tickets  = await sqliteAll('SELECT * FROM support_tickets ORDER BY id');
   const history  = await sqliteAll('SELECT * FROM support_ticket_history ORDER BY id');
-  const localIds = tickets.map(t => t.id);
-  const result = await apiRequest('POST', '/api/sync/support', { tickets, history, localIds });
-  if (result.status === 200) log(`  ↳ support: ${tickets.length} tickets synced`);
-  else log(`  ⚠ support: ${JSON.stringify(result.body)}`);
+  // שלח רשימת IDs שנמחקו מקומית (לא את כל ה-IDs הקיימים!)
+  const deletedIds = await sqliteAll('SELECT ticket_id FROM deleted_support_tickets').catch(() => []);
+  const result = await apiRequest('POST', '/api/sync/support', {
+    tickets,
+    history,
+    deletedIds: deletedIds.map(r => r.ticket_id)
+  });
+  if (result.status === 200) {
+    // נקה את טבלת המחיקות המקומית לאחר סינק מוצלח
+    await sqliteRun('DELETE FROM deleted_support_tickets').catch(() => {});
+    log(`  ↳ support: ${tickets.length} tickets synced`);
+  } else {
+    log(`  ⚠ support: ${JSON.stringify(result.body)}`);
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -260,6 +270,12 @@ async function syncOutboundFromCloud() {
 // ── Support מהענן ─────────────────────────────────────────────────────────────
 async function syncSupportFromCloud() {
   // וודא שהטבלאות קיימות במקומי
+  // טבלת מחיקות מקומית - שומרת IDs של tickets שנמחקו מקומית
+  await sqliteRun(`CREATE TABLE IF NOT EXISTS deleted_support_tickets (
+    ticket_id INTEGER PRIMARY KEY,
+    deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`).catch(() => {});
+
   await sqliteRun(`CREATE TABLE IF NOT EXISTS support_tickets (
     id INTEGER PRIMARY KEY,
     ticket_number TEXT,
@@ -301,8 +317,6 @@ async function syncSupportFromCloud() {
   const { tickets, history } = result.body;
   let count = 0;
 
-  const cloudIds = (tickets || []).map(t => t.id);
-
   for (const t of (tickets || [])) {
     await sqliteRun(`
       INSERT OR REPLACE INTO support_tickets
@@ -319,16 +333,6 @@ async function syncSupportFromCloud() {
        t.closed_at||null, t.cancelled_at||null]
     );
     count++;
-  }
-
-  // מחק מקומית tickets שנמחקו בענן
-  const localTickets = await sqliteAll('SELECT id FROM support_tickets');
-  for (const local of localTickets) {
-    if (!cloudIds.includes(local.id)) {
-      await sqliteRun('DELETE FROM support_ticket_history WHERE ticket_id = ?', [local.id]);
-      await sqliteRun('DELETE FROM support_tickets WHERE id = ?', [local.id]);
-      log(`  ↳ deleted local ticket #${local.id} (removed from cloud)`);
-    }
   }
 
   for (const h of (history || [])) {
@@ -395,6 +399,8 @@ async function pullDeletionsFromCloud() {
       if (d.entity_type === 'support_ticket') {
         await sqliteRun('DELETE FROM support_ticket_history WHERE ticket_id = ?', [d.entity_id]);
         await sqliteRun('DELETE FROM support_tickets WHERE id = ?', [d.entity_id]);
+        // הסר מ-deleted_support_tickets אם קיים שם (למנוע לולאה)
+        await sqliteRun('DELETE FROM deleted_support_tickets WHERE ticket_id = ?', [d.entity_id]).catch(() => {});
         handled.push(d);
         log(`  ↳ pulled deletion: support_ticket #${d.entity_id}`);
       }
