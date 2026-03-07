@@ -538,15 +538,39 @@ app.get('/documents/:type/:filename', authenticateToken, (req, res) => {
 // ── Delivery Note ─────────────────────────────────────────────────────────────
 app.get('/api/outbound/:id/delivery-note', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  const { lang = 'he', token = '' } = req.query;
+  const { lang = 'he', contact = '', token = '' } = req.query;
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${date.getFullYear()}`;
+  };
+
+  const buildPhoneString = (company) => {
+    const phones = [];
+    if (company.phone && company.phone1_primary) phones.push(company.phone);
+    if (company.phone2 && company.phone2_primary) phones.push(company.phone2);
+    if (company.phone3 && company.phone3_primary) phones.push(company.phone3);
+    return phones.length > 0 ? phones.join(', ') : (company.phone || 'N/A');
+  };
+
+  const translations = {
+    he: { title:'תעודת משלוח', documentNumber:'מספר', date:'תאריך', companyDetails:'פרטי החברה', customerDetails:'פרטי הלקוח', name:'שם', address:'כתובת', phone:'טלפון', email:'אימייל', contactPerson:'איש קשר', taxId:'ע.מ / ח.פ', status:'סטטוס', items:'פריטים', sku:'מק"ט', productName:'שם מוצר', quantity:'כמות', notes:'הערות', preparedBy:'נערך על ידי', print:'הדפס / שמור כ-PDF', close:'סגור', sendEmail:'שלח במייל', emailTo:'כתובת מייל', emailSubject:'נושא', emailBody:'הודעה', emailSend:'שלח', emailCancel:'ביטול', emailSuccess:'המייל נשלח בהצלחה!', emailError:'שגיאה בשליחת המייל', emailSmtpMissing:'יש להגדיר SMTP בהגדרות החברה', dir:'rtl' },
+    en: { title:'Delivery Note', documentNumber:'Number', date:'Date', companyDetails:'Company Details', customerDetails:'Customer Details', name:'Name', address:'Address', phone:'Phone', email:'Email', contactPerson:'Contact Person', taxId:'Tax ID', status:'Status', items:'Items', sku:'SKU', productName:'Product Name', quantity:'Quantity', notes:'Notes', preparedBy:'Prepared by', print:'Print / Save as PDF', close:'Close', sendEmail:'Send by Email', emailTo:'Email Address', emailSubject:'Subject', emailBody:'Message', emailSend:'Send', emailCancel:'Cancel', emailSuccess:'Email sent successfully!', emailError:'Error sending email', emailSmtpMissing:'Please configure SMTP in company settings', dir:'ltr' },
+    pt: { title:'Nota de Entrega', documentNumber:'Número', date:'Data', companyDetails:'Detalhes da Empresa', customerDetails:'Detalhes do Cliente', name:'Nome', address:'Endereço', phone:'Telefone', email:'E-mail', contactPerson:'Pessoa de Contacto', taxId:'NIF', status:'Status', items:'Itens', sku:'SKU', productName:'Nome do Produto', quantity:'Quantidade', notes:'Notas', preparedBy:'Preparado por', print:'Imprimir / Salvar como PDF', close:'Fechar', sendEmail:'Enviar por Email', emailTo:'Endereço de Email', emailSubject:'Assunto', emailBody:'Mensagem', emailSend:'Enviar', emailCancel:'Cancelar', emailSuccess:'Email enviado com sucesso!', emailError:'Erro ao enviar email', emailSmtpMissing:'Configure o SMTP nas configurações da empresa', dir:'ltr' }
+  };
+  const t = translations[lang] || translations.he;
 
   try {
     const txRes = await query(`
       SELECT ot.*, c.name as customer_name, c.address as customer_address,
-             c.phone as customer_phone, c.email as customer_email, u.username
+             c.phone as customer_phone, c.email as customer_email,
+             c.contact_person as customer_contact,
+             u.username,
+             qr.image_url as qr_image_url
       FROM outbound_transactions ot
       LEFT JOIN customers c ON ot.customer_id = c.id
       LEFT JOIN users u ON ot.user_id = u.id
+      LEFT JOIN qr_codes qr ON ot.qr_code_id = qr.id
       WHERE ot.id=$1`, [id]);
     const transaction = txRes.rows[0];
     if (!transaction) return res.status(404).json({ error: 'Not found' });
@@ -560,113 +584,246 @@ app.get('/api/outbound/:id/delivery-note', authenticateToken, async (req, res) =
     const compRes = await query('SELECT * FROM company_settings WHERE id=1');
     const company = compRes.rows[0] || {};
 
-    const t = {
-      he: { title:'תעודת משלוח', dir:'rtl', sku:'מק"ט', qty:'כמות', product:'שם מוצר', date:'תאריך', num:'מספר' },
-      en: { title:'Delivery Note',  dir:'ltr', sku:'SKU', qty:'Quantity', product:'Product Name', date:'Date', num:'Number' },
-      pt: { title:'Nota de Entrega',dir:'ltr', sku:'SKU', qty:'Quantidade', product:'Nome do Produto', date:'Data', num:'Número' }
-    }[lang] || { title:'Delivery Note', dir:'ltr', sku:'SKU', qty:'Qty', product:'Product', date:'Date', num:'No' };
+    const baseUrl = 'https://worldsecure-backend.onrender.com';
+    const logoHtml = company.logo_path
+      ? `<div style="text-align:left;margin-bottom:20px;position:relative;z-index:1;"><img src="${baseUrl}${company.logo_path}" alt="Company Logo" style="max-height:120px;max-width:300px;object-fit:contain;"></div>`
+      : '';
 
-    const formatDate = (d) => {
-      const dt = new Date(d);
-      return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
-    };
+    const qrImgHtml = transaction.qr_image_url
+      ? `<img src="${transaction.qr_image_url}" alt="QR Code" style="width:55px;height:55px;display:block;${t.dir==='rtl'?'margin-right:auto;':'margin-left:auto;'}">`
+      : '';
 
-    const html = `<!DOCTYPE html><html dir="${t.dir}"><head><meta charset="UTF-8">
-<title>${t.title} #${id}</title>
-<style>
-  body{font-family:Arial,sans-serif;max-width:800px;margin:20px auto;padding:20px}
-  @media print{.no-print{display:none}@page{margin:1.5cm 2cm;size:A4}}
-  .btn-bar{text-align:center;padding:15px;background:#f8f9fa;border-radius:8px;margin-bottom:20px}
-  .btn-bar button{padding:10px 20px;margin:0 6px;border:none;border-radius:5px;cursor:pointer;font-weight:600}
-  .btn-print{background:#3498db;color:#fff}.btn-close{background:#95a5a6;color:#fff}
-  table{width:100%;border-collapse:collapse;margin:20px 0}
-  th{background:#3498db;color:#fff;padding:10px;text-align:${t.dir==='rtl'?'right':'left'}}
-  td{padding:10px;border:1px solid #ddd}
-  .info-box{flex:1;padding:15px;border:1px solid #ddd;border-radius:5px;margin:0 8px}
-  .info-box h3{margin-top:0;border-bottom:2px solid #3498db;padding-bottom:5px}
-  .info-row{display:flex;margin-bottom:20px}
-  .footer{margin-top:30px;padding-top:15px;border-top:2px solid #ddd;text-align:center;color:#777}
-    .email-modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:99999;justify-content:center;align-items:center}
-  .email-modal-overlay.open{display:flex!important}
-  .email-modal-box{background:white;border-radius:10px;padding:2rem;width:420px;max-width:95vw;box-shadow:0 10px 40px rgba(0,0,0,0.3);direction:${t.dir}}
-  .email-modal-box h3{margin:0 0 1.2rem;font-size:1.2rem}
-  .email-modal-box label{display:block;font-weight:600;margin-bottom:0.3rem;font-size:0.9rem}
-  .email-modal-box input,.email-modal-box textarea{width:100%;padding:0.6rem;border:1px solid #ddd;border-radius:5px;font-size:0.95rem;margin-bottom:1rem;box-sizing:border-box;font-family:inherit}
-  .email-modal-box textarea{height:80px;resize:vertical}
-  .email-modal-footer{display:flex;gap:0.75rem;justify-content:flex-end;margin-top:0.5rem}
-  .email-modal-footer button{padding:0.6rem 1.4rem;border:none;border-radius:5px;cursor:pointer;font-size:0.95rem}
-  .btn-modal-send{background:#27ae60;color:white}.btn-modal-cancel{background:#95a5a6;color:white}
-  #email-status{margin-top:0.5rem;font-size:0.9rem;min-height:1.2rem}
-  .doc-footer{position:fixed;bottom:0;left:0;right:0;border-top:1px solid #ddd;padding:5px;text-align:center;font-size:8pt;color:#888;background:#fff}
-</style></head><body>
-<script>
-window._authToken = '${token}';
-async function sendDocumentEmail() {
-  const to = document.getElementById('emailTo').value;
-  const subject = document.getElementById('emailSubject').value;
-  const body = document.getElementById('emailBody').value;
-  const status = document.getElementById('email-status');
-  if (!to) { status.style.color='red'; status.textContent='${lang==="he"?"נא להזין כתובת מייל":"Please enter email address"}'; return; }
-  status.style.color='#555'; status.textContent='⏳ ...';
-  const token = window._authToken || sessionStorage.getItem('token') || '';
-  try {
-    const res = await fetch('/api/send-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ to, subject, body, docType: 'outbound', docId: '${id}', docLang: '${lang}' })
-    });
-    const data = await res.json();
-    if (res.ok) {
-      status.style.color='green'; status.textContent='✅ ${lang==="he"?"נשלח בהצלחה":"Sent successfully"}';
-      setTimeout(() => document.getElementById('emailModal').classList.remove('open'), 2000);
-    } else {
-      status.style.color='red'; status.textContent='❌ ' + (data.error || 'Error');
-    }
-  } catch(e) { status.style.color='red'; status.textContent='❌ ${lang==="he"?"שגיאה בשליחה":"Send error"}'; }
-}
-</script>
-<div class="btn-bar no-print">
-  <button class="btn-print" onclick="window.print()">🖨️ ${lang==='he'?'הדפס / שמור PDF':lang==='pt'?'Imprimir / Salvar PDF':'Print / Save as PDF'}</button>
-  <button onclick="document.getElementById('emailModal').classList.add('open')" style="background:#4CAF50;color:white">✉️ ${lang==='he'?'שלח במייל':lang==='pt'?'Enviar por Email':'Send by Email'}</button>
-  <button class="btn-close" onclick="window.close()">❌ ${lang==='he'?'סגור':lang==='pt'?'Fechar':'Close'}</button>
-</div>
-<h1>${t.title}</h1>
-<p><strong>${t.num}:</strong> ${id} &nbsp;|&nbsp; <strong>${t.date}:</strong> ${formatDate(transaction.transaction_date)}</p>
-<div class="info-row">
-  <div class="info-box"><h3>${lang==='he'?'פרטי החברה':lang==='pt'?'Detalhes da Empresa':'Company Details'}</h3>
-    <p><strong>${lang==='he'?'שם':'Name'}:</strong> ${company.company_name||'WorldSecure LTD'}</p>
-    <p><strong>${lang==='he'?'טלפון':'Phone'}:</strong> ${company.phone||'-'}</p>
-    <p><strong>${lang==='he'?'אימייל':'Email'}:</strong> ${company.email||'-'}</p>
+    const authToken = req.headers['authorization']?.split(' ')[1] || token;
+
+    const html = `<!DOCTYPE html>
+<html dir="${t.dir}" lang="${lang}">
+<head>
+  <meta charset="UTF-8">
+  <title>${t.title} #${id}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body > *:first-child { border-top: none !important; margin-top: 0 !important; padding-top: 0 !important; }
+    @media print { .no-print { display: none; } .doc-footer { display: block !important; } @page { margin: 1.5cm 2cm; size: A4; } th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+    .button-container { text-align: center; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; }
+    .btn-print, .btn-email, .btn-close { padding: 12px 24px; margin: 0 8px; font-size: 16px; cursor: pointer; border: none; border-radius: 5px; font-weight: 600; }
+    .btn-print { background: #3498db; color: white; } .btn-print:hover { background: #2980b9; }
+    .btn-email { background: #27ae60; color: white; } .btn-email:hover { background: #229954; }
+    .btn-close { background: #95a5a6; color: white; } .btn-close:hover { background: #7f8c8d; }
+    .doc-footer { display:block; position:fixed; bottom:0; left:0; right:0; border-top:1px solid #ddd; padding:6px 0; text-align:center; font-size:8pt; color:#888; background:white; }
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: white; }
+    .info-section { display: flex; justify-content: space-between; margin-bottom: 30px; }
+    .info-box { flex: 1; margin: 0 10px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+    .info-box h3 { margin-top: 0; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { border: 1px solid #ddd; padding: 12px; text-align: ${t.dir === 'rtl' ? 'right' : 'left'}; }
+    th { background-color: #3498db; color: white; text-align: center; }
+    tr:nth-child(even) { background-color: #f9f9f9; }
+    .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #ddd; text-align: center; color: #7f8c8d; }
+    .email-modal-overlay { display:none; position:fixed; top:0;left:0;right:0;bottom:0; background:rgba(0,0,0,0.5); z-index:99999; justify-content:center; align-items:center; }
+    .email-modal-overlay.open { display:flex !important; }
+    .email-modal-box { background:white; border-radius:10px; padding:2rem; width:420px; max-width:95vw; box-shadow:0 10px 40px rgba(0,0,0,0.3); direction:${t.dir}; }
+    .email-modal-box h3 { margin:0 0 1.2rem; font-size:1.2rem; }
+    .ac-wrap { position:relative !important; margin-bottom:1rem; overflow:visible !important; }
+    .ac-wrap input { width:100%; padding:0.6rem; border:1px solid #ddd; border-radius:5px; box-sizing:border-box; font-size:0.95rem; font-family:inherit; }
+    .ac-list { position:fixed !important; background:white !important; border:1px solid #ccc; border-radius:8px; max-height:220px; overflow-y:auto; z-index:999999 !important; box-shadow:0 6px 16px rgba(0,0,0,0.2); display:none; min-width:300px; }
+    .ac-item { padding:0.5rem 0.85rem; cursor:pointer; border-bottom:1px solid #f0f0f0; display:block; }
+    .ac-item:hover { background:#e8f4fd; }
+    .ac-name { display:block; font-weight:600; color:#222; font-size:0.88rem; }
+    .ac-email { display:block; color:#777; font-size:0.8rem; }
+    .email-modal-box label { display:block; font-weight:600; margin-bottom:0.3rem; font-size:0.9rem; }
+    .email-modal-box input, .email-modal-box textarea { width:100%; padding:0.6rem; border:1px solid #ddd; border-radius:5px; font-size:0.95rem; margin-bottom:1rem; box-sizing:border-box; font-family:inherit; }
+    .email-modal-box textarea { height:80px; resize:vertical; }
+    .email-modal-footer { display:flex; gap:0.75rem; justify-content:flex-end; margin-top:0.5rem; }
+    .email-modal-footer button { padding:0.6rem 1.4rem; border:none; border-radius:5px; cursor:pointer; font-size:0.95rem; }
+    .btn-modal-send { background:#27ae60; color:white; } .btn-modal-cancel { background:#95a5a6; color:white; }
+    #email-status { margin-top:0.5rem; font-size:0.9rem; min-height:1.2rem; }
+  </style>
+</head>
+<body>
+  <div class="button-container no-print">
+    <button class="btn-print" onclick="window.print()">🖨️ ${t.print}</button>
+    <button class="btn-email" onclick="document.getElementById('emailModal').classList.add('open')">✉️ ${t.sendEmail}</button>
+    <button class="btn-close" onclick="window.close()">❌ ${t.close}</button>
   </div>
-  <div class="info-box"><h3>${lang==='he'?'פרטי הלקוח':lang==='pt'?'Detalhes do Cliente':'Customer Details'}</h3>
-    <p><strong>${lang==='he'?'שם':'Name'}:</strong> ${transaction.customer_type==='casual'?transaction.casual_customer_name:transaction.customer_name||'-'}</p>
-    ${transaction.customer_address?`<p><strong>${lang==='he'?'כתובת':'Address'}:</strong> ${transaction.customer_address}</p>`:''}
-  </div>
-</div>
-<table><thead><tr><th>#</th><th>${t.sku}</th><th>${t.product}</th><th>${t.qty}</th></tr></thead>
-<tbody>${items.map((item,i)=>`<tr><td>${i+1}</td><td>${item.sku}</td>
-  <td>${lang==='he'&&item.name_he?item.name_he:lang==='pt'&&item.name_pt?item.name_pt:item.name}</td>
-  <td>${item.quantity}</td></tr>`).join('')}</tbody></table>
-${transaction.notes?`<p><strong>${lang==='he'?'הערות':'Notes'}:</strong> ${transaction.notes}</p>`:''}
-<div class="footer"><p>${lang==='he'?'נערך ע"י':'Prepared by'}: ${transaction.username||'-'}</p></div>
-<div class="doc-footer">${company.company_name||'WorldSecure LTD'} &bull; ${company.email||'info@world-secure.com'}</div>
-<div class="email-modal-overlay no-print" id="emailModal">
-  <div class="email-modal-box">
-    <h3>✉️ ${lang==='he'?'שלח במייל':lang==='pt'?'Enviar por Email':'Send by Email'}</h3>
-    <label>${lang==='he'?'כתובת מייל':'Email Address'}</label>
-    <input type="text" id="emailTo" placeholder="example@domain.com" autocomplete="off">
-    <label>${lang==='he'?'נושא':'Subject'}</label>
-    <input type="text" id="emailSubject" value="${t.title} #${id}">
-    <label>${lang==='he'?'הודעה':'Message'}</label>
-    <textarea id="emailBody">${t.title} #${id}</textarea>
-    <div id="email-status"></div>
-    <div class="email-modal-footer">
-      <button class="btn-modal-cancel" onclick="document.getElementById('emailModal').classList.remove('open')">${lang==='he'?'ביטול':'Cancel'}</button>
-      <button class="btn-modal-send" onclick="sendDocumentEmail()">📤 ${lang==='he'?'שלח':'Send'}</button>
+  <script>
+  window._authToken = '${authToken}';
+  var _ac = [], _acIdx = -1;
+  (function loadContacts() {
+    var tok = window._authToken || sessionStorage.getItem('token') || '';
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/api/email-contacts');
+    xhr.setRequestHeader('Authorization', 'Bearer ' + tok);
+    xhr.onload = function() { if (xhr.status === 200) { try { _ac = JSON.parse(xhr.responseText); } catch(e) {} } };
+    xhr.send();
+  })();
+  function acFilter(val) {
+    var box = document.getElementById('acList'); _acIdx = -1;
+    if (!val) { box.style.display='none'; return; }
+    var q = val.toLowerCase(), expanded = [];
+    for (var j=0; j<_ac.length; j++) { var c=_ac[j]; if (!c.email) continue; var emails=c.email.split(/[;,]/).map(function(e){return e.trim();}).filter(Boolean); for (var k=0;k<emails.length;k++) expanded.push({name:c.name,email:emails[k]}); }
+    var matches = expanded.filter(function(c){ return c.name.toLowerCase().indexOf(q)>=0||c.email.toLowerCase().indexOf(q)>=0; }).slice(0,10);
+    if (!matches.length) { box.style.display='none'; return; }
+    var html='';
+    for (var i=0;i<matches.length;i++) { var c=matches[i]; html+='<div class="ac-item" data-email="'+c.email.replace(/"/g,'&quot;')+'" onmousedown="acSelect(this.dataset.email)"><span class="ac-name">'+c.name+'</span><span class="ac-email">'+c.email+'</span></div>'; }
+    box.innerHTML=html;
+    var inp=document.getElementById('emailTo'), rect=inp.getBoundingClientRect();
+    box.style.top=(rect.bottom+2)+'px'; box.style.left=rect.left+'px'; box.style.width=rect.width+'px'; box.style.display='block';
+  }
+  function acSelect(email) { document.getElementById('emailTo').value=email; document.getElementById('acList').style.display='none'; }
+  function acKey(e) {
+    var box=document.getElementById('acList'), items=box.querySelectorAll('.ac-item');
+    if (!items.length) return;
+    if (e.key==='ArrowDown') _acIdx=Math.min(_acIdx+1,items.length-1);
+    else if (e.key==='ArrowUp') _acIdx=Math.max(_acIdx-1,0);
+    else if (e.key==='Enter'&&_acIdx>=0) { e.preventDefault(); acSelect(items[_acIdx].getAttribute('data-email')); return; }
+    else return;
+    for (var i=0;i<items.length;i++) items[i].style.background=i===_acIdx?'#e8f4fd':'';
+    items[_acIdx].scrollIntoView({block:'nearest'});
+  }
+  window._docLang = '${lang}';
+  window._docContact = decodeURIComponent('${encodeURIComponent(contact)}');
+  async function sendDocumentEmail(docId, docType) {
+    const to = document.getElementById('emailTo').value;
+    const subject = document.getElementById('emailSubject').value;
+    const body = document.getElementById('emailBody').value;
+    const status = document.getElementById('email-status');
+    if (!to) { status.style.color='red'; status.textContent='${t.emailTo}...'; return; }
+    status.style.color='#555'; status.textContent='⏳ ...';
+    const token = window._authToken || sessionStorage.getItem('token') || '';
+    try {
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ to, subject, body, docType, docId, docLang: window._docLang, docContact: window._docContact })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        status.style.color='green'; status.textContent='✅ ${t.emailSuccess}';
+        setTimeout(() => document.getElementById('emailModal').classList.remove('open'), 2000);
+      } else {
+        status.style.color='red';
+        status.textContent = data.error?.includes('SMTP') ? '⚠️ ${t.emailSmtpMissing}' : '❌ ' + data.error;
+      }
+    } catch(e) { status.style.color='red'; status.textContent='❌ ${t.emailError}'; }
+  }
+  </script>
+
+  <table style="width:100%;border:none;margin-bottom:20px;">
+    <tr>
+      <td style="vertical-align:middle;border:none;padding:0;">
+        ${logoHtml ? logoHtml.replace('<div style="text-align:left;margin-bottom:20px;position:relative;z-index:1;">', '<div>') : ''}
+        <div>
+          <h1 style="margin:4px 0;font-size:28px;font-weight:bold;">${t.title}</h1>
+          <p style="margin:0;font-size:16px;color:#555;">${t.documentNumber}: ${id} | ${t.date}: ${formatDate(transaction.transaction_date)}</p>
+        </div>
+      </td>
+      <td style="vertical-align:top;text-align:${t.dir==='rtl'?'left':'right'};border:none;padding:0;width:70px;">
+        ${qrImgHtml}
+      </td>
+    </tr>
+  </table>
+
+  <div class="info-section">
+    <div class="info-box">
+      <h3>${t.companyDetails}</h3>
+      <p><strong>${t.name}:</strong> ${company.company_name || 'N/A'}</p>
+      <p><strong>${t.address}:</strong> ${company.address || 'N/A'}</p>
+      <p><strong>${t.phone}:</strong> ${buildPhoneString(company)}</p>
+      <p><strong>${t.email}:</strong> ${company.email || 'N/A'}</p>
+      <p><strong>${t.taxId}:</strong> ${company.tax_id || 'N/A'}</p>
+    </div>
+    <div class="info-box">
+      <h3>${t.customerDetails}</h3>
+      <p><strong>${t.name}:</strong> ${transaction.customer_type === 'casual' ? transaction.casual_customer_name : transaction.customer_name || 'N/A'}</p>
+      ${transaction.customer_address ? `<p><strong>${t.address}:</strong> ${transaction.customer_address}</p>` : ''}
+      ${!contact && transaction.customer_phone ? `<p><strong>${t.phone}:</strong> ${transaction.customer_phone}</p>` : ''}
+      ${!contact && transaction.customer_email ? `<p><strong>${t.email}:</strong> ${transaction.customer_email}</p>` : ''}
+      ${(() => {
+        if (contact) return `<p><strong>${t.contactPerson}:</strong> ${contact.split(' | ').join(', ')}</p>`;
+        if (!transaction.customer_contact) return '';
+        try {
+          const parsed = JSON.parse(transaction.customer_contact);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const c = parsed[0];
+            return `<p><strong>${t.contactPerson}:</strong> ${[c.name, c.phone, c.email].filter(Boolean).join(', ')}</p>`;
+          }
+        } catch(e) {}
+        return `<p><strong>${t.contactPerson}:</strong> ${transaction.customer_contact.split(';')[0].trim()}</p>`;
+      })()}
+      <p><strong>${t.status}:</strong> ${transaction.status}</p>
     </div>
   </div>
-</div>
-</body></html>`;
+
+  <h3>${t.items}</h3>
+  <table>
+    <thead>
+      <tr><th>#</th><th>${t.sku}</th><th>${t.productName}</th><th>${t.quantity}</th><th>${lang==='he'?'אריזה':'Packaging'}</th></tr>
+    </thead>
+    <tbody>
+      ${items.map((item, index) => {
+        let packagingInfo = '-';
+        if (item.use_packaging && item.items_per_carton) {
+          const cartonsText = lang==='he'?'קרטונים':'cartons';
+          const perCartonText = lang==='he'?'יח\' לקרטון':'items/carton';
+          const kgText = lang==='he'?'ק"ג':'kg';
+          packagingInfo = `${item.num_cartons} ${cartonsText} (${item.items_per_carton} ${perCartonText})`;
+          if (item.carton_weight) packagingInfo += `<br><small>${item.carton_weight} ${kgText}/${lang==='he'?'קרטון':'carton'}</small>`;
+          if (item.use_pallets && item.num_pallets) {
+            const palletsText = lang==='he'?'משטחים':'pallets';
+            packagingInfo += `<br><strong>${item.num_pallets} ${palletsText}</strong>`;
+            if (item.pallet_dimensions) packagingInfo += `<br><small>${item.pallet_dimensions} cm</small>`;
+          }
+        }
+        return `<tr><td>${index+1}</td><td>${item.sku}</td><td>${lang==='he'&&item.name_he?item.name_he:lang==='pt'&&item.name_pt?item.name_pt:item.name}</td><td><strong>${item.quantity}</strong></td><td>${packagingInfo}</td></tr>`;
+      }).join('')}
+    </tbody>
+    ${(() => {
+      const totalWeight = items.reduce((sum, item) => {
+        if (item.use_packaging && item.num_cartons && item.carton_weight) return sum + (item.num_cartons * item.carton_weight);
+        return sum;
+      }, 0);
+      if (totalWeight > 0) {
+        const kgText = lang==='he'?'ק"ג':'kg';
+        const totalWeightText = lang==='he'?'משקל כולל':'Total Weight';
+        return `<tfoot><tr style="background-color:#ecf0f1;font-weight:bold;"><td colspan="4" style="text-align:${lang==='he'?'right':'left'};">${totalWeightText}:</td><td><strong>${totalWeight.toFixed(2)} ${kgText}</strong></td></tr></tfoot>`;
+      }
+      return '';
+    })()}
+  </table>
+
+  ${transaction.notes ? `<div class="info-box"><h3>${t.notes}</h3><p>${transaction.notes}</p></div>` : ''}
+
+  <div class="footer">
+    <p>${t.preparedBy}: ${transaction.username}</p>
+    <p>${company.company_name || ''} © ${new Date().getFullYear()}</p>
+  </div>
+
+  <div class="email-modal-overlay no-print" id="emailModal">
+    <div class="email-modal-box">
+      <h3>✉️ ${t.sendEmail}</h3>
+      <label>${t.emailTo}</label>
+      <div class="ac-wrap">
+        <input type="text" id="emailTo" placeholder="example@domain.com" autocomplete="off"
+          oninput="acFilter(this.value)" onfocus="acFilter(this.value)"
+          onblur="setTimeout(function(){var b=document.getElementById('acList');if(b)b.style.display='none'},200)"
+          onkeydown="acKey(event)">
+        <div id="acList" class="ac-list"></div>
+      </div>
+      <label>${t.emailSubject}</label>
+      <input type="text" id="emailSubject" value="${t.title} #${id}">
+      <label>${t.emailBody}</label>
+      <textarea id="emailBody">${t.title} #${id}</textarea>
+      <div id="email-status"></div>
+      <div class="email-modal-footer">
+        <button class="btn-modal-cancel" onclick="document.getElementById('emailModal').classList.remove('open')">${t.emailCancel}</button>
+        <button class="btn-modal-send" onclick="sendDocumentEmail('${id}', 'outbound')">📤 ${t.emailSend}</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="doc-footer">${company.company_name || 'WorldSecure LTD'} &nbsp;&bull;&nbsp; ${company.email || 'info@world-secure.com'}</div>
+</body>
+</html>`;
 
     await saveDocument('delivery', id, html, lang, req.user?.id||null,
       transaction.customer_type==='casual' ? transaction.casual_customer_name : transaction.customer_name);
@@ -675,18 +832,35 @@ ${transaction.notes?`<p><strong>${lang==='he'?'הערות':'Notes'}:</strong> ${
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+
 // ── Receipt Note ──────────────────────────────────────────────────────────────
 app.get('/api/inbound/:id/receipt-note', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  const { lang = 'he' } = req.query;
+  const { lang = 'he', contact = '', token = '' } = req.query;
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${date.getFullYear()}`;
+  };
+
+  const translations = {
+    he: { title:'תעודת קליטה', documentNumber:'מספר', date:'תאריך', companyDetails:'פרטי החברה', supplierDetails:'פרטי הספק', name:'שם', address:'כתובת', phone:'טלפון', email:'אימייל', contactPerson:'איש קשר', taxId:'ע.מ / ח.פ', items:'פריטים', sku:'מק"ט', productName:'שם מוצר', quantity:'כמות', notes:'הערות', receivedBy:'התקבל ע"י', print:'הדפס / שמור כ-PDF', close:'סגור', sendEmail:'שלח במייל', dir:'rtl' },
+    en: { title:'Receipt Note', documentNumber:'Number', date:'Date', companyDetails:'Company Details', supplierDetails:'Supplier Details', name:'Name', address:'Address', phone:'Phone', email:'Email', contactPerson:'Contact Person', taxId:'Tax ID', items:'Items', sku:'SKU', productName:'Product Name', quantity:'Quantity', notes:'Notes', receivedBy:'Received by', print:'Print / Save as PDF', close:'Close', sendEmail:'Send by Email', dir:'ltr' },
+    pt: { title:'Nota de Recebimento', documentNumber:'Número', date:'Data', companyDetails:'Detalhes da Empresa', supplierDetails:'Detalhes do Fornecedor', name:'Nome', address:'Endereço', phone:'Telefone', email:'E-mail', contactPerson:'Pessoa de Contacto', taxId:'NIF', items:'Itens', sku:'SKU', productName:'Nome do Produto', quantity:'Quantidade', notes:'Notas', receivedBy:'Recebido por', print:'Imprimir / Salvar como PDF', close:'Fechar', sendEmail:'Enviar por Email', dir:'ltr' }
+  };
+  const t = translations[lang] || translations.he;
 
   try {
     const txRes = await query(`
       SELECT it.*, s.name as supplier_name, s.address as supplier_address,
-             s.phone as supplier_phone, u.username
+             s.phone as supplier_phone, s.email as supplier_email,
+             s.contact_person as supplier_contact,
+             u.username,
+             qr.image_url as qr_image_url
       FROM inbound_transactions it
       LEFT JOIN suppliers s ON it.supplier_id = s.id
       LEFT JOIN users u ON it.user_id = u.id
+      LEFT JOIN qr_codes qr ON it.qr_code_id = qr.id
       WHERE it.id=$1`, [id]);
     const transaction = txRes.rows[0];
     if (!transaction) return res.status(404).json({ error: 'Not found' });
@@ -700,109 +874,213 @@ app.get('/api/inbound/:id/receipt-note', authenticateToken, async (req, res) => 
     const compRes = await query('SELECT * FROM company_settings WHERE id=1');
     const company = compRes.rows[0] || {};
 
-    const t = {
-      he: { title:'תעודת קליטה', dir:'rtl' },
-      en: { title:'Receipt Note', dir:'ltr' },
-      pt: { title:'Nota de Recebimento', dir:'ltr' }
-    }[lang] || { title:'Receipt Note', dir:'ltr' };
+    const baseUrl = 'https://worldsecure-backend.onrender.com';
+    const logoHtml = company.logo_path
+      ? `<img src="${baseUrl}${company.logo_path}" alt="Logo" style="max-height:120px;max-width:300px;object-fit:contain;">`
+      : '';
 
-    const formatDate = (d) => {
-      const dt = new Date(d);
-      return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
-    };
+    const qrImgHtml = transaction.qr_image_url
+      ? `<img src="${transaction.qr_image_url}" alt="QR Code" style="width:55px;height:55px;display:block;${t.dir==='rtl'?'margin-right:auto;':'margin-left:auto;'}">`
+      : '';
 
-    const html = `<!DOCTYPE html><html dir="${t.dir}"><head><meta charset="UTF-8">
-<title>${t.title} #${id}</title>
-<style>
-  body{font-family:Arial,sans-serif;max-width:800px;margin:20px auto;padding:20px}
-  @media print{.no-print{display:none}@page{margin:1.5cm 2cm;size:A4}}
-  .btn-bar{text-align:center;padding:15px;background:#f8f9fa;border-radius:8px;margin-bottom:20px}
-  .btn-bar button{padding:10px 20px;margin:0 6px;border:none;border-radius:5px;cursor:pointer;font-weight:600}
-  .btn-print{background:#3498db;color:#fff}.btn-close{background:#95a5a6;color:#fff}
-  table{width:100%;border-collapse:collapse;margin:20px 0}
-  th{background:#3498db;color:#fff;padding:10px;text-align:${t.dir==='rtl'?'right':'left'}}
-  td{padding:10px;border:1px solid #ddd}
-  .email-modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:99999;justify-content:center;align-items:center}
-  .email-modal-overlay.open{display:flex!important}
-  .email-modal-box{background:white;border-radius:10px;padding:2rem;width:420px;max-width:95vw;box-shadow:0 10px 40px rgba(0,0,0,0.3);direction:${t.dir}}
-  .email-modal-box h3{margin:0 0 1.2rem;font-size:1.2rem}
-  .email-modal-box label{display:block;font-weight:600;margin-bottom:0.3rem;font-size:0.9rem}
-  .email-modal-box input,.email-modal-box textarea{width:100%;padding:0.6rem;border:1px solid #ddd;border-radius:5px;font-size:0.95rem;margin-bottom:1rem;box-sizing:border-box;font-family:inherit}
-  .email-modal-box textarea{height:80px;resize:vertical}
-  .email-modal-footer{display:flex;gap:0.75rem;justify-content:flex-end;margin-top:0.5rem}
-  .email-modal-footer button{padding:0.6rem 1.4rem;border:none;border-radius:5px;cursor:pointer;font-size:0.95rem}
-  .btn-modal-send{background:#27ae60;color:white}.btn-modal-cancel{background:#95a5a6;color:white}
-  #email-status{margin-top:0.5rem;font-size:0.9rem;min-height:1.2rem}
-  .doc-footer{position:fixed;bottom:0;left:0;right:0;border-top:1px solid #ddd;padding:5px;text-align:center;font-size:8pt;color:#888;background:#fff}
-</style></head><body>
-<script>
-window._authToken = '${token}';
-async function sendDocumentEmail() {
-  const to = document.getElementById('emailTo').value;
-  const subject = document.getElementById('emailSubject').value;
-  const body = document.getElementById('emailBody').value;
-  const status = document.getElementById('email-status');
-  if (!to) { status.style.color='red'; status.textContent='${lang==="he"?"נא להזין כתובת מייל":"Please enter email address"}'; return; }
-  status.style.color='#555'; status.textContent='⏳ ...';
-  const token = window._authToken || sessionStorage.getItem('token') || '';
-  try {
-    const res = await fetch('/api/send-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ to, subject, body, docType: 'inbound', docId: '${id}', docLang: '${lang}' })
-    });
-    const data = await res.json();
-    if (res.ok) {
-      status.style.color='green'; status.textContent='✅ ${lang==="he"?"נשלח בהצלחה":"Sent successfully"}';
-      setTimeout(() => document.getElementById('emailModal').classList.remove('open'), 2000);
-    } else {
-      status.style.color='red'; status.textContent='❌ ' + (data.error || 'Error');
-    }
-  } catch(e) { status.style.color='red'; status.textContent='❌ ${lang==="he"?"שגיאה בשליחה":"Send error"}'; }
-}
-</script>
-<div class="btn-bar no-print">
-  <button class="btn-print" onclick="window.print()">🖨️ ${lang==='he'?'הדפס / שמור PDF':lang==='pt'?'Imprimir / Salvar PDF':'Print / Save as PDF'}</button>
-  <button onclick="document.getElementById('emailModal').classList.add('open')" style="background:#4CAF50;color:white">✉️ ${lang==='he'?'שלח במייל':lang==='pt'?'Enviar por Email':'Send by Email'}</button>
-  <button class="btn-close" onclick="window.close()">❌ ${lang==='he'?'סגור':lang==='pt'?'Fechar':'Close'}</button>
-</div>
-<h1>${t.title} #${id}</h1>
-<p>${lang==='he'?'תאריך':'Date'}: ${formatDate(transaction.transaction_date)}</p>
-<p><strong>${lang==='he'?'ספק':'Supplier'}:</strong> ${transaction.supplier_name||transaction.casual_supplier_name||'-'}</p>
-<table>
-  <thead><tr><th>SKU</th><th>${lang==='he'?'שם מוצר':'Product'}</th><th>${lang==='he'?'כמות':'Qty'}</th></tr></thead>
-  <tbody>${items.map(item=>`<tr>
-    <td>${item.sku}</td>
-    <td>${lang==='he'&&item.name_he?item.name_he:lang==='pt'&&item.name_pt?item.name_pt:item.name}</td>
-    <td>${item.quantity}</td>
-  </tr>`).join('')}</tbody>
-</table>
-${transaction.notes?`<p><strong>${lang==='he'?'הערות':'Notes'}:</strong> ${transaction.notes}</p>`:''}
-<p><strong>${lang==='he'?'התקבל ע"י':'Received by'}:</strong> ${transaction.username||'-'}</p>
-<div class="doc-footer">${company.company_name||'WorldSecure LTD'} &bull; ${company.email||'info@world-secure.com'}</div>
-<div class="email-modal-overlay no-print" id="emailModal">
-  <div class="email-modal-box">
-    <h3>✉️ ${lang==='he'?'שלח במייל':lang==='pt'?'Enviar por Email':'Send by Email'}</h3>
-    <label>${lang==='he'?'כתובת מייל':'Email Address'}</label>
-    <input type="text" id="emailTo" placeholder="example@domain.com" autocomplete="off">
-    <label>${lang==='he'?'נושא':'Subject'}</label>
-    <input type="text" id="emailSubject" value="${t.title} #${id}">
-    <label>${lang==='he'?'הודעה':'Message'}</label>
-    <textarea id="emailBody">${t.title} #${id}</textarea>
-    <div id="email-status"></div>
-    <div class="email-modal-footer">
-      <button class="btn-modal-cancel" onclick="document.getElementById('emailModal').classList.remove('open')">${lang==='he'?'ביטול':'Cancel'}</button>
-      <button class="btn-modal-send" onclick="sendDocumentEmail()">📤 ${lang==='he'?'שלח':'Send'}</button>
+    const authToken = req.headers['authorization']?.split(' ')[1] || token;
+
+    const html = `<!DOCTYPE html>
+<html dir="${t.dir}" lang="${lang}">
+<head>
+  <meta charset="UTF-8">
+  <title>${t.title} #${id}</title>
+  <style>
+    * { box-sizing: border-box; }
+    @media print { .no-print { display:none; } .doc-footer { display:block !important; } @page { margin:1.5cm 2cm; size:A4; } th { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+    .button-container { text-align:center; margin-bottom:20px; padding:15px; background:#f8f9fa; border-radius:8px; }
+    .btn-print, .btn-email, .btn-close { padding:12px 24px; margin:0 8px; font-size:16px; cursor:pointer; border:none; border-radius:5px; font-weight:600; }
+    .btn-print { background:#3498db; color:white; } .btn-email { background:#27ae60; color:white; } .btn-close { background:#95a5a6; color:white; }
+    .doc-footer { display:block; position:fixed; bottom:0; left:0; right:0; border-top:1px solid #ddd; padding:6px 0; text-align:center; font-size:8pt; color:#888; background:white; }
+    body { font-family:Arial,sans-serif; max-width:800px; margin:20px auto; padding:20px; }
+    .info-section { margin:20px 0; padding:15px; background:#f8f9fa; border-radius:5px; }
+    h1 { color:#2c3e50; margin:0 0 10px 0; font-size:24px; }
+    table { width:100%; border-collapse:collapse; margin:20px 0; }
+    th { background:#3498db; color:white; padding:12px; text-align:${t.dir==='rtl'?'right':'left'}; }
+    td { padding:10px; border-bottom:1px solid #ddd; text-align:${t.dir==='rtl'?'right':'left'}; }
+    .total { font-weight:bold; background:#f0f0f0; }
+    .email-modal-overlay { display:none; position:fixed; top:0;left:0;right:0;bottom:0; background:rgba(0,0,0,0.5); z-index:99999; justify-content:center; align-items:center; }
+    .email-modal-overlay.open { display:flex !important; }
+    .email-modal-box { background:white; border-radius:10px; padding:2rem; width:420px; max-width:95vw; box-shadow:0 10px 40px rgba(0,0,0,0.3); direction:${t.dir}; }
+    .email-modal-box h3 { margin:0 0 1.2rem; font-size:1.2rem; }
+    .ac-wrap { position:relative !important; margin-bottom:1rem; overflow:visible !important; }
+    .ac-wrap input { width:100%; padding:0.6rem; border:1px solid #ddd; border-radius:5px; box-sizing:border-box; font-size:0.95rem; font-family:inherit; }
+    .ac-list { position:fixed !important; background:white !important; border:1px solid #ccc; border-radius:8px; max-height:220px; overflow-y:auto; z-index:999999 !important; box-shadow:0 6px 16px rgba(0,0,0,0.2); display:none; min-width:300px; }
+    .ac-item { padding:0.5rem 0.85rem; cursor:pointer; border-bottom:1px solid #f0f0f0; display:block; }
+    .ac-item:hover { background:#e8f4fd; }
+    .ac-name { display:block; font-weight:600; color:#222; font-size:0.88rem; }
+    .ac-email { display:block; color:#777; font-size:0.8rem; }
+    .email-modal-box label { display:block; font-weight:600; margin-bottom:0.3rem; font-size:0.9rem; }
+    .email-modal-box input, .email-modal-box textarea { width:100%; padding:0.6rem; border:1px solid #ddd; border-radius:5px; font-size:0.95rem; margin-bottom:1rem; box-sizing:border-box; font-family:inherit; }
+    .email-modal-box textarea { height:80px; resize:vertical; }
+    .email-modal-footer { display:flex; gap:0.75rem; justify-content:flex-end; margin-top:0.5rem; }
+    .email-modal-footer button { padding:0.6rem 1.4rem; border:none; border-radius:5px; cursor:pointer; font-size:0.95rem; }
+    .btn-modal-send { background:#27ae60; color:white; } .btn-modal-cancel { background:#95a5a6; color:white; }
+    #email-status { margin-top:0.5rem; font-size:0.9rem; min-height:1.2rem; }
+  </style>
+</head>
+<body>
+  <div class="button-container no-print">
+    <button class="btn-print" onclick="window.print()">🖨️ ${t.print}</button>
+    <button class="btn-email" onclick="document.getElementById('emailModal').classList.add('open')">✉️ ${t.sendEmail}</button>
+    <button class="btn-close" onclick="window.close()">❌ ${t.close}</button>
+  </div>
+  <script>
+  window._authToken = '${authToken}';
+  var _ac = [], _acIdx = -1;
+  (function loadContacts() {
+    var tok = window._authToken || sessionStorage.getItem('token') || '';
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/api/email-contacts');
+    xhr.setRequestHeader('Authorization', 'Bearer ' + tok);
+    xhr.onload = function() { if (xhr.status===200) { try { _ac=JSON.parse(xhr.responseText); } catch(e){} } };
+    xhr.send();
+  })();
+  function acFilter(val) {
+    var box=document.getElementById('acList'); _acIdx=-1;
+    if (!val) { box.style.display='none'; return; }
+    var q=val.toLowerCase(), expanded=[];
+    for (var j=0;j<_ac.length;j++) { var c=_ac[j]; if(!c.email) continue; var emails=c.email.split(/[;,]/).map(function(e){return e.trim();}).filter(Boolean); for(var k=0;k<emails.length;k++) expanded.push({name:c.name,email:emails[k]}); }
+    var matches=expanded.filter(function(c){return c.name.toLowerCase().indexOf(q)>=0||c.email.toLowerCase().indexOf(q)>=0;}).slice(0,10);
+    if (!matches.length) { box.style.display='none'; return; }
+    var html='';
+    for (var i=0;i<matches.length;i++) { var c=matches[i]; html+='<div class="ac-item" data-email="'+c.email.replace(/"/g,'&quot;')+'" onmousedown="acSelect(this.dataset.email)"><span class="ac-name">'+c.name+'</span><span class="ac-email">'+c.email+'</span></div>'; }
+    box.innerHTML=html;
+    var inp=document.getElementById('emailTo'), rect=inp.getBoundingClientRect();
+    box.style.top=(rect.bottom+2)+'px'; box.style.left=rect.left+'px'; box.style.width=rect.width+'px'; box.style.display='block';
+  }
+  function acSelect(email) { document.getElementById('emailTo').value=email; document.getElementById('acList').style.display='none'; }
+  function acKey(e) {
+    var box=document.getElementById('acList'), items=box.querySelectorAll('.ac-item');
+    if (!items.length) return;
+    if (e.key==='ArrowDown') _acIdx=Math.min(_acIdx+1,items.length-1);
+    else if (e.key==='ArrowUp') _acIdx=Math.max(_acIdx-1,0);
+    else if (e.key==='Enter'&&_acIdx>=0) { e.preventDefault(); acSelect(items[_acIdx].getAttribute('data-email')); return; }
+    else return;
+    for (var i=0;i<items.length;i++) items[i].style.background=i===_acIdx?'#e8f4fd':'';
+    items[_acIdx].scrollIntoView({block:'nearest'});
+  }
+  window._docLang = '${lang}';
+  window._docContact = '${contact}';
+  async function sendDocumentEmail() {
+    const to = document.getElementById('emailTo').value;
+    const subject = document.getElementById('emailSubject').value;
+    const body = document.getElementById('emailBody').value;
+    const status = document.getElementById('email-status');
+    if (!to) { status.style.color='red'; status.textContent='${lang==="he"?"נא הכנס כתובת מייל":"Please enter email address"}'; return; }
+    status.style.color='#555'; status.textContent='⏳ ...';
+    const token = window._authToken || sessionStorage.getItem('token') || '';
+    try {
+      const res = await fetch('/api/send-email', {
+        method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+        body: JSON.stringify({ to, subject, body, docType:'inbound', docId:'${id}', docLang:window._docLang, docContact:window._docContact })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        status.style.color='green'; status.textContent='✅ ${lang==="he"?"המייל נשלח בהצלחה!":lang==="pt"?"Email enviado com sucesso!":"Email sent successfully!"}';
+        setTimeout(()=>document.getElementById('emailModal').classList.remove('open'),2000);
+      } else {
+        status.style.color='red'; status.textContent=data.error?.includes('SMTP')?'⚠️ ${lang==="he"?"יש להגדיר SMTP":"Configure SMTP"}':'❌ '+data.error;
+      }
+    } catch(e) { status.style.color='red'; status.textContent='❌ ${lang==="he"?"שגיאה בשליחה":"Send error"}'; }
+  }
+  </script>
+
+  <table style="width:100%;border:none;margin-bottom:20px;">
+    <tr>
+      <td style="vertical-align:middle;border:none;padding:0;">
+        ${logoHtml}
+        <div>
+          <h1 style="margin:4px 0;">${t.title}</h1>
+          <p style="margin:0;">${t.documentNumber}: ${id} | ${t.date}: ${formatDate(transaction.transaction_date)}</p>
+        </div>
+      </td>
+      <td style="vertical-align:top;text-align:${t.dir==='rtl'?'left':'right'};border:none;padding:0;width:70px;">
+        ${qrImgHtml}
+      </td>
+    </tr>
+  </table>
+
+  <div class="info-section">
+    <h3>${t.supplierDetails}</h3>
+    <p><strong>${t.name}:</strong> ${transaction.supplier_name || '-'}</p>
+    ${!contact && transaction.supplier_phone ? `<p><strong>${t.phone}:</strong> ${transaction.supplier_phone}</p>` : ''}
+    ${!contact && transaction.supplier_email ? `<p><strong>${t.email}:</strong> ${transaction.supplier_email}</p>` : ''}
+    ${(() => {
+      if (contact) return `<p><strong>${t.contactPerson}:</strong> ${contact.split(' | ').join(', ')}</p>`;
+      if (!transaction.supplier_contact) return '';
+      try {
+        const parsed = JSON.parse(transaction.supplier_contact);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const c = parsed[0];
+          return `<p><strong>${t.contactPerson}:</strong> ${[c.name, c.phone, c.email].filter(Boolean).join(', ')}</p>`;
+        }
+      } catch(e) {}
+      return `<p><strong>${t.contactPerson}:</strong> ${transaction.supplier_contact.split(';')[0].trim()}</p>`;
+    })()}
+  </div>
+
+  <h3>${t.items}</h3>
+  <table>
+    <thead>
+      <tr><th>${t.sku}</th><th>${t.productName}</th><th>${t.quantity}</th></tr>
+    </thead>
+    <tbody>
+      ${items.map(item => `
+        <tr>
+          <td>${item.sku}</td>
+          <td>${lang==='he'&&item.name_he?item.name_he:lang==='pt'&&item.name_pt?item.name_pt:item.name}</td>
+          <td>${item.quantity}</td>
+        </tr>
+      `).join('')}
+      <tr class="total">
+        <td colspan="2">${t.dir==='rtl'?'סה"כ פריטים':'Total Items'}</td>
+        <td>${items.reduce((sum, item) => sum + item.quantity, 0)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  ${transaction.notes ? `<div class="info-section"><strong>${t.notes}:</strong> ${transaction.notes}</div>` : ''}
+  <p style="margin-top:30px;"><strong>${t.receivedBy}:</strong> ${transaction.username}</p>
+
+  <div class="email-modal-overlay no-print" id="emailModal">
+    <div class="email-modal-box">
+      <h3>✉️ ${t.sendEmail}</h3>
+      <label>${lang==='he'?'כתובת מייל':lang==='pt'?'Endereço de Email':'Email Address'}</label>
+      <div class="ac-wrap">
+        <input type="text" id="emailTo" placeholder="example@domain.com" autocomplete="off"
+          oninput="acFilter(this.value)" onfocus="acFilter(this.value)"
+          onblur="setTimeout(function(){var b=document.getElementById('acList');if(b)b.style.display='none'},200)"
+          onkeydown="acKey(event)">
+        <div id="acList" class="ac-list"></div>
+      </div>
+      <label>${lang==='he'?'נושא':lang==='pt'?'Assunto':'Subject'}</label>
+      <input type="text" id="emailSubject" value="${t.title} #${id}">
+      <label>${lang==='he'?'הודעה':lang==='pt'?'Mensagem':'Message'}</label>
+      <textarea id="emailBody">${t.title} #${id}</textarea>
+      <div id="email-status"></div>
+      <div class="email-modal-footer">
+        <button class="btn-modal-cancel" onclick="document.getElementById('emailModal').classList.remove('open')">${lang==='he'?'ביטול':lang==='pt'?'Cancelar':'Cancel'}</button>
+        <button class="btn-modal-send" onclick="sendDocumentEmail()">📤 ${lang==='he'?'שלח':lang==='pt'?'Enviar':'Send'}</button>
+      </div>
     </div>
   </div>
-</div>
-</body></html>`;
 
-    await saveDocument('receipt', id, html, lang, req.user?.id||null, transaction.supplier_name);
+  <div class="doc-footer">${company.company_name || 'WorldSecure LTD'} &nbsp;&bull;&nbsp; ${company.email || 'info@world-secure.com'}</div>
+</body>
+</html>`;
+
+    await saveDocument('receipt', id, html, lang, req.user?.id||null, transaction.supplier_name || transaction.casual_supplier_name);
     res.setHeader('Content-Type','text/html; charset=utf-8');
     res.send(html);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
 
 // ════════════════════════════════════════════════════════════════════════════
 //  SUPPORT TICKETS
