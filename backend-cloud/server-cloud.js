@@ -323,7 +323,7 @@ app.get('/api/backups', authenticateToken, async (req, res) => {
 app.get('/api/inbound', authenticateToken, async (req, res) => {
   try {
     const r = await query(`
-      SELECT it.*, s.name as supplier_name, u.username
+      SELECT it.*, s.name as supplier_name, COALESCE(it.username, u.username) as username
       FROM inbound_transactions it
       LEFT JOIN suppliers s ON it.supplier_id = s.id
       LEFT JOIN users u ON it.user_id = u.id
@@ -368,7 +368,7 @@ app.post('/api/inbound', authenticateToken, async (req, res) => {
 app.get('/api/inbound/:id/details', authenticateToken, async (req, res) => {
   try {
     const tx = await query(`
-      SELECT it.*, s.name as supplier_name, u.username
+      SELECT it.*, s.name as supplier_name, COALESCE(it.username, u.username) as username
       FROM inbound_transactions it
       LEFT JOIN suppliers s ON it.supplier_id = s.id
       LEFT JOIN users u ON it.user_id = u.id
@@ -389,7 +389,7 @@ app.get('/api/inbound/:id/details', authenticateToken, async (req, res) => {
 app.get('/api/outbound', authenticateToken, async (req, res) => {
   try {
     const r = await query(`
-      SELECT ot.*, c.name as customer_name, u.username
+      SELECT ot.*, c.name as customer_name, COALESCE(ot.username, u.username) as username
       FROM outbound_transactions ot
       LEFT JOIN customers c ON ot.customer_id = c.id
       LEFT JOIN users u ON ot.user_id = u.id
@@ -1423,13 +1423,13 @@ app.post('/api/sync/inbound', authenticateToken, async (req, res) => {
     for (const t of transactions) {
       await client.query(`
         INSERT INTO inbound_transactions
-          (id, supplier_id, supplier_type, casual_supplier_name, transaction_date, notes, user_id)
-        VALUES ($1,$2,$3,$4,$5,$6,$7)
+          (id, supplier_id, supplier_type, casual_supplier_name, transaction_date, notes, user_id, username)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
         ON CONFLICT (id) DO UPDATE SET
           supplier_id=$2, supplier_type=$3, casual_supplier_name=$4,
-          transaction_date=$5, notes=$6, user_id=$7`,
+          transaction_date=$5, notes=$6, user_id=$7, username=$8`,
         [t.id, t.supplier_id||null, t.supplier_type||'registered',
-         t.casual_supplier_name||null, t.transaction_date, t.notes||null, t.user_id||null]
+         t.casual_supplier_name||null, t.transaction_date, t.notes||null, t.user_id||null, t.username||null]
       );
     }
 
@@ -1474,14 +1474,14 @@ app.post('/api/sync/outbound', authenticateToken, async (req, res) => {
     for (const t of transactions) {
       await client.query(`
         INSERT INTO outbound_transactions
-          (id, customer_id, customer_type, casual_customer_name, transaction_date, status, notes, user_id, delivery_note_sent)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+          (id, customer_id, customer_type, casual_customer_name, transaction_date, status, notes, user_id, delivery_note_sent, username)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
         ON CONFLICT (id) DO UPDATE SET
           customer_id=$2, customer_type=$3, casual_customer_name=$4,
-          transaction_date=$5, status=$6, notes=$7, user_id=$8, delivery_note_sent=$9`,
+          transaction_date=$5, status=$6, notes=$7, user_id=$8, delivery_note_sent=$9, username=$10`,
         [t.id, t.customer_id||null, t.customer_type||'registered',
          t.casual_customer_name||null, t.transaction_date, t.status||'pending',
-         t.notes||null, t.user_id||null, t.delivery_note_sent||false]
+         t.notes||null, t.user_id||null, t.delivery_note_sent||false, t.username||null]
       );
     }
 

@@ -147,7 +147,7 @@ async function syncEntityToCloud(entityName, sql) {
 }
 
 async function syncInboundToCloud() {
-  const transactions = await sqliteAll('SELECT * FROM inbound_transactions ORDER BY id');
+  const transactions = await sqliteAll('SELECT it.*, u.username FROM inbound_transactions it LEFT JOIN users u ON it.user_id = u.id ORDER BY it.id');
   const items        = await sqliteAll('SELECT * FROM inbound_items ORDER BY id');
   const result = await apiRequest('POST', '/api/sync/inbound', { transactions, items });
   if (result.status === 200) log(`  ↳ inbound: ${transactions.length} transactions synced`);
@@ -155,7 +155,7 @@ async function syncInboundToCloud() {
 }
 
 async function syncOutboundToCloud() {
-  const transactions = await sqliteAll('SELECT * FROM outbound_transactions ORDER BY id');
+  const transactions = await sqliteAll('SELECT ot.*, u.username FROM outbound_transactions ot LEFT JOIN users u ON ot.user_id = u.id ORDER BY ot.id');
   const items        = await sqliteAll('SELECT * FROM outbound_items ORDER BY id');
   const result = await apiRequest('POST', '/api/sync/outbound', { transactions, items });
   if (result.status === 200) log(`  ↳ outbound: ${transactions.length} transactions synced`);
