@@ -650,6 +650,22 @@ async function sendDocumentEmail() {
 ${transaction.notes?`<p><strong>${lang==='he'?'הערות':'Notes'}:</strong> ${transaction.notes}</p>`:''}
 <div class="footer"><p>${lang==='he'?'נערך ע"י':'Prepared by'}: ${transaction.username||'-'}</p></div>
 <div class="doc-footer">${company.company_name||'WorldSecure LTD'} &bull; ${company.email||'info@world-secure.com'}</div>
+<div class="email-modal-overlay no-print" id="emailModal">
+  <div class="email-modal-box">
+    <h3>✉️ ${lang==='he'?'שלח במייל':lang==='pt'?'Enviar por Email':'Send by Email'}</h3>
+    <label>${lang==='he'?'כתובת מייל':'Email Address'}</label>
+    <input type="text" id="emailTo" placeholder="example@domain.com" autocomplete="off">
+    <label>${lang==='he'?'נושא':'Subject'}</label>
+    <input type="text" id="emailSubject" value="${t.title} #${id}">
+    <label>${lang==='he'?'הודעה':'Message'}</label>
+    <textarea id="emailBody">${t.title} #${id}</textarea>
+    <div id="email-status"></div>
+    <div class="email-modal-footer">
+      <button class="btn-modal-cancel" onclick="document.getElementById('emailModal').classList.remove('open')">${lang==='he'?'ביטול':'Cancel'}</button>
+      <button class="btn-modal-send" onclick="sendDocumentEmail()">📤 ${lang==='he'?'שלח':'Send'}</button>
+    </div>
+  </div>
+</div>
 </body></html>`;
 
     await saveDocument('delivery', id, html, lang, req.user?.id||null,
@@ -764,6 +780,22 @@ async function sendDocumentEmail() {
 ${transaction.notes?`<p><strong>${lang==='he'?'הערות':'Notes'}:</strong> ${transaction.notes}</p>`:''}
 <p><strong>${lang==='he'?'התקבל ע"י':'Received by'}:</strong> ${transaction.username||'-'}</p>
 <div class="doc-footer">${company.company_name||'WorldSecure LTD'} &bull; ${company.email||'info@world-secure.com'}</div>
+<div class="email-modal-overlay no-print" id="emailModal">
+  <div class="email-modal-box">
+    <h3>✉️ ${lang==='he'?'שלח במייל':lang==='pt'?'Enviar por Email':'Send by Email'}</h3>
+    <label>${lang==='he'?'כתובת מייל':'Email Address'}</label>
+    <input type="text" id="emailTo" placeholder="example@domain.com" autocomplete="off">
+    <label>${lang==='he'?'נושא':'Subject'}</label>
+    <input type="text" id="emailSubject" value="${t.title} #${id}">
+    <label>${lang==='he'?'הודעה':'Message'}</label>
+    <textarea id="emailBody">${t.title} #${id}</textarea>
+    <div id="email-status"></div>
+    <div class="email-modal-footer">
+      <button class="btn-modal-cancel" onclick="document.getElementById('emailModal').classList.remove('open')">${lang==='he'?'ביטול':'Cancel'}</button>
+      <button class="btn-modal-send" onclick="sendDocumentEmail()">📤 ${lang==='he'?'שלח':'Send'}</button>
+    </div>
+  </div>
+</div>
 </body></html>`;
 
     await saveDocument('receipt', id, html, lang, req.user?.id||null, transaction.supplier_name);
