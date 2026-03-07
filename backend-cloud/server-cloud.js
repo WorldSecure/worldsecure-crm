@@ -1715,10 +1715,11 @@ app.post('/api/send-email', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'SMTP not configured. Please set up email settings in company settings.' });
     }
 
+    const smtpPort = parseInt(company.smtp_port) || 587;
     const transporter = nodemailer.createTransport({
       host: company.smtp_host,
-      port: parseInt(company.smtp_port) || 587,
-      secure: false,
+      port: smtpPort,
+      secure: smtpPort === 465,
       auth: { user: company.smtp_user, pass: company.smtp_pass },
       tls: { rejectUnauthorized: false }
     });
