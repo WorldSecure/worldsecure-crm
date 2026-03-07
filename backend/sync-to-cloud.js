@@ -301,6 +301,8 @@ async function syncSupportFromCloud() {
   const { tickets, history } = result.body;
   let count = 0;
 
+  const cloudIds = (tickets || []).map(t => t.id);
+
   for (const t of (tickets || [])) {
     await sqliteRun(`
       INSERT OR REPLACE INTO support_tickets
@@ -317,6 +319,16 @@ async function syncSupportFromCloud() {
        t.closed_at||null, t.cancelled_at||null]
     );
     count++;
+  }
+
+  // מחק מקומית tickets שנמחקו בענן
+  const localTickets = await sqliteAll('SELECT id FROM support_tickets');
+  for (const local of localTickets) {
+    if (!cloudIds.includes(local.id)) {
+      await sqliteRun('DELETE FROM support_ticket_history WHERE ticket_id = ?', [local.id]);
+      await sqliteRun('DELETE FROM support_tickets WHERE id = ?', [local.id]);
+      log(`  ↳ deleted local ticket #${local.id} (removed from cloud)`);
+    }
   }
 
   for (const h of (history || [])) {
