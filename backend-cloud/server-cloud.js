@@ -1093,6 +1093,91 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
   }
 });
 
+
+// ════════════════════════════════════════════════════════════════════════════
+//  PULL ENDPOINTS - מאפשרים למחשב המקומי למשוך נתונים מהענן
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Pull: Inbound ─────────────────────────────────────────────────────────────
+app.get('/api/sync/pull/inbound', authenticateToken, async (req, res) => {
+  try {
+    const transactions = await query('SELECT * FROM inbound_transactions ORDER BY id');
+    const items        = await query('SELECT * FROM inbound_items ORDER BY id');
+    res.json({ transactions: transactions.rows, items: items.rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Pull: Outbound ────────────────────────────────────────────────────────────
+app.get('/api/sync/pull/outbound', authenticateToken, async (req, res) => {
+  try {
+    const transactions = await query('SELECT * FROM outbound_transactions ORDER BY id');
+    const items        = await query('SELECT * FROM outbound_items ORDER BY id');
+    res.json({ transactions: transactions.rows, items: items.rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Pull: Support ─────────────────────────────────────────────────────────────
+app.get('/api/sync/pull/support', authenticateToken, async (req, res) => {
+  try {
+    const tickets = await query('SELECT * FROM support_tickets ORDER BY id');
+    const history = await query('SELECT * FROM support_ticket_history ORDER BY id');
+    res.json({ tickets: tickets.rows, history: history.rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Sync: Support (push from local) ──────────────────────────────────────────
+app.post('/api/sync/support', authenticateToken, async (req, res) => {
+  const { tickets, history } = req.body;
+  if (!Array.isArray(tickets)) return res.status(400).json({ error: 'tickets array required' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    for (const t of tickets) {
+      await client.query(`
+        INSERT INTO support_tickets
+          (id, ticket_number, customer_id, customer_name, product_id, product_name,
+           subject, description, status, priority, owner_id, owner_name, created_by,
+           awaiting_channel, awaiting_note, awaiting_deadline,
+           created_at, updated_at, closed_at, cancelled_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+        ON CONFLICT (id) DO UPDATE SET
+          ticket_number=$2, customer_id=$3, customer_name=$4, product_id=$5,
+          product_name=$6, subject=$7, description=$8, status=$9, priority=$10,
+          owner_id=$11, owner_name=$12, created_by=$13, awaiting_channel=$14,
+          awaiting_note=$15, awaiting_deadline=$16, updated_at=$18,
+          closed_at=$19, cancelled_at=$20`,
+        [t.id, t.ticket_number, t.customer_id||null, t.customer_name||null,
+         t.product_id||null, t.product_name||null, t.subject, t.description||null,
+         t.status||'open', t.priority||'medium', t.owner_id||null, t.owner_name||null,
+         t.created_by||null, t.awaiting_channel||null, t.awaiting_note||null,
+         t.awaiting_deadline||null, t.created_at, t.updated_at||null,
+         t.closed_at||null, t.cancelled_at||null]
+      );
+    }
+
+    for (const h of (history || [])) {
+      await client.query(`
+        INSERT INTO support_ticket_history
+          (id, ticket_id, user_id, username, action, old_status, new_status, comment, created_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        ON CONFLICT (id) DO NOTHING`,
+        [h.id, h.ticket_id, h.user_id||null, h.username||null, h.action,
+         h.old_status||null, h.new_status||null, h.comment||null, h.created_at]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ message: 'support synced', count: tickets.length });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 // ── Health Check ──────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
