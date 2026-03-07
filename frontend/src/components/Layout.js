@@ -66,11 +66,6 @@ function Layout() {
             {/* Warehouse Module */}
             {hasModuleAccess('warehouse') && (
               <>
-                <Link to="/products" className={isActive('/products')}>
-                  <span className="sidebar-icon">📦</span>
-                  {t('products')}
-                </Link>
-                
                 <Link to="/inbound" className={isActive('/inbound')}>
                   <span className="sidebar-icon">⬇️</span>
                   {t('inbound')}
@@ -79,6 +74,11 @@ function Layout() {
                 <Link to="/outbound" className={isActive('/outbound')}>
                   <span className="sidebar-icon">⬆️</span>
                   {t('outbound')}
+                </Link>
+                
+                <Link to="/products" className={isActive('/products')}>
+                  <span className="sidebar-icon">📦</span>
+                  {t('products')}
                 </Link>
                 
                 <Link to="/suppliers" className={isActive('/suppliers')}>
