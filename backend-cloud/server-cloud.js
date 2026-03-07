@@ -1469,14 +1469,7 @@ app.post('/api/sync/inbound', authenticateToken, async (req, res) => {
       );
     }
 
-    // סנכרן מלאי מוצרים לפי הנתונים המקומיים
-    const productRows = await client.query('SELECT id FROM products');
-    for (const p of productRows.rows) {
-      const inRes  = await client.query(`SELECT COALESCE(SUM(quantity),0) as total FROM inbound_items ii JOIN inbound_transactions it ON ii.transaction_id=it.id WHERE ii.product_id=$1`, [p.id]);
-      const outRes = await client.query(`SELECT COALESCE(SUM(quantity),0) as total FROM outbound_items oi JOIN outbound_transactions ot ON oi.transaction_id=ot.id WHERE oi.product_id=$1`, [p.id]);
-      const qty = parseInt(inRes.rows[0].total) - parseInt(outRes.rows[0].total);
-      await client.query('UPDATE products SET quantity=$1 WHERE id=$2', [Math.max(0,qty), p.id]);
-    }
+    // הכמות מתעדכנת ע"י sync/products בלבד
 
     // מחק תעודות שנמחקו במקומי (רק אם נוצרו לפני יותר מ-10 דקות)
     if (Array.isArray(localIds) && localIds.length >= 0) {
