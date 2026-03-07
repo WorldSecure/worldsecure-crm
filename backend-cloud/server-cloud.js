@@ -161,6 +161,16 @@ app.delete('/api/users/:id', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.put('/api/users/:id/username', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  const { username } = req.body;
+  if (!username?.trim()) return res.status(400).json({ error: 'Username required' });
+  try {
+    await query('UPDATE users SET username=$1 WHERE id=$2', [username.trim(), req.params.id]);
+    res.json({ message: 'Username updated' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ════════════════════════════════════════════════════════════════════════════
 //  READ-ONLY: לקוחות / מוצרים / ספקים (מסונכרנים מהמחשב)
 // ════════════════════════════════════════════════════════════════════════════

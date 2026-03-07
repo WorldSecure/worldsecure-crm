@@ -9,6 +9,8 @@ function Users() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingUsername, setEditingUsername] = useState({ id: null, username: '' });
   const [editingUser, setEditingUser] = useState(null);
   
   const [formData, setFormData] = useState({
@@ -115,6 +117,23 @@ function Users() {
     }
   };
 
+  const handleEditUsername = (userItem) => {
+    setEditingUsername({ id: userItem.id, username: userItem.username });
+    setShowEditModal(true);
+  };
+
+  const handleSaveUsername = async () => {
+    if (!editingUsername.username.trim()) return;
+    try {
+      await axios.put(`/api/users/${editingUsername.id}/username`, { username: editingUsername.username });
+      alert(t('success'));
+      setShowEditModal(false);
+      fetchUsers();
+    } catch (error) {
+      alert(t('error') + ': ' + (error.response?.data?.error || error.message));
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       username: '',
@@ -191,6 +210,12 @@ function Users() {
                           onClick={() => handleEdit(userItem)}
                         >
                           {t('change_role')}
+                        </button>
+                        <button 
+                          className="btn btn-primary"
+                          onClick={() => handleEditUsername(userItem)}
+                        >
+                          ✏️ Edit Name
                         </button>
                         {userItem.id !== user.id && (
                           <button 
@@ -357,6 +382,39 @@ function Users() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+    </div>
+
+      {/* Edit Username Modal */}
+      {showEditModal && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">✏️ Edit Username</h3>
+              <button className="modal-close" onClick={() => setShowEditModal(false)}>×</button>
+            </div>
+            <div style={{ padding: '1.5rem' }}>
+              <div className="form-group">
+                <label className="form-label">Username *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={editingUsername.username}
+                  onChange={(e) => setEditingUsername({...editingUsername, username: e.target.value})}
+                  required
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setShowEditModal(false)}>
+                {t('cancel')}
+              </button>
+              <button type="button" className="btn btn-primary" onClick={handleSaveUsername}>
+                {t('save')}
+              </button>
+            </div>
           </div>
         </div>
       )}
