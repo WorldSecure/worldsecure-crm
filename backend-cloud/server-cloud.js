@@ -461,6 +461,47 @@ app.get('/api/outbound/:id/details', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+
+// ── DELETE: Inbound Transaction ───────────────────────────────────────────────
+app.delete('/api/inbound/:id', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // החזר כמויות למלאי
+    const items = await client.query('SELECT product_id, quantity FROM inbound_items WHERE transaction_id=$1', [req.params.id]);
+    for (const item of items.rows) {
+      await client.query('UPDATE products SET quantity = quantity - $1 WHERE id=$2', [item.quantity, item.product_id]);
+    }
+    await client.query('DELETE FROM inbound_items WHERE transaction_id=$1', [req.params.id]);
+    await client.query('DELETE FROM inbound_transactions WHERE id=$1', [req.params.id]);
+    await client.query('COMMIT');
+    res.json({ message: 'Inbound transaction deleted' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally { client.release(); }
+});
+
+// ── DELETE: Outbound Transaction ──────────────────────────────────────────────
+app.delete('/api/outbound/:id', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // החזר כמויות למלאי
+    const items = await client.query('SELECT product_id, quantity FROM outbound_items WHERE transaction_id=$1', [req.params.id]);
+    for (const item of items.rows) {
+      await client.query('UPDATE products SET quantity = quantity + $1 WHERE id=$2', [item.quantity, item.product_id]);
+    }
+    await client.query('DELETE FROM outbound_items WHERE transaction_id=$1', [req.params.id]);
+    await client.query('DELETE FROM outbound_transactions WHERE id=$1', [req.params.id]);
+    await client.query('COMMIT');
+    res.json({ message: 'Outbound transaction deleted' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally { client.release(); }
+});
+
 // ════════════════════════════════════════════════════════════════════════════
 //  DOCUMENTS – שמירה + רשימה לגיבוי
 // ════════════════════════════════════════════════════════════════════════════
