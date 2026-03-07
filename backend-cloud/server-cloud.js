@@ -586,20 +586,50 @@ app.get('/api/outbound/:id/delivery-note', authenticateToken, async (req, res) =
   .info-box h3{margin-top:0;border-bottom:2px solid #3498db;padding-bottom:5px}
   .info-row{display:flex;margin-bottom:20px}
   .footer{margin-top:30px;padding-top:15px;border-top:2px solid #ddd;text-align:center;color:#777}
+    .email-modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:99999;justify-content:center;align-items:center}
+  .email-modal-overlay.open{display:flex!important}
+  .email-modal-box{background:white;border-radius:10px;padding:2rem;width:420px;max-width:95vw;box-shadow:0 10px 40px rgba(0,0,0,0.3);direction:${t.dir}}
+  .email-modal-box h3{margin:0 0 1.2rem;font-size:1.2rem}
+  .email-modal-box label{display:block;font-weight:600;margin-bottom:0.3rem;font-size:0.9rem}
+  .email-modal-box input,.email-modal-box textarea{width:100%;padding:0.6rem;border:1px solid #ddd;border-radius:5px;font-size:0.95rem;margin-bottom:1rem;box-sizing:border-box;font-family:inherit}
+  .email-modal-box textarea{height:80px;resize:vertical}
+  .email-modal-footer{display:flex;gap:0.75rem;justify-content:flex-end;margin-top:0.5rem}
+  .email-modal-footer button{padding:0.6rem 1.4rem;border:none;border-radius:5px;cursor:pointer;font-size:0.95rem}
+  .btn-modal-send{background:#27ae60;color:white}.btn-modal-cancel{background:#95a5a6;color:white}
+  #email-status{margin-top:0.5rem;font-size:0.9rem;min-height:1.2rem}
   .doc-footer{position:fixed;bottom:0;left:0;right:0;border-top:1px solid #ddd;padding:5px;text-align:center;font-size:8pt;color:#888;background:#fff}
 </style></head><body>
-<div class="btn-bar no-print">
-  <button class="btn-print" onclick="window.print()">🖨️ ${lang==='he'?'הדפס / שמור PDF':lang==='pt'?'Imprimir / Salvar PDF':'Print / Save as PDF'}</button>
-  <button onclick="sendByEmail()" style="background:#4CAF50;color:white">✉️ ${lang==='he'?'שלח במייל':lang==='pt'?'Enviar por Email':'Send by Email'}</button>
-  <button class="btn-close" onclick="window.close()">❌ ${lang==='he'?'סגור':lang==='pt'?'Fechar':'Close'}</button>
-</div>
 <script>
-function sendByEmail() {
-  const subject = encodeURIComponent('${lang==="he"?"תעודת משלוח":lang==="pt"?"Nota de Entrega":"Delivery Note"} #${id}');
-  const body = encodeURIComponent('${lang==="he"?"מצורפת תעודת משלוח":lang==="pt"?"Segue em anexo a nota de entrega":"Please find attached the delivery note"} #${id}');
-  window.location.href = 'mailto:?subject=' + subject + '&body=' + body;
+window._authToken = '${token}';
+async function sendDocumentEmail() {
+  const to = document.getElementById('emailTo').value;
+  const subject = document.getElementById('emailSubject').value;
+  const body = document.getElementById('emailBody').value;
+  const status = document.getElementById('email-status');
+  if (!to) { status.style.color='red'; status.textContent='${lang==="he"?"נא להזין כתובת מייל":"Please enter email address"}'; return; }
+  status.style.color='#555'; status.textContent='⏳ ...';
+  const token = window._authToken || sessionStorage.getItem('token') || '';
+  try {
+    const res = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ to, subject, body, docType: 'outbound', docId: '${id}', docLang: '${lang}' })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      status.style.color='green'; status.textContent='✅ ${lang==="he"?"נשלח בהצלחה":"Sent successfully"}';
+      setTimeout(() => document.getElementById('emailModal').classList.remove('open'), 2000);
+    } else {
+      status.style.color='red'; status.textContent='❌ ' + (data.error || 'Error');
+    }
+  } catch(e) { status.style.color='red'; status.textContent='❌ ${lang==="he"?"שגיאה בשליחה":"Send error"}'; }
 }
 </script>
+<div class="btn-bar no-print">
+  <button class="btn-print" onclick="window.print()">🖨️ ${lang==='he'?'הדפס / שמור PDF':lang==='pt'?'Imprimir / Salvar PDF':'Print / Save as PDF'}</button>
+  <button onclick="document.getElementById('emailModal').classList.add('open')" style="background:#4CAF50;color:white">✉️ ${lang==='he'?'שלח במייל':lang==='pt'?'Enviar por Email':'Send by Email'}</button>
+  <button class="btn-close" onclick="window.close()">❌ ${lang==='he'?'סגור':lang==='pt'?'Fechar':'Close'}</button>
+</div>
 <h1>${t.title}</h1>
 <p><strong>${t.num}:</strong> ${id} &nbsp;|&nbsp; <strong>${t.date}:</strong> ${formatDate(transaction.transaction_date)}</p>
 <div class="info-row">
@@ -676,21 +706,49 @@ app.get('/api/inbound/:id/receipt-note', authenticateToken, async (req, res) => 
   table{width:100%;border-collapse:collapse;margin:20px 0}
   th{background:#3498db;color:#fff;padding:10px;text-align:${t.dir==='rtl'?'right':'left'}}
   td{padding:10px;border:1px solid #ddd}
+  .email-modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:99999;justify-content:center;align-items:center}
+  .email-modal-overlay.open{display:flex!important}
+  .email-modal-box{background:white;border-radius:10px;padding:2rem;width:420px;max-width:95vw;box-shadow:0 10px 40px rgba(0,0,0,0.3);direction:${t.dir}}
+  .email-modal-box h3{margin:0 0 1.2rem;font-size:1.2rem}
+  .email-modal-box label{display:block;font-weight:600;margin-bottom:0.3rem;font-size:0.9rem}
+  .email-modal-box input,.email-modal-box textarea{width:100%;padding:0.6rem;border:1px solid #ddd;border-radius:5px;font-size:0.95rem;margin-bottom:1rem;box-sizing:border-box;font-family:inherit}
+  .email-modal-box textarea{height:80px;resize:vertical}
+  .email-modal-footer{display:flex;gap:0.75rem;justify-content:flex-end;margin-top:0.5rem}
+  .email-modal-footer button{padding:0.6rem 1.4rem;border:none;border-radius:5px;cursor:pointer;font-size:0.95rem}
+  .btn-modal-send{background:#27ae60;color:white}.btn-modal-cancel{background:#95a5a6;color:white}
+  #email-status{margin-top:0.5rem;font-size:0.9rem;min-height:1.2rem}
   .doc-footer{position:fixed;bottom:0;left:0;right:0;border-top:1px solid #ddd;padding:5px;text-align:center;font-size:8pt;color:#888;background:#fff}
 </style></head><body>
-<div class="btn-bar no-print">
-  <button class="btn-print" onclick="window.print()">🖨️ ${lang==='he'?'הדפס / שמור PDF':lang==='pt'?'Imprimir / Salvar PDF':'Print / Save as PDF'}</button>
-  <button onclick="sendByEmail()" style="background:#4CAF50;color:white">✉️ ${lang==='he'?'שלח במייל':lang==='pt'?'Enviar por Email':'Send by Email'}</button>
-  <button class="btn-close" onclick="window.close()">❌ ${lang==='he'?'סגור':lang==='pt'?'Fechar':'Close'}</button>
-</div>
 <script>
-function sendByEmail() {
-  const subject = encodeURIComponent('${lang==="he"?"תעודת קבלה":lang==="pt"?"Nota de Recebimento":"Receipt Note"} #${id}');
-  const body = encodeURIComponent('${lang==="he"?"מצורפת תעודת קבלה":lang==="pt"?"Segue em anexo a nota de recebimento":"Please find attached the receipt note"} #${id}');
-  window.location.href = 'mailto:?subject=' + subject + '&body=' + body;
+window._authToken = '${token}';
+async function sendDocumentEmail() {
+  const to = document.getElementById('emailTo').value;
+  const subject = document.getElementById('emailSubject').value;
+  const body = document.getElementById('emailBody').value;
+  const status = document.getElementById('email-status');
+  if (!to) { status.style.color='red'; status.textContent='${lang==="he"?"נא להזין כתובת מייל":"Please enter email address"}'; return; }
+  status.style.color='#555'; status.textContent='⏳ ...';
+  const token = window._authToken || sessionStorage.getItem('token') || '';
+  try {
+    const res = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ to, subject, body, docType: 'inbound', docId: '${id}', docLang: '${lang}' })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      status.style.color='green'; status.textContent='✅ ${lang==="he"?"נשלח בהצלחה":"Sent successfully"}';
+      setTimeout(() => document.getElementById('emailModal').classList.remove('open'), 2000);
+    } else {
+      status.style.color='red'; status.textContent='❌ ' + (data.error || 'Error');
+    }
+  } catch(e) { status.style.color='red'; status.textContent='❌ ${lang==="he"?"שגיאה בשליחה":"Send error"}'; }
 }
 </script>
-  <button class="btn-close" onclick="window.close()">❌ ${lang==='he'?'סגור':'Close'}</button>
+<div class="btn-bar no-print">
+  <button class="btn-print" onclick="window.print()">🖨️ ${lang==='he'?'הדפס / שמור PDF':lang==='pt'?'Imprimir / Salvar PDF':'Print / Save as PDF'}</button>
+  <button onclick="document.getElementById('emailModal').classList.add('open')" style="background:#4CAF50;color:white">✉️ ${lang==='he'?'שלח במייל':lang==='pt'?'Enviar por Email':'Send by Email'}</button>
+  <button class="btn-close" onclick="window.close()">❌ ${lang==='he'?'סגור':lang==='pt'?'Fechar':'Close'}</button>
 </div>
 <h1>${t.title} #${id}</h1>
 <p>${lang==='he'?'תאריך':'Date'}: ${formatDate(transaction.transaction_date)}</p>
@@ -1329,6 +1387,90 @@ app.post('/api/admin/run-migrations', async (req, res) => {
     await pool.query(`UPDATE users SET module_warehouse=TRUE, module_sales=FALSE, module_service=TRUE WHERE module_warehouse IS NULL`);
     res.json({ message: 'Migrations complete' });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// ── Send Email ─────────────────────────────────────────────────────────────────
+app.post('/api/send-email', authenticateToken, async (req, res) => {
+  const { to, subject, body, docType, docId, docLang, docContact } = req.body;
+  if (!to) return res.status(400).json({ error: 'Missing recipient email' });
+
+  try {
+    const compRes = await query('SELECT * FROM company_settings WHERE id=1');
+    const company = compRes.rows[0];
+
+    if (!company?.smtp_host || !company?.smtp_user || !company?.smtp_pass) {
+      return res.status(400).json({ error: 'SMTP not configured. Please set up email settings in company settings.' });
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: company.smtp_host,
+      port: parseInt(company.smtp_port) || 587,
+      secure: false,
+      auth: { user: company.smtp_user, pass: company.smtp_pass },
+      tls: { rejectUnauthorized: false }
+    });
+
+    // Fetch document HTML and attach it
+    let attachments = [];
+    if (docType && docId) {
+      try {
+        const token = req.headers.authorization?.replace('Bearer ', '');
+        const baseUrl = `https://worldsecure-backend.onrender.com`;
+        const urlMap = {
+          'outbound': `${baseUrl}/api/outbound/${docId}/delivery-note?lang=${docLang||'he'}${docContact?`&contact=${encodeURIComponent(docContact)}`:''}&token=${encodeURIComponent(token)}`,
+          'inbound':  `${baseUrl}/api/inbound/${docId}/receipt-note?lang=${docLang||'he'}${docContact?`&contact=${encodeURIComponent(docContact)}`:''}&token=${encodeURIComponent(token)}`
+        };
+        const nameMap = {
+          'outbound': `delivery_note_${docId}.html`,
+          'inbound':  `receipt_note_${docId}.html`
+        };
+        const fetchUrl = urlMap[docType];
+        if (fetchUrl) {
+          const https = require('https');
+          const htmlContent = await new Promise((resolve, reject) => {
+            const urlObj = new URL(fetchUrl);
+            const options = { hostname: urlObj.hostname, port: 443, path: urlObj.pathname + urlObj.search, method: 'GET' };
+            const req2 = https.request(options, (r) => {
+              let data = '';
+              r.on('data', chunk => data += chunk);
+              r.on('end', () => resolve(data));
+            });
+            req2.on('error', reject);
+            req2.end();
+          });
+          let cleanHtml = htmlContent.replace(/<script[\s\S]*?<\/script>/g, '');
+          cleanHtml = cleanHtml.replace('</style>', '.no-print{display:none!important}.btn-bar{display:none!important}</style>');
+          attachments.push({
+            filename: nameMap[docType],
+            content: Buffer.from(cleanHtml, 'utf-8'),
+            contentType: 'text/html; charset=utf-8'
+          });
+        }
+      } catch (attachErr) {
+        console.error('Attachment error:', attachErr.message);
+      }
+    }
+
+    await transporter.sendMail({
+      from: company.smtp_from || company.smtp_user,
+      to,
+      subject: subject || `Document from ${company.company_name || 'WorldSecure'}`,
+      html: `<div style="font-family:Arial,sans-serif;padding:20px;max-width:600px;">
+        <p>${body || 'Please find the attached document.'}</p>
+        <hr style="border:none;border-top:1px solid #e0e0e0;margin:20px 0">
+        <p style="color:#555;font-size:13px;">${company.company_name || 'WorldSecure LTD'}<br>
+        ${company.email || ''} | ${company.phone || ''}<br>
+        <a href="https://www.world-secure.com">www.world-secure.com</a></p>
+      </div>`,
+      attachments
+    });
+
+    res.json({ success: true, message: '✅ Email sent successfully' });
+  } catch (err) {
+    console.error('Send email error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
