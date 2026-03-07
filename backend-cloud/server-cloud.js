@@ -1248,24 +1248,11 @@ app.post('/api/support-tickets/:id/comments', authenticateToken, async (req, res
 });
 
 app.delete('/api/support-tickets/:id', authenticateToken, async (req, res) => {
-  const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-    const r = await client.query('SELECT id FROM support_tickets WHERE id=$1', [req.params.id]);
+    const r = await query('DELETE FROM support_tickets WHERE id=$1', [req.params.id]);
     if (r.rowCount === 0) return res.status(404).json({ error: 'Not found' });
-    // שמור את ה-ID ב-pending_deletions לפני המחיקה
-    await client.query(`
-      INSERT INTO pending_deletions (entity_type, entity_id, deleted_at)
-      VALUES ('support_ticket', $1, NOW())
-      ON CONFLICT DO NOTHING`, [req.params.id]);
-    await client.query('DELETE FROM support_ticket_history WHERE ticket_id=$1', [req.params.id]);
-    await client.query('DELETE FROM support_tickets WHERE id=$1', [req.params.id]);
-    await client.query('COMMIT');
     res.json({ message: 'Deleted' });
-  } catch (err) {
-    await client.query('ROLLBACK');
-    res.status(500).json({ error: err.message });
-  } finally { client.release(); }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1619,6 +1606,19 @@ app.post('/api/sync/support', authenticateToken, async (req, res) => {
     await client.query('BEGIN');
 
     for (const t of tickets) {
+      // תרגם owner_id ו-created_by לפי username (כי ה-IDs שונים בין מקומי לענן)
+      let resolvedOwnerId = null;
+      if (t.owner_name) {
+        const ownerRes = await client.query('SELECT id FROM users WHERE username=$1', [t.owner_name]);
+        resolvedOwnerId = ownerRes.rows[0]?.id || null;
+      }
+      let resolvedCreatedBy = null;
+      if (t.created_by) {
+        // created_by הוא ID מקומי - ננסה למצוא לפי owner_name או נשאיר null
+        const creatorRes = await client.query('SELECT id FROM users WHERE id=$1', [t.created_by]);
+        resolvedCreatedBy = creatorRes.rows[0]?.id || null;
+      }
+
       await client.query(`
         INSERT INTO support_tickets
           (id, ticket_number, customer_id, customer_name, product_id, product_name,
@@ -1634,8 +1634,8 @@ app.post('/api/sync/support', authenticateToken, async (req, res) => {
           closed_at=$19, cancelled_at=$20`,
         [t.id, t.ticket_number, t.customer_id||null, t.customer_name||null,
          t.product_id||null, t.product_name||null, t.subject, t.description||null,
-         t.status||'open', t.priority||'medium', t.owner_id||null, t.owner_name||null,
-         t.created_by||null, t.awaiting_channel||null, t.awaiting_note||null,
+         t.status||'open', t.priority||'medium', resolvedOwnerId, t.owner_name||null,
+         resolvedCreatedBy, t.awaiting_channel||null, t.awaiting_note||null,
          t.awaiting_deadline||null, t.created_at, t.updated_at||null,
          t.closed_at||null, t.cancelled_at||null]
       );
@@ -1780,25 +1780,6 @@ app.get('/api/sync/pull/outbound', authenticateToken, async (req, res) => {
 });
 
 // ── Pull: Support ─────────────────────────────────────────────────────────────
-app.get('/api/sync/pending-deletions', authenticateToken, async (req, res) => {
-  try {
-    const r = await query(`SELECT entity_type, entity_id FROM pending_deletions ORDER BY deleted_at`);
-    res.json(r.rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-app.delete('/api/sync/pending-deletions', authenticateToken, async (req, res) => {
-  // מחק את כל הרשומות שהסינק טיפל בהן
-  const { ids } = req.body; // [{ entity_type, entity_id }]
-  try {
-    for (const d of (ids || [])) {
-      await query('DELETE FROM pending_deletions WHERE entity_type=$1 AND entity_id=$2',
-        [d.entity_type, d.entity_id]);
-    }
-    res.json({ message: 'cleared' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
 app.get('/api/sync/pull/support', authenticateToken, async (req, res) => {
   try {
     const tickets = await query('SELECT * FROM support_tickets ORDER BY id');
@@ -2058,16 +2039,6 @@ app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISO
 // ════════════════════════════════════════════════════════════════════════════
 
 async function runMigrations() {
-  // טבלת מחיקות ממתינות לסינק
-  await query(`
-    CREATE TABLE IF NOT EXISTS pending_deletions (
-      id SERIAL PRIMARY KEY,
-      entity_type TEXT NOT NULL,
-      entity_id INTEGER NOT NULL,
-      deleted_at TIMESTAMPTZ DEFAULT NOW(),
-      UNIQUE(entity_type, entity_id)
-    )
-  `);
   const migrations = [
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_warehouse BOOLEAN DEFAULT TRUE`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_sales BOOLEAN DEFAULT FALSE`,
