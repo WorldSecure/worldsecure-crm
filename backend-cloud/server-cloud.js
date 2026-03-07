@@ -1715,14 +1715,8 @@ app.post('/api/send-email', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'SMTP not configured. Please set up email settings in company settings.' });
     }
 
-    // Render blocks port 587 - force port 465 with SSL
-    const transporter = nodemailer.createTransport({
-      host: company.smtp_host,
-      port: 465,
-      secure: true,
-      auth: { user: company.smtp_user, pass: company.smtp_pass },
-      tls: { rejectUnauthorized: false }
-    });
+    // Use Brevo API (Render blocks SMTP ports)
+    // smtp_pass for Brevo is the API key (xsmtpsib-...)
 
     // Build document HTML directly (no self-request)
     let attachments = [];
@@ -1827,19 +1821,42 @@ ${tx?.notes?`<p><strong>${lang==='he'?'הערות':'Notes'}:</strong> ${tx.notes
       }
     }
 
-    await transporter.sendMail({
-      from: company.smtp_from || company.smtp_user,
-      to,
+    // Build email payload for Brevo API
+    const emailPayload = {
+      sender: { name: company.company_name || 'WorldSecure', email: company.smtp_from || company.smtp_user },
+      to: [{ email: to }],
       subject: subject || `Document from ${company.company_name || 'WorldSecure'}`,
-      html: `<div style="font-family:Arial,sans-serif;padding:20px;max-width:600px;">
+      htmlContent: `<div style="font-family:Arial,sans-serif;padding:20px;max-width:600px;">
         <p>${body || 'Please find the attached document.'}</p>
         <hr style="border:none;border-top:1px solid #e0e0e0;margin:20px 0">
         <p style="color:#555;font-size:13px;">${company.company_name || 'WorldSecure LTD'}<br>
         ${company.email || ''} | ${company.phone || ''}<br>
         <a href="https://www.world-secure.com">www.world-secure.com</a></p>
-      </div>`,
-      attachments
+      </div>`
+    };
+
+    // Add attachments if any
+    if (attachments.length > 0) {
+      emailPayload.attachment = attachments.map(a => ({
+        name: a.filename,
+        content: a.content.toString('base64')
+      }));
+    }
+
+    // Send via Brevo API
+    const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api-key': company.smtp_pass
+      },
+      body: JSON.stringify(emailPayload)
     });
+
+    if (!brevoRes.ok) {
+      const errData = await brevoRes.json();
+      throw new Error(errData.message || 'Brevo API error');
+    }
 
     res.json({ success: true, message: '✅ Email sent successfully' });
   } catch (err) {
