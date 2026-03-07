@@ -334,13 +334,13 @@ app.get('/api/inbound', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/inbound', authenticateToken, async (req, res) => {
-  const { supplier_id, supplier_type, casual_supplier_name, items, notes } = req.body;
+  const { supplier_id, supplier_type, casual_supplier_name, items, notes, qr_code_id } = req.body;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const txResult = await client.query(
-      'INSERT INTO inbound_transactions (supplier_id, supplier_type, casual_supplier_name, notes, user_id) VALUES ($1,$2,$3,$4,$5) RETURNING id',
-      [supplier_id, supplier_type, casual_supplier_name, notes, req.user.id]
+      'INSERT INTO inbound_transactions (supplier_id, supplier_type, casual_supplier_name, notes, user_id, qr_code_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
+      [supplier_id, supplier_type, casual_supplier_name, notes, req.user.id, qr_code_id||null]
     );
     const transactionId = txResult.rows[0].id;
 
@@ -400,7 +400,7 @@ app.get('/api/outbound', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/outbound', authenticateToken, async (req, res) => {
-  const { customer_id, customer_type, casual_customer_name, items, notes, status } = req.body;
+  const { customer_id, customer_type, casual_customer_name, items, notes, status, qr_code_id } = req.body;
   const client = await pool.connect();
   try {
     // בדוק מלאי
@@ -414,8 +414,8 @@ app.post('/api/outbound', authenticateToken, async (req, res) => {
 
     await client.query('BEGIN');
     const txResult = await client.query(
-      'INSERT INTO outbound_transactions (customer_id, customer_type, casual_customer_name, notes, status, user_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
-      [customer_id, customer_type, casual_customer_name, notes, status||'pending', req.user.id]
+      'INSERT INTO outbound_transactions (customer_id, customer_type, casual_customer_name, notes, status, user_id, qr_code_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id',
+      [customer_id, customer_type, casual_customer_name, notes, status||'pending', req.user.id, qr_code_id||null]
     );
     const transactionId = txResult.rows[0].id;
 
