@@ -50,7 +50,7 @@ function Settings() {
 });
 
       if (response.data.logo_path) {
-        setLogoPreview(`http://localhost:3001${response.data.logo_path}`);
+        setLogoPreview(`${axios.defaults.baseURL}${response.data.logo_path}`);
       }
       setLoading(false);
     } catch (error) {
@@ -106,16 +106,98 @@ function Settings() {
   };
 
 
-  const loadQrGallery = () => {
-    const saved = localStorage.getItem('qrGallery');
-    if (saved) {
-      setQrGallery(JSON.parse(saved));
+  const loadQrGallery = async () => {
+    try {
+      // טען מה-DB (מקור האמת)
+      const response = await axios.get('/api/qr-codes');
+      const dbGallery = response.data || [];
+
+      // === MIGRATION: אם DB ריק אבל יש נתונים ב-localStorage - דחוף ל-DB ===
+      if (dbGallery.length === 0) {
+        const saved = localStorage.getItem('qrGallery');
+        if (saved) {
+          const localGallery = JSON.parse(saved);
+          if (localGallery.length > 0) {
+            console.log('Migrating QR codes from localStorage to DB...');
+            const migrated = [];
+            for (const qr of localGallery) {
+              try {
+                const res = await axios.post('/api/qr-codes', {
+                  type: qr.type,
+                  qr_data: qr.qrData,
+                  image_url: qr.image,
+                  title: qr.title || `QR - ${qr.type}`
+                });
+                migrated.push({
+                  id: res.data.id,
+                  type: res.data.type,
+                  qrData: res.data.qr_data,
+                  image: res.data.image_url,
+                  title: res.data.title
+                });
+              } catch (e) {
+                console.error('Migration failed for QR item:', e);
+              }
+            }
+            setQrGallery(migrated);
+            localStorage.setItem('qrGallery', JSON.stringify(migrated));
+            return;
+          }
+        }
+      }
+
+      // המר פורמט DB לפורמט Gallery
+      const gallery = dbGallery.map(qr => ({
+        id: qr.id,
+        type: qr.type,
+        qrData: qr.qr_data,
+        image: qr.image_url,
+        title: qr.title
+      }));
+      setQrGallery(gallery);
+      // עדכן localStorage כגיבוי
+      localStorage.setItem('qrGallery', JSON.stringify(gallery));
+    } catch (error) {
+      console.error('Error loading QR from DB, falling back to localStorage:', error);
+      // Fallback ל-localStorage
+      const saved = localStorage.getItem('qrGallery');
+      if (saved) {
+        setQrGallery(JSON.parse(saved));
+      }
     }
   };
 
-  const saveQrGallery = (gallery) => {
-    localStorage.setItem('qrGallery', JSON.stringify(gallery));
+  const saveQrGallery = async (gallery) => {
+    // שמור ב-state ו-localStorage מיד
     setQrGallery(gallery);
+    localStorage.setItem('qrGallery', JSON.stringify(gallery));
+  };
+
+  const syncQrToDb = async (qrItem) => {
+    try {
+      // שמור QR חדש ב-DB
+      const response = await axios.post('/api/qr-codes', {
+        type: qrItem.type,
+        qr_data: qrItem.qrData,
+        image_url: qrItem.image,
+        title: qrItem.title || `QR - ${qrItem.type}`
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error syncing QR to DB:', error);
+      return null;
+    }
+  };
+
+  const deleteQrFromDb = async (qrId) => {
+    try {
+      // מחק רק אם זה ID מספרי (מה-DB)
+      if (typeof qrId === 'number') {
+        await axios.delete(`/api/qr-codes/${qrId}`);
+      }
+    } catch (error) {
+      console.error('Error deleting QR from DB:', error);
+    }
   };
 
   const generateQrData = (type, data) => {
@@ -151,15 +233,26 @@ function Settings() {
 
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrData)}`;
     
-    const newQrItem = {
+    const tempQrItem = {
       id: Date.now(),
       type: newQr.type,
       data: newQr.data,
       qrData: qrData,
-      image: qrUrl
+      image: qrUrl,
+      title: `QR - ${newQr.type}`
     };
 
-    saveQrGallery([...qrGallery, newQrItem]);
+    // שמור ב-DB וקבל ID אמיתי
+    const dbResult = await syncQrToDb(tempQrItem);
+    const finalItem = dbResult ? {
+      id: dbResult.id,
+      type: dbResult.type,
+      qrData: dbResult.qr_data,
+      image: dbResult.image_url,
+      title: dbResult.title
+    } : tempQrItem;
+
+    saveQrGallery([...qrGallery, finalItem]);
     setNewQr({ type: 'website', data: {} });
   };
 
@@ -172,15 +265,21 @@ function Settings() {
     saveQrGallery(newGallery);
   };
 
-  const deleteQr = (index) => {
+  const deleteQr = async (index) => {
     if (window.confirm(t('delete') + '?')) {
+      const qrToDelete = qrGallery[index];
+      await deleteQrFromDb(qrToDelete.id);
       const newGallery = qrGallery.filter((_, i) => i !== index);
       saveQrGallery(newGallery);
     }
   };
 
-  const clearAllQr = () => {
+  const clearAllQr = async () => {
     if (window.confirm(t('delete_all_qr') || 'למחוק את כל קודי ה-QR?')) {
+      // מחק כל QR מה-DB
+      for (const qr of qrGallery) {
+        await deleteQrFromDb(qr.id);
+      }
       saveQrGallery([]);
     }
   };
@@ -524,27 +623,27 @@ function Settings() {
                   onChange={(e) => setCompanyData({...companyData, smtp_pass: e.target.value})}
                   placeholder="••••••••" />
                 <div style={{ marginTop: '0.4rem', padding: '0.75rem', background: '#e8f4fd', borderRadius: '6px', border: '1px solid #bee5eb', fontSize: '0.85rem' }}>
-                  <strong>📧 Brevo - חינמי, 300 מיילים/יום, עובד מיד</strong>
+                  <strong>📧 Brevo - {t('brevo_title') || 'חינמי, 300 מיילים/יום, עובד מיד'}</strong>
                   <ol style={{ margin: '0.5rem 0 0 1.2rem', padding: 0, lineHeight: 1.9 }}>
-                    <li>הירשם ב: <a href="https://app.brevo.com" target="_blank" rel="noreferrer" style={{ color: '#0066cc', fontWeight: 600 }}>app.brevo.com</a> (חינמי)</li>
-                    <li>לאחר הכניסה: לחץ על שמך למעלה → <strong>SMTP & API</strong></li>
-                    <li>לחץ <strong>"Generate a new SMTP key"</strong> → תן שם → <strong>Generate</strong></li>
-                    <li>הכנס בשדות מעלה:
+                    <li>{t('brevo_step1') || 'הירשם ב:'} <a href="https://app.brevo.com" target="_blank" rel="noreferrer" style={{ color: '#0066cc', fontWeight: 600 }}>app.brevo.com</a></li>
+                    <li>{t('brevo_step2') || 'לאחר הכניסה: לחץ על שמך למעלה →'} <strong>SMTP & API</strong></li>
+                    <li>{t('brevo_step3') || 'לחץ'} <strong>"Generate a new SMTP key"</strong> → {t('brevo_step3b') || 'תן שם →'} <strong>Generate</strong></li>
+                    <li>{t('brevo_step4') || 'הכנס בשדות מעלה:'}
                       <div style={{ background: '#fff', padding: '0.5rem 0.8rem', borderRadius: '4px', marginTop: '0.4rem', fontFamily: 'monospace', fontSize: '0.82rem', lineHeight: 2, border: '1px solid #dee2e6' }}>
                         <b>Host:</b> smtp-relay.brevo.com<br/>
                         <b>Port:</b> 587<br/>
-                        <b>User:</b> המספר מהשדה "Login" (לא המייל!)<br/>
-                        <b>Password:</b> המפתח שנוצר (xsmtpsib-...)
+                        <b>User:</b> {t('brevo_user_hint') || 'המספר מהשדה "Login" (לא המייל!)'}<br/>
+                        <b>Password:</b> {t('brevo_pass_hint') || 'המפתח שנוצר (xsmtpsib-...)'}
                       </div>
                     </li>
                   </ol>
                   <div style={{ marginTop: '0.5rem', padding: '0.4rem 0.6rem', background: '#d4edda', borderRadius: '4px', color: '#155724', fontSize: '0.82rem' }}>
-                    ✅ לא דורש אישור אדמין, עובד עם כל חשבון מייל
+                    ✅ {t('brevo_note') || 'לא דורש אישור אדמין, עובד עם כל חשבון מייל'}
                   </div>
                 </div>
               </div>
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                <label className="form-label">כתובת שולח (From) <span style={{ color: '#888', fontWeight: 'normal', fontSize: '0.85rem' }}>(אופציונלי)</span></label>
+                <label className="form-label">{t('smtp_from') || 'כתובת שולח'} (From) <span style={{ color: '#888', fontWeight: 'normal', fontSize: '0.85rem' }}>({t('optional') || 'אופציונלי'})</span></label>
                 <input type="email" className="form-input" value={companyData.smtp_from || ''}
                   onChange={(e) => setCompanyData({...companyData, smtp_from: e.target.value})}
                   placeholder="noreply@company.com" />
@@ -562,7 +661,8 @@ function Settings() {
                   setSmtpTestResult(null);
                   try {
                     const res = await axios.post('/api/test-smtp');
-                    setSmtpTestResult({ ok: true, msg: res.data.message });
+                    const sender = res.data.sender || '';
+                    setSmtpTestResult({ ok: true, msg: (t('smtp_success') || 'החיבור הצליח! שולח:') + (sender ? ' ' + sender : '') });
                   } catch (err) {
                     setSmtpTestResult({ ok: false, msg: err.response?.data?.error || err.message });
                   } finally {
@@ -570,7 +670,7 @@ function Settings() {
                   }
                 }}
               >
-                {smtpTesting ? '⏳ בודק...' : '🔌 בדוק חיבור SMTP'}
+                {smtpTesting ? `⏳ ${t('testing') || 'בודק...'}` : `🔌 ${t('test_smtp') || 'בדוק חיבור SMTP'}`}
               </button>
               {smtpTestResult && (
                 <div style={{
@@ -621,6 +721,23 @@ function BackupSection() {
     setRestoring(null);
   };
 
+  const handleDownload = async () => {
+    try {
+      const res = await axios.get('/api/backup/download', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'warehouse.db';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      setTimeout(loadBackups, 500); // רענן טבלה
+    } catch(e) {
+      setMsg({ ok: false, text: e.response?.data?.error || e.message });
+    }
+  };
+
   const handleUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -661,9 +778,9 @@ function BackupSection() {
       )}
 
       <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-        <a href="/api/backup/download" download className="btn btn-primary" style={{ textDecoration: 'none' }}>
+        <button className="btn btn-primary" onClick={handleDownload}>
           ⬇️ {t('download_backup') || 'הורד גיבוי עכשיו'}
-        </a>
+        </button>
         <label className="btn btn-success" style={{ cursor: 'pointer', margin: 0 }}>
           ⬆️ {t('upload_backup') || 'העלאת גיבוי'}
           <input 
