@@ -144,10 +144,10 @@ app.get('/api/users', authenticateToken, async (req, res) => {
 
 app.put('/api/users/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
-  const { role, module_warehouse, module_service } = req.body;
+  const { role, module_warehouse, module_sales, module_service } = req.body;
   try {
-    await query('UPDATE users SET role=$1, module_warehouse=$2, module_service=$3 WHERE id=$4',
-      [role, module_warehouse, module_service, req.params.id]);
+    await query('UPDATE users SET role=$1, module_warehouse=$2, module_sales=$3, module_service=$4 WHERE id=$5',
+      [role, module_warehouse, module_sales, module_service, req.params.id]);
     res.json({ message: 'Updated' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
