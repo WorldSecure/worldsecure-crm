@@ -1894,6 +1894,23 @@ ${tx?.notes?`<p><strong>${lang==='he'?'הערות':'Notes'}:</strong> ${tx.notes
   }
 });
 
+// ── Run Migrations ────────────────────────────────────────────────────────────
+app.post('/api/run-migrations', authenticateToken, async (req, res) => {
+  const migrations = [
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_warehouse BOOLEAN DEFAULT TRUE`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_sales BOOLEAN DEFAULT FALSE`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_service BOOLEAN DEFAULT TRUE`,
+    `ALTER TABLE inbound_transactions ADD COLUMN IF NOT EXISTS username TEXT`,
+    `ALTER TABLE outbound_transactions ADD COLUMN IF NOT EXISTS username TEXT`,
+  ];
+  const results = [];
+  for (const sql of migrations) {
+    try { await query(sql); results.push({ sql: sql.substring(0,60), ok: true }); }
+    catch(e) { results.push({ sql: sql.substring(0,60), error: e.message }); }
+  }
+  res.json({ done: true, results });
+});
+
 // ── Health Check ──────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
