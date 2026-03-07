@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './utils/AuthContext';
 import { LanguageProvider, useLanguage } from './utils/LanguageContext';
@@ -23,11 +23,23 @@ import SupportDashboard from './pages/SupportDashboard';
 import SupportManagement from './pages/SupportManagement';
 import './App.css';
 
+// Hook לזיהוי מובייל
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return isMobile;
+};
+
 // Header חדש עם הרשאות
 const NewHeader = ({ activeTab }) => {
   const { user, logout } = useAuth();
   const { language, setLanguage } = useLanguage();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   const handleLogout = () => {
     logout();
@@ -52,67 +64,71 @@ const NewHeader = ({ activeTab }) => {
 
   return (
     <div style={{
-      width: '100%', 
-      background: 'linear-gradient(135deg, #0a3d6b 0%, #1a6fa8 100%)', 
-      padding: '1rem',
-      minHeight: '120px'
+      width: '100%',
+      background: 'linear-gradient(135deg, #0a3d6b 0%, #1a6fa8 100%)',
+      padding: isMobile ? '0.5rem' : '1rem',
+      boxSizing: 'border-box'
     }}>
       {/* Header עליון */}
       <div style={{
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'space-between', 
-        marginBottom: '1rem', 
-        padding: '1rem', 
-        background: 'rgba(255,255,255,0.1)', 
-        borderRadius: '20px', 
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '0.4rem',
+        marginBottom: isMobile ? '0.4rem' : '1rem',
+        padding: isMobile ? '0.4rem 0.6rem' : '1rem',
+        background: 'rgba(255,255,255,0.1)',
+        borderRadius: isMobile ? '10px' : '20px',
         backdropFilter: 'blur(10px)',
-        boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
+        boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
       }}>
-        <div style={{ fontSize: '2rem', fontWeight: '500', color: 'white', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
-           🌐 WorldSecure Business Hub
+        <div style={{ fontSize: isMobile ? '1rem' : '2rem', fontWeight: '600', color: 'white', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
+          🌐 {isMobile ? 'WorldSecure' : 'WorldSecure Business Hub'}
         </div>
-        <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', color: 'white' }}>
-          {/* שם משתמש */}
-          <span style={{ 
-            padding: '0.65rem 1.4rem',
-            background: 'rgba(255,255,255,0.2)', 
-            borderRadius: '50px',
-            fontWeight: '600',
-            fontSize: '0.95rem',
-            height: '42px',
-            display: 'inline-flex',
-            alignItems: 'center'
-          }}>
-            {user?.username || user?.email || 'משתמש'}
-          </span>
+        <div style={{ display: 'flex', gap: isMobile ? '0.4rem' : '0.8rem', alignItems: 'center', color: 'white' }}>
+          {/* שם משתמש - הסתר במובייל */}
+          {!isMobile && (
+            <span style={{ 
+              padding: '0.65rem 1.4rem',
+              background: 'rgba(255,255,255,0.2)', 
+              borderRadius: '50px',
+              fontWeight: '600',
+              fontSize: '0.95rem',
+              height: '42px',
+              display: 'inline-flex',
+              alignItems: 'center'
+            }}>
+              {user?.username || user?.email || 'משתמש'}
+            </span>
+          )}
           
           {/* בחירת שפה */}
           <select 
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
             style={{ 
-              padding: '0.65rem 1.4rem',
+              padding: isMobile ? '0.3rem 0.5rem' : '0.65rem 1.4rem',
               background: 'rgba(255,255,255,0.2)', 
               borderRadius: '50px',
               border: 'none',
               color: 'white',
               cursor: 'pointer',
               fontWeight: '600',
-              fontSize: '0.95rem',
-              height: '42px'
+              fontSize: isMobile ? '0.8rem' : '0.95rem',
+              height: isMobile ? '34px' : '42px'
             }}
           >
-            <option value="he" style={{background: '#0a3d6b', color: 'white'}}>עברית</option>
-            <option value="en" style={{background: '#0a3d6b', color: 'white'}}>English</option>
-            <option value="pt" style={{background: '#0a3d6b', color: 'white'}}>Português</option>
+            <option value="he" style={{background: '#0a3d6b', color: 'white'}}>עב</option>
+            <option value="en" style={{background: '#0a3d6b', color: 'white'}}>EN</option>
+            <option value="pt" style={{background: '#0a3d6b', color: 'white'}}>PT</option>
           </select>
           
           {/* כפתור יציאה */}
           <button 
             onClick={handleLogout}
             style={{
-              padding: '0.65rem 1.4rem',
+              padding: isMobile ? '0.3rem 0.7rem' : '0.65rem 1.4rem',
               background: '#ef4444', 
               color: 'white', 
               border: 'none', 
@@ -120,8 +136,8 @@ const NewHeader = ({ activeTab }) => {
               fontWeight: '600',
               cursor: 'pointer',
               transition: 'all 0.3s',
-              fontSize: '0.95rem',
-              height: '42px'
+              fontSize: isMobile ? '0.8rem' : '0.95rem',
+              height: isMobile ? '34px' : '42px'
             }}
             onMouseOver={(e) => e.target.style.background = '#dc2626'}
             onMouseOut={(e) => e.target.style.background = '#ef4444'}
@@ -132,7 +148,7 @@ const NewHeader = ({ activeTab }) => {
       </div>
 
       {/* 3 כפתורים - רק אם יש הרשאה */}
-      <div style={{ display: 'flex', gap: '1.5rem' }}>
+      <div style={{ display: 'flex', gap: isMobile ? '0.4rem' : '1.5rem' }}>
         {hasModuleAccess('warehouse') && (
           <a href="/" style={activeTab === 'warehouse' 
             ? buttonActiveStyle('#0a3d6b', '#083264') 
@@ -165,24 +181,28 @@ const NewHeader = ({ activeTab }) => {
 };
 
 // סגנונות כפתורים
-const buttonBaseStyle = () => ({
-  flex: 1,
-  padding: '1.2rem 0.8rem',
-  color: 'white',
-  fontSize: '1rem',
-  fontWeight: '600',
-  border: 'none',
-  borderRadius: '10px',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: '0.4rem',
-  height: '48px',
-  textDecoration: 'none',
-  boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-  transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-  cursor: 'pointer'
-});
+const buttonBaseStyle = () => {
+  const mobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+  return {
+    flex: 1,
+    padding: mobile ? '0.4rem 0.3rem' : '1.2rem 0.8rem',
+    color: 'white',
+    fontSize: mobile ? '0.72rem' : '1rem',
+    fontWeight: '600',
+    border: 'none',
+    borderRadius: mobile ? '8px' : '10px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '0.3rem',
+    height: mobile ? '34px' : '48px',
+    textDecoration: 'none',
+    boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+    transition: 'all 0.3s',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap'
+  };
+};
 
 const buttonActiveStyle = (bgColor, hoverColor) => ({
   ...buttonBaseStyle(),
