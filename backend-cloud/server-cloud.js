@@ -1810,10 +1810,39 @@ ${tx?.notes?`<p><strong>${lang==='he'?'הערות':'Notes'}:</strong> ${tx.notes
         }
 
         if (docHtml) {
+          let attachBuffer = Buffer.from(docHtml, 'utf-8');
+          let attachFilename = nameMap[docType];
+          let attachContentType = 'text/html; charset=utf-8';
+
+          // Convert to PDF using PDFShift if API key available
+          if (process.env.PDFSHIFT_API_KEY) {
+            try {
+              const pdfRes = await fetch('https://api.pdfshift.io/v3/convert/pdf', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': 'Basic ' + Buffer.from('api:' + process.env.PDFSHIFT_API_KEY).toString('base64')
+                },
+                body: JSON.stringify({ source: docHtml, landscape: false, use_print: true })
+              });
+              if (pdfRes.ok) {
+                const pdfBuffer = await pdfRes.arrayBuffer();
+                attachBuffer = Buffer.from(pdfBuffer);
+                attachFilename = attachFilename.replace('.html', '.pdf');
+                attachContentType = 'application/pdf';
+                console.log(`PDF generated via PDFShift: ${attachFilename}`);
+              } else {
+                console.error('PDFShift error:', await pdfRes.text());
+              }
+            } catch (pdfErr) {
+              console.error('PDFShift failed, sending HTML:', pdfErr.message);
+            }
+          }
+
           attachments.push({
-            filename: nameMap[docType],
-            content: Buffer.from(docHtml, 'utf-8'),
-            contentType: 'text/html; charset=utf-8'
+            filename: attachFilename,
+            content: attachBuffer,
+            contentType: attachContentType
           });
         }
       } catch (attachErr) {
