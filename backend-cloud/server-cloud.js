@@ -1812,7 +1812,11 @@ app.delete('/api/sync/pending-deletions', authenticateToken, async (req, res) =>
 
 app.get('/api/sync/pull/support', authenticateToken, async (req, res) => {
   try {
-    const tickets = await query('SELECT * FROM support_tickets ORDER BY id');
+    const tickets = await query(`
+      SELECT t.*, u.username as created_by_name
+      FROM support_tickets t
+      LEFT JOIN users u ON t.created_by = u.id
+      ORDER BY t.id`);
     const history = await query('SELECT * FROM support_ticket_history ORDER BY id');
     res.json({ tickets: tickets.rows, history: history.rows });
   } catch (err) { res.status(500).json({ error: err.message }); }

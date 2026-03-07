@@ -42,6 +42,10 @@ const sqliteAll = (sql, params = []) =>
   new Promise((res, rej) =>
     sqlite.all(sql, params, (err, rows) => err ? rej(err) : res(rows))
   );
+const sqliteGet = (sql, params = []) =>
+  new Promise((res, rej) =>
+    sqlite.get(sql, params, (err, row) => err ? rej(err) : res(row))
+  );
 const sqliteRun = (sql, params = []) =>
   new Promise((res, rej) =>
     sqlite.run(sql, params, function(err) { err ? rej(err) : res(this); })
@@ -330,6 +334,18 @@ async function syncSupportFromCloud() {
   let count = 0;
 
   for (const t of (tickets || [])) {
+    // תרגם owner ו-created_by לפי username (IDs שונים בין ענן למקומי)
+    let localOwnerId = null;
+    if (t.owner_name) {
+      const row = await sqliteGet('SELECT id FROM users WHERE username=?', [t.owner_name]).catch(() => null);
+      localOwnerId = row?.id || null;
+    }
+    let localCreatedBy = null;
+    if (t.created_by_name) {
+      const row = await sqliteGet('SELECT id FROM users WHERE username=?', [t.created_by_name]).catch(() => null);
+      localCreatedBy = row?.id || null;
+    }
+
     await sqliteRun(`
       INSERT OR REPLACE INTO support_tickets
         (id, ticket_number, customer_id, customer_name, product_id, product_name,
@@ -339,8 +355,8 @@ async function syncSupportFromCloud() {
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [t.id, t.ticket_number, t.customer_id||null, t.customer_name||null,
        t.product_id||null, t.product_name||null, t.subject, t.description||null,
-       t.status||'open', t.priority||'medium', t.owner_id||null, t.owner_name||null,
-       t.created_by||null, t.awaiting_channel||null, t.awaiting_note||null,
+       t.status||'open', t.priority||'medium', localOwnerId, t.owner_name||null,
+       localCreatedBy, t.awaiting_channel||null, t.awaiting_note||null,
        t.awaiting_deadline||null, t.created_at, t.updated_at||null,
        t.closed_at||null, t.cancelled_at||null]
     );
