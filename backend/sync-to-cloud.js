@@ -312,8 +312,11 @@ async function syncSupportFromCloud() {
     created_at DATETIME,
     updated_at DATETIME,
     closed_at DATETIME,
-    cancelled_at DATETIME
+    cancelled_at DATETIME,
+    owner_updated_at DATETIME
   )`).catch(() => {});
+  // migration - הוסף owner_updated_at אם לא קיים
+  await sqliteRun(`ALTER TABLE support_tickets ADD COLUMN owner_updated_at DATETIME`).catch(() => {});
 
   await sqliteRun(`CREATE TABLE IF NOT EXISTS support_ticket_history (
     id INTEGER PRIMARY KEY,
@@ -346,19 +349,28 @@ async function syncSupportFromCloud() {
       localCreatedBy = row?.id || null;
     }
 
+    // עדכן owner רק אם owner_updated_at מהענן חדש יותר מהמקומי
+    const existing = await sqliteGet('SELECT owner_id, owner_name, owner_updated_at FROM support_tickets WHERE id=?', [t.id]).catch(() => null);
+    const cloudOwnerUpdated = t.owner_updated_at ? new Date(t.owner_updated_at).getTime() : 0;
+    const localOwnerUpdated = existing?.owner_updated_at ? new Date(existing.owner_updated_at).getTime() : 0;
+    const shouldUpdateOwner = !existing || cloudOwnerUpdated > localOwnerUpdated;
+
+    const finalOwnerId = shouldUpdateOwner ? localOwnerId : existing.owner_id;
+    const finalOwnerName = shouldUpdateOwner ? (t.owner_name||null) : existing.owner_name;
+
     await sqliteRun(`
       INSERT OR REPLACE INTO support_tickets
         (id, ticket_number, customer_id, customer_name, product_id, product_name,
          subject, description, status, priority, owner_id, owner_name, created_by,
          awaiting_channel, awaiting_note, awaiting_deadline,
-         created_at, updated_at, closed_at, cancelled_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         created_at, updated_at, closed_at, cancelled_at, owner_updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [t.id, t.ticket_number, t.customer_id||null, t.customer_name||null,
        t.product_id||null, t.product_name||null, t.subject, t.description||null,
-       t.status||'open', t.priority||'medium', localOwnerId, t.owner_name||null,
+       t.status||'open', t.priority||'medium', finalOwnerId, finalOwnerName,
        localCreatedBy, t.awaiting_channel||null, t.awaiting_note||null,
        t.awaiting_deadline||null, t.created_at, t.updated_at||null,
-       t.closed_at||null, t.cancelled_at||null]
+       t.closed_at||null, t.cancelled_at||null, t.owner_updated_at||null]
     );
     count++;
   }

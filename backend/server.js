@@ -5002,6 +5002,7 @@ app.delete('/api/qr-codes/:id', authenticateToken, (req, res) => {
 
 // ===== SUPPORT TICKETS - MIGRATIONS =====
 db.run(`ALTER TABLE support_tickets ADD COLUMN owner_id INTEGER`, () => {});
+db.run(`ALTER TABLE support_tickets ADD COLUMN owner_updated_at DATETIME`, () => {});
 db.run(`ALTER TABLE support_tickets ADD COLUMN owner_name TEXT`, () => {});
 db.run(`ALTER TABLE support_tickets ADD COLUMN cancelled_at TEXT`, () => {});
 db.run(`ALTER TABLE support_tickets ADD COLUMN awaiting_channel TEXT`, () => {});
@@ -5161,8 +5162,10 @@ app.put('/api/support-tickets/:id', authenticateToken, upload.array('images', 5)
   const { customer_id, customer_name, product_id, product_name, subject, description, status, priority, owner_id } = req.body;
   if (!subject) return res.status(400).json({ error: 'Subject is required' });
   const closedCol = status === 'closed' ? ", closed_at=datetime('now')" : '';
+  const ownerChangedByAdmin = !!(owner_id && req.user.role === 'admin');
+  const ownerUpdatedCol = ownerChangedByAdmin ? ", owner_updated_at=datetime('now')" : '';
   const resolveOwner = (cb) => {
-    if (owner_id && req.user.role === 'admin') {
+    if (ownerChangedByAdmin) {
       db.get('SELECT username FROM users WHERE id = ?', [owner_id], (e, r) => cb(owner_id, r?.username||null));
     } else {
       db.get('SELECT owner_id, owner_name FROM support_tickets WHERE id = ?', [id], (e, r) => cb(r?.owner_id||null, r?.owner_name||null));
@@ -5176,7 +5179,7 @@ app.put('/api/support-tickets/:id', authenticateToken, upload.array('images', 5)
         `UPDATE support_tickets SET customer_id=?, customer_name=?, product_id=?, product_name=?,
          subject=?, description=?, status=?, priority=?, owner_id=?, owner_name=?,
          awaiting_channel=?, awaiting_note=?, awaiting_deadline=?,
-         updated_at=datetime('now')${closedCol} WHERE id=?`,
+         updated_at=datetime('now')${closedCol}${ownerUpdatedCol} WHERE id=?`,
         [customer_id||null, customer_name||null, product_id||null, product_name||null,
          subject, description||'', status||'open', priority||'medium', ownerId, ownerName,
          awaiting_channel||null, awaiting_note||null, awaiting_deadline||null, id],

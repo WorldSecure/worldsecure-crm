@@ -1191,19 +1191,22 @@ app.put('/api/support-tickets/:id', authenticateToken, upload.array('images', 5)
     const oldRes = await query('SELECT status, owner_id, owner_name FROM support_tickets WHERE id=$1', [id]);
     const old = oldRes.rows[0] || {};
     let ownerId = old.owner_id, ownerName = old.owner_name;
+    let ownerChanged = false;
     if (owner_id && req.user.role === 'admin') {
       const ownerRes = await query('SELECT username FROM users WHERE id=$1', [owner_id]);
       ownerId = owner_id;
       ownerName = ownerRes.rows[0]?.username || null;
+      ownerChanged = true;
     }
     const closedAt = status === 'closed' ? 'NOW()' : 'NULL';
+    const ownerUpdatedSql = ownerChanged ? ', owner_updated_at=NOW()' : '';
     await query(`
       UPDATE support_tickets SET
         customer_id=$1, customer_name=$2, product_id=$3, product_name=$4,
         subject=$5, description=$6, status=$7, priority=$8,
         owner_id=$9, owner_name=$10, awaiting_channel=$11,
         awaiting_note=$12, awaiting_deadline=$13,
-        updated_at=NOW() ${status==='closed'?', closed_at=NOW()':''}
+        updated_at=NOW() ${status==='closed'?', closed_at=NOW()':''} ${ownerChanged?', owner_updated_at=NOW()':''}
       WHERE id=$14`,
       [customer_id||null, customer_name||null, product_id||null, product_name||null,
        subject, description||'', status||'open', priority||'medium',
@@ -1631,26 +1634,29 @@ app.post('/api/sync/support', authenticateToken, async (req, res) => {
         resolvedCreatedBy = r.rows[0]?.id || null;
       }
 
-      // INSERT: שמור owner ו-created_by
-      // ON CONFLICT: עדכן רק שדות תוכן — לעולם אל תדרוס owner_id/owner_name/created_by
+      // INSERT: קבע owner ו-created_by לפי username
+      // ON CONFLICT: עדכן owner רק אם owner_updated_at מהמקומי חדש יותר מהענן
       await client.query(`
         INSERT INTO support_tickets
           (id, ticket_number, customer_id, customer_name, product_id, product_name,
            subject, description, status, priority, owner_id, owner_name, created_by,
            awaiting_channel, awaiting_note, awaiting_deadline,
-           created_at, updated_at, closed_at, cancelled_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+           created_at, updated_at, closed_at, cancelled_at, owner_updated_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
         ON CONFLICT (id) DO UPDATE SET
           ticket_number=$2, customer_id=$3, customer_name=$4, product_id=$5,
           product_name=$6, subject=$7, description=$8, status=$9, priority=$10,
           awaiting_channel=$14, awaiting_note=$15, awaiting_deadline=$16,
-          updated_at=$18, closed_at=$19, cancelled_at=$20`,
+          updated_at=$18, closed_at=$19, cancelled_at=$20,
+          owner_id=CASE WHEN $21::TIMESTAMPTZ IS NOT NULL AND ($21::TIMESTAMPTZ > support_tickets.owner_updated_at OR support_tickets.owner_updated_at IS NULL) THEN $11 ELSE support_tickets.owner_id END,
+          owner_name=CASE WHEN $21::TIMESTAMPTZ IS NOT NULL AND ($21::TIMESTAMPTZ > support_tickets.owner_updated_at OR support_tickets.owner_updated_at IS NULL) THEN $12 ELSE support_tickets.owner_name END,
+          owner_updated_at=CASE WHEN $21::TIMESTAMPTZ IS NOT NULL AND ($21::TIMESTAMPTZ > support_tickets.owner_updated_at OR support_tickets.owner_updated_at IS NULL) THEN $21 ELSE support_tickets.owner_updated_at END`,
         [t.id, t.ticket_number, t.customer_id||null, t.customer_name||null,
          t.product_id||null, t.product_name||null, t.subject, t.description||null,
          t.status||'open', t.priority||'medium', resolvedOwnerId, t.owner_name||null,
          resolvedCreatedBy, t.awaiting_channel||null, t.awaiting_note||null,
          t.awaiting_deadline||null, t.created_at, t.updated_at||null,
-         t.closed_at||null, t.cancelled_at||null]
+         t.closed_at||null, t.cancelled_at||null, t.owner_updated_at||null]
       );
     }
 
@@ -2054,6 +2060,7 @@ app.post('/api/run-migrations', authenticateToken, async (req, res) => {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_warehouse BOOLEAN DEFAULT TRUE`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_sales BOOLEAN DEFAULT FALSE`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_service BOOLEAN DEFAULT TRUE`,
+    `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS owner_updated_at TIMESTAMPTZ`,
     `ALTER TABLE inbound_transactions ADD COLUMN IF NOT EXISTS username TEXT`,
     `ALTER TABLE outbound_transactions ADD COLUMN IF NOT EXISTS username TEXT`,
   ];
@@ -2087,6 +2094,7 @@ async function runMigrations() {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_warehouse BOOLEAN DEFAULT TRUE`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_sales BOOLEAN DEFAULT FALSE`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_service BOOLEAN DEFAULT TRUE`,
+    `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS owner_updated_at TIMESTAMPTZ`,
     `CREATE TABLE IF NOT EXISTS stock_alerts (
       id SERIAL PRIMARY KEY,
       quote_id INTEGER,
