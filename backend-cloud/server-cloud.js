@@ -228,6 +228,84 @@ app.get('/api/company', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── PUT: Company Settings ─────────────────────────────────────────────────────
+app.put('/api/company', authenticateToken, async (req, res) => {
+  const { company_name, address, phone, phone2, phone3, email, tax_id, website } = req.body;
+  try {
+    await query(`
+      UPDATE company_settings SET
+        company_name=$1, address=$2, phone=$3, phone2=$4, phone3=$5,
+        email=$6, tax_id=$7, website=$8
+      WHERE id=1`,
+      [company_name, address, phone, phone2, phone3, email, tax_id, website]
+    );
+    const r = await query('SELECT * FROM company_settings WHERE id=1');
+    res.json(r.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── POST: Upload Company Logo ─────────────────────────────────────────────────
+app.post('/api/settings/logo', authenticateToken, upload.single('logo'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const logoPath = '/uploads/' + req.file.filename;
+    await query('UPDATE company_settings SET logo_path=$1 WHERE id=1', [logoPath]);
+    res.json({ logo_path: logoPath, url: logoPath });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── GET/PUT: SMTP Settings ────────────────────────────────────────────────────
+app.get('/api/settings/smtp', authenticateToken, async (req, res) => {
+  try {
+    const r = await query('SELECT smtp_host, smtp_port, smtp_user, smtp_from FROM company_settings WHERE id=1');
+    res.json(r.rows[0] || {});
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/settings/smtp', authenticateToken, async (req, res) => {
+  const { smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from } = req.body;
+  try {
+    await query(`
+      UPDATE company_settings SET
+        smtp_host=$1, smtp_port=$2, smtp_user=$3, smtp_pass=$4, smtp_from=$5
+      WHERE id=1`,
+      [smtp_host, smtp_port||587, smtp_user, smtp_pass, smtp_from]
+    );
+    res.json({ message: 'SMTP settings saved' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── GET/POST/DELETE: QR Codes ─────────────────────────────────────────────────
+app.get('/api/qr-codes', authenticateToken, async (req, res) => {
+  try {
+    const r = await query('SELECT * FROM qr_codes ORDER BY created_at DESC');
+    res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/qr-codes', authenticateToken, async (req, res) => {
+  const { type, qr_data, image_url, title } = req.body;
+  try {
+    const r = await query(
+      'INSERT INTO qr_codes (type, qr_data, image_url, title, created_by) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [type, qr_data, image_url, title, req.user?.userId || null]
+    );
+    res.json(r.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/qr-codes/:id', authenticateToken, async (req, res) => {
+  try {
+    await query('DELETE FROM qr_codes WHERE id=$1', [req.params.id]);
+    res.json({ message: 'deleted' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── GET: Backups list (cloud has no local backups - return empty) ──────────────
+app.get('/api/backups', authenticateToken, async (req, res) => {
+  res.json([]);
+});
+
 // ════════════════════════════════════════════════════════════════════════════
 //  INBOUND TRANSACTIONS
 // ════════════════════════════════════════════════════════════════════════════
