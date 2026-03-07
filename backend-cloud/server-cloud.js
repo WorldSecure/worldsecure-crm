@@ -1537,6 +1537,71 @@ app.post('/api/sync/outbound', authenticateToken, async (req, res) => {
   }
 });
 
+app.post('/api/sync/support', authenticateToken, async (req, res) => {
+  const { tickets, history, localIds } = req.body;
+  if (!Array.isArray(tickets)) return res.status(400).json({ error: 'tickets array required' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    for (const t of tickets) {
+      await client.query(`
+        INSERT INTO support_tickets
+          (id, ticket_number, customer_id, customer_name, product_id, product_name,
+           subject, description, status, priority, owner_id, owner_name, created_by,
+           awaiting_channel, awaiting_note, awaiting_deadline,
+           created_at, updated_at, closed_at, cancelled_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+        ON CONFLICT (id) DO UPDATE SET
+          ticket_number=$2, customer_id=$3, customer_name=$4, product_id=$5,
+          product_name=$6, subject=$7, description=$8, status=$9, priority=$10,
+          owner_id=$11, owner_name=$12, created_by=$13, awaiting_channel=$14,
+          awaiting_note=$15, awaiting_deadline=$16, updated_at=$18,
+          closed_at=$19, cancelled_at=$20`,
+        [t.id, t.ticket_number, t.customer_id||null, t.customer_name||null,
+         t.product_id||null, t.product_name||null, t.subject, t.description||null,
+         t.status||'open', t.priority||'medium', t.owner_id||null, t.owner_name||null,
+         t.created_by||null, t.awaiting_channel||null, t.awaiting_note||null,
+         t.awaiting_deadline||null, t.created_at, t.updated_at||null,
+         t.closed_at||null, t.cancelled_at||null]
+      );
+    }
+
+    for (const h of (history || [])) {
+      await client.query(`
+        INSERT INTO support_ticket_history
+          (id, ticket_id, user_id, username, action, old_status, new_status, comment, created_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        ON CONFLICT (id) DO NOTHING`,
+        [h.id, h.ticket_id, h.user_id||null, h.username||null, h.action,
+         h.old_status||null, h.new_status||null, h.comment||null, h.created_at]
+      );
+    }
+
+    // מחק tickets שנמחקו במקומי (רק אם נוצרו לפני יותר מ-10 דקות)
+    if (Array.isArray(localIds) && localIds.length >= 0) {
+      const cloudRows = await client.query(
+        `SELECT id FROM support_tickets WHERE created_at < NOW() - INTERVAL '10 minutes'`
+      );
+      for (const row of cloudRows.rows) {
+        if (!localIds.includes(row.id)) {
+          await client.query('DELETE FROM support_ticket_history WHERE ticket_id=$1', [row.id]);
+          await client.query('DELETE FROM support_tickets WHERE id=$1', [row.id]);
+        }
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json({ message: 'support synced', count: tickets.length });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 // ── SYNC ENDPOINT (מקבל נתונים מהמחשב המקומי) ────────────────────────────────
 app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
   const { entity } = req.params;
@@ -1644,57 +1709,6 @@ app.get('/api/sync/pull/support', authenticateToken, async (req, res) => {
 });
 
 // ── Sync: Support (push from local) ──────────────────────────────────────────
-app.post('/api/sync/support', authenticateToken, async (req, res) => {
-  const { tickets, history } = req.body;
-  if (!Array.isArray(tickets)) return res.status(400).json({ error: 'tickets array required' });
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
-    for (const t of tickets) {
-      await client.query(`
-        INSERT INTO support_tickets
-          (id, ticket_number, customer_id, customer_name, product_id, product_name,
-           subject, description, status, priority, owner_id, owner_name, created_by,
-           awaiting_channel, awaiting_note, awaiting_deadline,
-           created_at, updated_at, closed_at, cancelled_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
-        ON CONFLICT (id) DO UPDATE SET
-          ticket_number=$2, customer_id=$3, customer_name=$4, product_id=$5,
-          product_name=$6, subject=$7, description=$8, status=$9, priority=$10,
-          owner_id=$11, owner_name=$12, created_by=$13, awaiting_channel=$14,
-          awaiting_note=$15, awaiting_deadline=$16, updated_at=$18,
-          closed_at=$19, cancelled_at=$20`,
-        [t.id, t.ticket_number, t.customer_id||null, t.customer_name||null,
-         t.product_id||null, t.product_name||null, t.subject, t.description||null,
-         t.status||'open', t.priority||'medium', t.owner_id||null, t.owner_name||null,
-         t.created_by||null, t.awaiting_channel||null, t.awaiting_note||null,
-         t.awaiting_deadline||null, t.created_at, t.updated_at||null,
-         t.closed_at||null, t.cancelled_at||null]
-      );
-    }
-
-    for (const h of (history || [])) {
-      await client.query(`
-        INSERT INTO support_ticket_history
-          (id, ticket_id, user_id, username, action, old_status, new_status, comment, created_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-        ON CONFLICT (id) DO NOTHING`,
-        [h.id, h.ticket_id, h.user_id||null, h.username||null, h.action,
-         h.old_status||null, h.new_status||null, h.comment||null, h.created_at]
-      );
-    }
-
-    await client.query('COMMIT');
-    res.json({ message: 'support synced', count: tickets.length });
-  } catch (err) {
-    await client.query('ROLLBACK');
-    res.status(500).json({ error: err.message });
-  } finally {
-    client.release();
-  }
-});
 
 
 // ── Backup endpoints (cloud stubs) ───────────────────────────────────────────
