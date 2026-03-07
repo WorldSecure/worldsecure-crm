@@ -70,7 +70,8 @@ function SupportManagement() {
       if (isAdmin) calls.push(axios.get('/api/users', auth()));
       const results = await Promise.all(calls);
       setTickets(results[0].data);
-      setCustomers(results[1].data);
+      const allCustomers = results[1].data;
+      setCustomers(isAdmin ? allCustomers : allCustomers.filter(c => !c.is_sensitive));
       setProducts(results[2].data);
       if (isAdmin) setUsers(results[3].data);
     } catch(e) { console.error(e); }

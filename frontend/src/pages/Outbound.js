@@ -17,6 +17,7 @@ function Outbound() {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [qrCodes, setQrCodes] = useState([]);
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [selectedTransactionId, setSelectedTransactionId] = useState(null);
@@ -32,20 +33,6 @@ function Outbound() {
     console.log('User role:', user?.role);
     console.log('Is admin:', isAdmin);
   }, [user, isAdmin]);
-
-  // ESC key handler for modals
-  useEffect(() => {
-    const handleEsc = (e) => {
-      if (e.key === 'Escape') {
-        if (showModal) setShowModal(false);
-        // Note: showLanguageModal does NOT close on ESC
-      }
-    };
-    
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
-  }, [showModal]);
-
   
   const [formData, setFormData] = useState({
     customer_id: '',
@@ -54,7 +41,8 @@ function Outbound() {
     status: 'pending',
     notes: '',
     items: [],
-    generate_delivery_note: false
+    generate_delivery_note: false,
+    qr_code_id: null
   });
 
   const [currentItem, setCurrentItem] = useState({
@@ -80,15 +68,24 @@ function Outbound() {
 
   const fetchData = async () => {
     try {
-      const [customersRes, productsRes, transactionsRes] = await Promise.all([
+      const [customersRes, productsRes, transactionsRes, qrRes] = await Promise.all([
         axios.get('/api/customers'),
         axios.get('/api/products'),
-        axios.get('/api/outbound')
+        axios.get('/api/outbound'),
+        axios.get('/api/qr-codes').catch(() => ({ data: [] }))
       ]);
       
-      setCustomers(customersRes.data);
+      const isAdmin = user?.role === 'admin';
+      setCustomers(isAdmin ? customersRes.data : customersRes.data.filter(c => !c.is_sensitive));
       setProducts(productsRes.data);
       setTransactions(transactionsRes.data);
+      // המר פורמט DB לפורמט dropdown
+      const qrList = (qrRes.data || []).map(qr => ({
+        id: qr.id,
+        type: qr.type,
+        title: qr.title || `QR #${qr.id} - ${qr.type}`
+      }));
+      setQrCodes(qrList);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -400,7 +397,8 @@ function Outbound() {
       status: 'pending',
       notes: '',
       items: [],
-      generate_delivery_note: false
+      generate_delivery_note: false,
+    qr_code_id: null
     });
     setCurrentItem({
       product_id: '',
@@ -435,8 +433,8 @@ function Outbound() {
           </button>
         </div>
 
-        <div className="table-container">
-          <table className="table">
+        <div className="table-container" style={{ overflowX:"visible" }}>
+          <table className="table" style={{ tableLayout:"fixed", width:"100%" }}>
             <thead>
               <tr>
                 <th>{t('transaction_date')}</th>
@@ -481,11 +479,11 @@ function Outbound() {
                     <td>{trans.notes || '-'}</td>
                     <td>{trans.username}</td>
                     <td>
-                      <div className="table-actions" style={{ display: 'flex', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
                         <button 
                           className="btn btn-success"
                           onClick={() => handleGenerateDeliveryNote(trans.id)}
-                          style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
+                          style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
                         >
                           📄 {t('delivery_note')}
                         </button>
@@ -494,16 +492,16 @@ function Outbound() {
                             <button 
                               className="btn btn-secondary"
                               onClick={() => handleEdit(trans)}
-                              style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
+                              style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
                             >
-                              {t('edit')}
+                              ✏️
                             </button>
                             <button 
                               className="btn btn-danger"
                               onClick={() => handleDeleteTransaction(trans.id)}
-                              style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
+                              style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
                             >
-                              {t('delete')}
+                              🗑️
                             </button>
                           </>
                         )}
@@ -518,7 +516,7 @@ function Outbound() {
       </div>
 
       {showModal && (
-        <div className="modal-overlay">
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" style={{ maxWidth: '800px' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="modal-title">{editingTransaction ? t('edit_transaction') : t('new_outbound')}</h3>
@@ -905,6 +903,23 @@ function Outbound() {
                     {t('generate_delivery_note_after_save')}
                   </span>
                 </label>
+                
+                {/* QR Code Selection */}
+                <div style={{ marginTop: '1rem' }}>
+                  <label className="form-label">{t('add_qr_code')}</label>
+                  <select
+                    className="form-input"
+                    value={formData.qr_code_id || ''}
+                    onChange={(e) => setFormData({...formData, qr_code_id: e.target.value ? parseInt(e.target.value) : null})}
+                  >
+                    <option value="">{qrCodes.length === 0 ? t('no_qr_codes_created') : t('select_qr_code')}</option>
+                    {qrCodes.map((qr, index) => (
+                      <option key={qr.id} value={qr.id}>
+                        QR #{index + 1} - {qr.type}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div className="modal-footer">
@@ -930,10 +945,16 @@ function Outbound() {
       
       {/* Language Selection Modal for Delivery Note */}
       {showLanguageModal && (
-        <div className="modal-overlay">
+        <div className="modal-overlay" onClick={() => setShowLanguageModal(false)}>
           <div className="modal" style={{ maxWidth: '400px' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title">{t('select_document_language') || 'בחר שפה'}</h3>
+              <h3 className="modal-title">📄 {t('delivery_note')}</h3>
+              <button 
+                className="modal-close"
+                onClick={() => setShowLanguageModal(false)}
+              >
+                ×
+              </button>
             </div>
             
             <div className="modal-body">
