@@ -433,8 +433,8 @@ function Outbound() {
           </button>
         </div>
 
-        <div className="table-container" style={{ overflowX:"visible" }}>
-          <table className="table" style={{ tableLayout:"fixed", width:"100%" }}>
+        <div className="table-container" >
+          <table className="table" >
             <thead>
               <tr>
                 <th>{t('transaction_date')}</th>
