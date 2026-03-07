@@ -1568,7 +1568,10 @@ app.post('/api/sync/support', authenticateToken, async (req, res) => {
       );
     }
 
+    // Get valid ticket IDs in cloud to avoid FK violation
+    const validTicketIds = new Set(tickets.map(t => t.id));
     for (const h of (history || [])) {
+      if (!validTicketIds.has(h.ticket_id)) continue; // skip orphan history
       await client.query(`
         INSERT INTO support_ticket_history
           (id, ticket_id, user_id, username, action, old_status, new_status, comment, created_at)
