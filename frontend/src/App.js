@@ -40,11 +40,11 @@ const NewHeader = ({ activeTab }) => {
     
     switch(module) {
       case 'warehouse':
-        return user?.module_warehouse !== 0;
+        return user?.module_warehouse === true || user?.module_warehouse === 1;
       case 'sales':
-        return user?.module_sales !== 0;
+        return user?.module_sales === true || user?.module_sales === 1;
       case 'support':
-        return user?.module_service !== 0;
+        return user?.module_service === true || user?.module_service === 1;
       default:
         return false;
     }
