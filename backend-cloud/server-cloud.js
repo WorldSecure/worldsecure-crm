@@ -1611,7 +1611,7 @@ app.post('/api/sync/outbound', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/sync/support', authenticateToken, async (req, res) => {
-  const { tickets, history, localIds } = req.body;
+  const { tickets, history, deletedIds } = req.body;
   if (!Array.isArray(tickets)) return res.status(400).json({ error: 'tickets array required' });
 
   const client = await pool.connect();
@@ -1619,7 +1619,7 @@ app.post('/api/sync/support', authenticateToken, async (req, res) => {
     await client.query('BEGIN');
 
     for (const t of tickets) {
-      // תרגם owner_id ו-created_by לפי username (IDs שונים בין מקומי לענן)
+      // תרגם owner ו-created_by לפי username בלבד
       let resolvedOwnerId = null;
       if (t.owner_name) {
         const r = await client.query('SELECT id FROM users WHERE username=$1', [t.owner_name]);
@@ -1631,6 +1631,8 @@ app.post('/api/sync/support', authenticateToken, async (req, res) => {
         resolvedCreatedBy = r.rows[0]?.id || null;
       }
 
+      // INSERT: שמור owner ו-created_by
+      // ON CONFLICT: עדכן רק שדות תוכן — לעולם אל תדרוס owner_id/owner_name/created_by
       await client.query(`
         INSERT INTO support_tickets
           (id, ticket_number, customer_id, customer_name, product_id, product_name,
@@ -1652,10 +1654,10 @@ app.post('/api/sync/support', authenticateToken, async (req, res) => {
       );
     }
 
-    // Get valid ticket IDs in cloud to avoid FK violation
+    // history
     const validTicketIds = new Set(tickets.map(t => t.id));
     for (const h of (history || [])) {
-      if (!validTicketIds.has(h.ticket_id)) continue; // skip orphan history
+      if (!validTicketIds.has(h.ticket_id)) continue;
       await client.query(`
         INSERT INTO support_ticket_history
           (id, ticket_id, user_id, username, action, old_status, new_status, comment, created_at)
@@ -1666,13 +1668,11 @@ app.post('/api/sync/support', authenticateToken, async (req, res) => {
       );
     }
 
-    // מחק מהענן רק tickets שנמחקו מקומית באופן מפורש (deletedIds)
-    const { deletedIds } = req.body;
+    // מחק מהענן רק tickets שנמחקו מקומית באופן מפורש
     if (Array.isArray(deletedIds) && deletedIds.length > 0) {
       for (const id of deletedIds) {
         await client.query('DELETE FROM support_ticket_history WHERE ticket_id=$1', [id]);
         await client.query('DELETE FROM support_tickets WHERE id=$1', [id]);
-        // נקה גם מ-pending_deletions אם קיים
         await client.query(
           `DELETE FROM pending_deletions WHERE entity_type='support_ticket' AND entity_id=$1`, [id]
         );
