@@ -53,7 +53,7 @@ function Layout() {
 
   return (
     <div className="app">
-      <div className="main-layout" style={{ minHeight: '100vh' }}>
+      <div className="main-layout">
         <aside className="sidebar">
           <nav>
             <Link to="/dashboard" className={isActive('/dashboard')}>
