@@ -1619,6 +1619,18 @@ app.post('/api/sync/support', authenticateToken, async (req, res) => {
     await client.query('BEGIN');
 
     for (const t of tickets) {
+      // תרגם owner_id ו-created_by לפי username (IDs שונים בין מקומי לענן)
+      let resolvedOwnerId = null;
+      if (t.owner_name) {
+        const r = await client.query('SELECT id FROM users WHERE username=$1', [t.owner_name]);
+        resolvedOwnerId = r.rows[0]?.id || null;
+      }
+      let resolvedCreatedBy = null;
+      if (t.created_by_name) {
+        const r = await client.query('SELECT id FROM users WHERE username=$1', [t.created_by_name]);
+        resolvedCreatedBy = r.rows[0]?.id || null;
+      }
+
       await client.query(`
         INSERT INTO support_tickets
           (id, ticket_number, customer_id, customer_name, product_id, product_name,
@@ -1629,13 +1641,12 @@ app.post('/api/sync/support', authenticateToken, async (req, res) => {
         ON CONFLICT (id) DO UPDATE SET
           ticket_number=$2, customer_id=$3, customer_name=$4, product_id=$5,
           product_name=$6, subject=$7, description=$8, status=$9, priority=$10,
-          owner_id=$11, owner_name=$12, created_by=$13, awaiting_channel=$14,
-          awaiting_note=$15, awaiting_deadline=$16, updated_at=$18,
-          closed_at=$19, cancelled_at=$20`,
+          awaiting_channel=$14, awaiting_note=$15, awaiting_deadline=$16,
+          updated_at=$18, closed_at=$19, cancelled_at=$20`,
         [t.id, t.ticket_number, t.customer_id||null, t.customer_name||null,
          t.product_id||null, t.product_name||null, t.subject, t.description||null,
-         t.status||'open', t.priority||'medium', t.owner_id||null, t.owner_name||null,
-         t.created_by||null, t.awaiting_channel||null, t.awaiting_note||null,
+         t.status||'open', t.priority||'medium', resolvedOwnerId, t.owner_name||null,
+         resolvedCreatedBy, t.awaiting_channel||null, t.awaiting_note||null,
          t.awaiting_deadline||null, t.created_at, t.updated_at||null,
          t.closed_at||null, t.cancelled_at||null]
       );
@@ -1801,11 +1812,7 @@ app.delete('/api/sync/pending-deletions', authenticateToken, async (req, res) =>
 
 app.get('/api/sync/pull/support', authenticateToken, async (req, res) => {
   try {
-    const tickets = await query(`
-      SELECT t.*, u.username as created_by_name
-      FROM support_tickets t
-      LEFT JOIN users u ON t.created_by = u.id
-      ORDER BY t.id`);
+    const tickets = await query('SELECT * FROM support_tickets ORDER BY id');
     const history = await query('SELECT * FROM support_ticket_history ORDER BY id');
     res.json({ tickets: tickets.rows, history: history.rows });
   } catch (err) { res.status(500).json({ error: err.message }); }
