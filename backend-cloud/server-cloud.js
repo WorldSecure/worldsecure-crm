@@ -245,7 +245,7 @@ app.put('/api/company', authenticateToken, async (req, res) => {
 });
 
 // ── POST: Upload Company Logo ─────────────────────────────────────────────────
-app.post('/api/settings/logo', authenticateToken, upload.single('logo'), async (req, res) => {
+app.post(['/api/company/logo', '/api/settings/logo'], authenticateToken, upload.single('logo'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const logoPath = '/uploads/' + req.file.filename;
@@ -972,7 +972,25 @@ app.get('/api/email-contacts', authenticateToken, async (req, res) => {
 
 // ════════════════════════════════════════════════════════════════════════════
 //  SYNC ENDPOINTS - הוסף את הקוד הזה לתוך server-cloud.js
-//  מעל השורה: // ── Health Check ──
+//  מעל השורה: 
+// ── Backup endpoints (cloud stubs) ───────────────────────────────────────────
+app.get('/api/backup/list', authenticateToken, async (req, res) => {
+  res.json([]);
+});
+app.get('/api/backup/download', authenticateToken, async (req, res) => {
+  res.status(501).json({ error: 'Backup not available in cloud' });
+});
+app.post('/api/backup/upload', authenticateToken, upload.single('backup'), async (req, res) => {
+  res.status(501).json({ error: 'Backup restore not available in cloud' });
+});
+app.post('/api/backup/restore/:filename', authenticateToken, async (req, res) => {
+  res.status(501).json({ error: 'Backup restore not available in cloud' });
+});
+app.post('/api/test-smtp', authenticateToken, async (req, res) => {
+  res.json({ message: 'SMTP test not configured' });
+});
+
+// ── Health Check ──
 // ════════════════════════════════════════════════════════════════════════════
 
 // ── Sync: Settings ───────────────────────────────────────────────────────────
@@ -1254,6 +1272,24 @@ app.post('/api/sync/support', authenticateToken, async (req, res) => {
   } finally {
     client.release();
   }
+});
+
+
+// ── Backup endpoints (cloud stubs) ───────────────────────────────────────────
+app.get('/api/backup/list', authenticateToken, async (req, res) => {
+  res.json([]);
+});
+app.get('/api/backup/download', authenticateToken, async (req, res) => {
+  res.status(501).json({ error: 'Backup not available in cloud' });
+});
+app.post('/api/backup/upload', authenticateToken, upload.single('backup'), async (req, res) => {
+  res.status(501).json({ error: 'Backup restore not available in cloud' });
+});
+app.post('/api/backup/restore/:filename', authenticateToken, async (req, res) => {
+  res.status(501).json({ error: 'Backup restore not available in cloud' });
+});
+app.post('/api/test-smtp', authenticateToken, async (req, res) => {
+  res.json({ message: 'SMTP test not configured' });
 });
 
 // ── Health Check ──────────────────────────────────────────────────────────────
