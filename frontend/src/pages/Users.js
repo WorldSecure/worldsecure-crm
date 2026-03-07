@@ -385,7 +385,6 @@ function Users() {
           </div>
         </div>
       )}
-    </div>
 
       {/* Edit Username Modal */}
       {showEditModal && (
