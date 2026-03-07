@@ -1662,15 +1662,25 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
 
     if (entity === 'products') {
       for (const r of rows) {
-        await client.query(`
-          INSERT INTO products (id, sku, name, name_he, name_pt, description, category_id, price, currency, unit, quantity, min_quantity, created_at)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-          ON CONFLICT (id) DO UPDATE SET
-            sku=$2, name=$3, name_he=$4, name_pt=$5, description=$6,
-            category_id=$7, price=$8, currency=$9, unit=$10, quantity=$11, min_quantity=$12`,
-          [r.id, r.sku, r.name, r.name_he||null, r.name_pt||null, r.description||null,
- r.category_id||null, r.price||null, r.currency||'ILS', r.unit||'unit',
- parseInt(r.quantity)||0, parseInt(r.min_quantity)||0, r.created_at]);
+        // תחילה נסה לעדכן לפי id
+        const existing = await client.query('SELECT id FROM products WHERE id=$1 OR sku=$2', [r.id, r.sku]);
+        if (existing.rows.length > 0) {
+          await client.query(`
+            UPDATE products SET
+              id=$1, sku=$2, name=$3, name_he=$4, name_pt=$5, description=$6,
+              category_id=$7, price=$8, currency=$9, unit=$10, quantity=$11, min_quantity=$12
+            WHERE id=$1 OR sku=$2`,
+            [r.id, r.sku, r.name, r.name_he||null, r.name_pt||null, r.description||null,
+             r.category_id||null, r.price||null, r.currency||'ILS', r.unit||'unit',
+             r.quantity != null ? parseInt(r.quantity) : 0, r.min_quantity != null ? parseInt(r.min_quantity) : 0]);
+        } else {
+          await client.query(`
+            INSERT INTO products (id, sku, name, name_he, name_pt, description, category_id, price, currency, unit, quantity, min_quantity, created_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+            [r.id, r.sku, r.name, r.name_he||null, r.name_pt||null, r.description||null,
+             r.category_id||null, r.price||null, r.currency||'ILS', r.unit||'unit',
+             r.quantity != null ? parseInt(r.quantity) : 0, r.min_quantity != null ? parseInt(r.min_quantity) : 0, r.created_at]);
+        }
       }
       if (rows.length > 0) {
         const ids = rows.map(r => r.id);
