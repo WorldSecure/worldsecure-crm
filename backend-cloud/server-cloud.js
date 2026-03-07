@@ -1606,19 +1606,6 @@ app.post('/api/sync/support', authenticateToken, async (req, res) => {
     await client.query('BEGIN');
 
     for (const t of tickets) {
-      // תרגם owner_id ו-created_by לפי username (כי ה-IDs שונים בין מקומי לענן)
-      let resolvedOwnerId = null;
-      if (t.owner_name) {
-        const ownerRes = await client.query('SELECT id FROM users WHERE username=$1', [t.owner_name]);
-        resolvedOwnerId = ownerRes.rows[0]?.id || null;
-      }
-      let resolvedCreatedBy = null;
-      if (t.created_by) {
-        // created_by הוא ID מקומי - ננסה למצוא לפי owner_name או נשאיר null
-        const creatorRes = await client.query('SELECT id FROM users WHERE id=$1', [t.created_by]);
-        resolvedCreatedBy = creatorRes.rows[0]?.id || null;
-      }
-
       await client.query(`
         INSERT INTO support_tickets
           (id, ticket_number, customer_id, customer_name, product_id, product_name,
@@ -1634,8 +1621,8 @@ app.post('/api/sync/support', authenticateToken, async (req, res) => {
           closed_at=$19, cancelled_at=$20`,
         [t.id, t.ticket_number, t.customer_id||null, t.customer_name||null,
          t.product_id||null, t.product_name||null, t.subject, t.description||null,
-         t.status||'open', t.priority||'medium', resolvedOwnerId, t.owner_name||null,
-         resolvedCreatedBy, t.awaiting_channel||null, t.awaiting_note||null,
+         t.status||'open', t.priority||'medium', t.owner_id||null, t.owner_name||null,
+         t.created_by||null, t.awaiting_channel||null, t.awaiting_note||null,
          t.awaiting_deadline||null, t.created_at, t.updated_at||null,
          t.closed_at||null, t.cancelled_at||null]
       );
