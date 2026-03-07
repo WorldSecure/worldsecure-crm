@@ -1299,7 +1299,19 @@ app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISO
 //  START
 // ════════════════════════════════════════════════════════════════════════════
 
-initDatabase().then(() => {
+async function runMigrations() {
+  const migrations = [
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_warehouse BOOLEAN DEFAULT TRUE`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_sales BOOLEAN DEFAULT FALSE`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_service BOOLEAN DEFAULT TRUE`,
+  ];
+  for (const sql of migrations) {
+    try { await query(sql); } catch(e) { /* column may already exist */ }
+  }
+  console.log('✅ Migrations complete');
+}
+
+initDatabase().then(runMigrations).then(() => {
   app.listen(PORT, () => {
     console.log(`✅ WorldSecure Cloud server running on port ${PORT}`);
   });
