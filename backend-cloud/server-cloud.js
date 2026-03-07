@@ -1260,6 +1260,32 @@ app.put('/api/warehouse-alerts/:id/complete', authenticateToken, async (req, res
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+//  STOCK ALERTS
+// ════════════════════════════════════════════════════════════════════════════
+
+app.get('/api/stock-alerts', authenticateToken, async (req, res) => {
+  try {
+    const r = await query(
+      `SELECT a.*, a.quote_id as quote_number
+       FROM stock_alerts a
+       WHERE a.status = 'active'
+       ORDER BY a.created_at DESC`
+    );
+    res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/stock-alerts/:id/resolve', authenticateToken, async (req, res) => {
+  try {
+    await query(
+      `UPDATE stock_alerts SET status='resolved', resolved_at=NOW() WHERE id=$1`,
+      [req.params.id]
+    );
+    res.json({ message: 'Alert resolved' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 //  NOTIFICATIONS
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -1966,6 +1992,18 @@ async function runMigrations() {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_warehouse BOOLEAN DEFAULT TRUE`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_sales BOOLEAN DEFAULT FALSE`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_service BOOLEAN DEFAULT TRUE`,
+    `CREATE TABLE IF NOT EXISTS stock_alerts (
+      id SERIAL PRIMARY KEY,
+      quote_id INTEGER,
+      product_id INTEGER,
+      product_name TEXT,
+      required_qty INTEGER,
+      available_qty INTEGER,
+      shortage_qty INTEGER,
+      status TEXT DEFAULT 'active',
+      resolved_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
   ];
   for (const sql of migrations) {
     try { await query(sql); } catch(e) { /* column may already exist */ }
