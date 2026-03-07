@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './utils/AuthContext';
 import { LanguageProvider, useLanguage } from './utils/LanguageContext';
@@ -23,23 +23,11 @@ import SupportDashboard from './pages/SupportDashboard';
 import SupportManagement from './pages/SupportManagement';
 import './App.css';
 
-// Hook לזיהוי מובייל
-const useIsMobile = () => {
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
-  useEffect(() => {
-    const handler = () => setIsMobile(window.innerWidth <= 768);
-    window.addEventListener('resize', handler);
-    return () => window.removeEventListener('resize', handler);
-  }, []);
-  return isMobile;
-};
-
 // Header חדש עם הרשאות
 const NewHeader = ({ activeTab }) => {
   const { user, logout } = useAuth();
   const { language, setLanguage } = useLanguage();
   const navigate = useNavigate();
-  const isMobile = useIsMobile();
 
   const handleLogout = () => {
     logout();
@@ -62,11 +50,13 @@ const NewHeader = ({ activeTab }) => {
     }
   };
 
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+
   return (
     <div style={{
       width: '100%',
       background: 'linear-gradient(135deg, #0a3d6b 0%, #1a6fa8 100%)',
-      padding: isMobile ? '0.5rem' : '1rem',
+      padding: isMobile ? '0.6rem' : '1rem',
       boxSizing: 'border-box'
     }}>
       {/* Header עליון */}
@@ -75,69 +65,62 @@ const NewHeader = ({ activeTab }) => {
         alignItems: 'center',
         justifyContent: 'space-between',
         flexWrap: 'wrap',
-        gap: '0.4rem',
-        marginBottom: isMobile ? '0.4rem' : '1rem',
-        padding: isMobile ? '0.4rem 0.6rem' : '1rem',
+        gap: '0.5rem',
+        marginBottom: '0.6rem',
+        padding: isMobile ? '0.5rem' : '1rem',
         background: 'rgba(255,255,255,0.1)',
-        borderRadius: isMobile ? '10px' : '20px',
+        borderRadius: '12px',
         backdropFilter: 'blur(10px)',
         boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
       }}>
-        <div style={{ fontSize: isMobile ? '1rem' : '2rem', fontWeight: '600', color: 'white', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
-          🌐 {isMobile ? 'WorldSecure' : 'WorldSecure Business Hub'}
+        <div style={{ fontSize: isMobile ? '1.1rem' : '2rem', fontWeight: '600', color: 'white', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
+          🌐 WorldSecure
         </div>
-        <div style={{ display: 'flex', gap: isMobile ? '0.4rem' : '0.8rem', alignItems: 'center', color: 'white' }}>
-          {/* שם משתמש - הסתר במובייל */}
-          {!isMobile && (
-            <span style={{ 
-              padding: '0.65rem 1.4rem',
-              background: 'rgba(255,255,255,0.2)', 
-              borderRadius: '50px',
-              fontWeight: '600',
-              fontSize: '0.95rem',
-              height: '42px',
-              display: 'inline-flex',
-              alignItems: 'center'
-            }}>
-              {user?.username || user?.email || 'משתמש'}
-            </span>
-          )}
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', color: 'white', flexWrap: 'wrap' }}>
+          {/* שם משתמש */}
+          <span style={{ 
+            padding: '0.4rem 0.8rem', 
+            background: 'rgba(255,255,255,0.2)', 
+            borderRadius: '50px',
+            fontWeight: '600',
+            fontSize: isMobile ? '0.8rem' : '1rem'
+          }}>
+            {user?.username || user?.email || 'משתמש'}
+          </span>
           
           {/* בחירת שפה */}
           <select 
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
             style={{ 
-              padding: isMobile ? '0.3rem 0.5rem' : '0.65rem 1.4rem',
+              padding: isMobile ? '0.3rem 0.5rem' : '0.8rem 1.5rem',
               background: 'rgba(255,255,255,0.2)', 
               borderRadius: '50px',
               border: 'none',
               color: 'white',
               cursor: 'pointer',
               fontWeight: '600',
-              fontSize: isMobile ? '0.8rem' : '0.95rem',
-              height: isMobile ? '34px' : '42px'
+              fontSize: isMobile ? '0.8rem' : '1rem'
             }}
           >
-            <option value="he" style={{background: '#0a3d6b', color: 'white'}}>עב</option>
-            <option value="en" style={{background: '#0a3d6b', color: 'white'}}>EN</option>
-            <option value="pt" style={{background: '#0a3d6b', color: 'white'}}>PT</option>
+            <option value="he" style={{background: '#0a3d6b', color: 'white'}}>עברית</option>
+            <option value="en" style={{background: '#0a3d6b', color: 'white'}}>English</option>
+            <option value="pt" style={{background: '#0a3d6b', color: 'white'}}>Português</option>
           </select>
           
           {/* כפתור יציאה */}
           <button 
             onClick={handleLogout}
             style={{
-              padding: isMobile ? '0.3rem 0.7rem' : '0.65rem 1.4rem',
+              padding: isMobile ? '0.4rem 0.8rem' : '1rem 2rem',
               background: '#ef4444', 
               color: 'white', 
               border: 'none', 
               borderRadius: '50px', 
-              fontWeight: '600',
+              fontWeight: 'bold',
               cursor: 'pointer',
               transition: 'all 0.3s',
-              fontSize: isMobile ? '0.8rem' : '0.95rem',
-              height: isMobile ? '34px' : '42px'
+              fontSize: isMobile ? '0.8rem' : '1rem'
             }}
             onMouseOver={(e) => e.target.style.background = '#dc2626'}
             onMouseOut={(e) => e.target.style.background = '#ef4444'}
@@ -182,20 +165,20 @@ const NewHeader = ({ activeTab }) => {
 
 // סגנונות כפתורים
 const buttonBaseStyle = () => {
-  const mobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
   return {
     flex: 1,
-    padding: mobile ? '0.4rem 0.3rem' : '1.2rem 0.8rem',
+    padding: isMobile ? '0.5rem 0.3rem' : '1.2rem 0.8rem',
     color: 'white',
-    fontSize: mobile ? '0.72rem' : '1rem',
+    fontSize: isMobile ? '0.75rem' : '1rem',
     fontWeight: '600',
     border: 'none',
-    borderRadius: mobile ? '8px' : '10px',
+    borderRadius: '8px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     gap: '0.3rem',
-    height: mobile ? '34px' : '48px',
+    height: isMobile ? '36px' : '48px',
     textDecoration: 'none',
     boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
     transition: 'all 0.3s',
@@ -240,10 +223,10 @@ function AppRoutes() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)' }}>
+    <div style={{ minHeight: '100vh', width: '100%', overflowX: 'hidden', background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)' }}>
       <NewHeader activeTab={getActiveTab()} />
       
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+      <div style={{ width: '100%' }}>
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<Navigate to="/dashboard" />} />
