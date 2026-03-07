@@ -1413,7 +1413,7 @@ app.post('/api/sync/settings', authenticateToken, async (req, res) => {
 
 // ── Sync: Inbound ─────────────────────────────────────────────────────────────
 app.post('/api/sync/inbound', authenticateToken, async (req, res) => {
-  const { transactions, items } = req.body;
+  const { transactions, items, localIds } = req.body;
   if (!Array.isArray(transactions)) return res.status(400).json({ error: 'transactions array required' });
 
   const client = await pool.connect();
@@ -1452,6 +1452,19 @@ app.post('/api/sync/inbound', authenticateToken, async (req, res) => {
       await client.query('UPDATE products SET quantity=$1 WHERE id=$2', [Math.max(0,qty), p.id]);
     }
 
+    // מחק תעודות שנמחקו במקומי (רק אם נוצרו לפני יותר מ-10 דקות)
+    if (Array.isArray(localIds) && localIds.length >= 0) {
+      const cloudRows = await client.query(
+        `SELECT id FROM inbound_transactions WHERE transaction_date < NOW() - INTERVAL '10 minutes'`
+      );
+      for (const row of cloudRows.rows) {
+        if (!localIds.includes(row.id)) {
+          await client.query('DELETE FROM inbound_items WHERE transaction_id=$1', [row.id]);
+          await client.query('DELETE FROM inbound_transactions WHERE id=$1', [row.id]);
+        }
+      }
+    }
+
     await client.query('COMMIT');
     res.json({ message: 'inbound synced', count: transactions.length });
   } catch (err) {
@@ -1464,7 +1477,7 @@ app.post('/api/sync/inbound', authenticateToken, async (req, res) => {
 
 // ── Sync: Outbound ────────────────────────────────────────────────────────────
 app.post('/api/sync/outbound', authenticateToken, async (req, res) => {
-  const { transactions, items } = req.body;
+  const { transactions, items, localIds } = req.body;
   if (!Array.isArray(transactions)) return res.status(400).json({ error: 'transactions array required' });
 
   const client = await pool.connect();
@@ -1499,6 +1512,19 @@ app.post('/api/sync/outbound', authenticateToken, async (req, res) => {
          item.num_cartons||null, item.use_pallets||false, item.cartons_per_pallet||null,
          item.pallet_dimensions||null, item.pallet_weight||null, item.num_pallets||null]
       );
+    }
+
+    // מחק תעודות שנמחקו במקומי (רק אם נוצרו לפני יותר מ-10 דקות)
+    if (Array.isArray(localIds) && localIds.length >= 0) {
+      const cloudRows = await client.query(
+        `SELECT id FROM outbound_transactions WHERE transaction_date < NOW() - INTERVAL '10 minutes'`
+      );
+      for (const row of cloudRows.rows) {
+        if (!localIds.includes(row.id)) {
+          await client.query('DELETE FROM outbound_items WHERE transaction_id=$1', [row.id]);
+          await client.query('DELETE FROM outbound_transactions WHERE id=$1', [row.id]);
+        }
+      }
     }
 
     await client.query('COMMIT');
