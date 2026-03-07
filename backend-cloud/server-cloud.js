@@ -1515,7 +1515,7 @@ app.post('/api/sync/outbound', authenticateToken, async (req, res) => {
 app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
   const { entity } = req.params;
   const { rows } = req.body;
-  const allowed = ['customers', 'products', 'suppliers', 'settings', 'inbound', 'outbound'];
+  const allowed = ['customers', 'products', 'suppliers', 'settings', 'inbound', 'outbound', 'support'];
   if (!allowed.includes(entity)) return res.status(400).json({ error: 'Invalid entity' });
   if (!rows || !Array.isArray(rows)) return res.status(400).json({ error: 'rows array required' });
 
