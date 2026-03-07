@@ -1723,39 +1723,101 @@ app.post('/api/send-email', authenticateToken, async (req, res) => {
       tls: { rejectUnauthorized: false }
     });
 
-    // Fetch document HTML and attach it
+    // Build document HTML directly (no self-request)
     let attachments = [];
     if (docType && docId) {
       try {
-        const token = req.headers.authorization?.replace('Bearer ', '');
-        const baseUrl = `https://worldsecure-backend.onrender.com`;
-        const urlMap = {
-          'outbound': `${baseUrl}/api/outbound/${docId}/delivery-note?lang=${docLang||'he'}${docContact?`&contact=${encodeURIComponent(docContact)}`:''}&token=${encodeURIComponent(token)}`,
-          'inbound':  `${baseUrl}/api/inbound/${docId}/receipt-note?lang=${docLang||'he'}${docContact?`&contact=${encodeURIComponent(docContact)}`:''}&token=${encodeURIComponent(token)}`
+        const lang = docLang || 'he';
+        const contact = docContact || '';
+
+        const formatDate = (dateString) => {
+          const date = new Date(dateString);
+          return `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${date.getFullYear()}`;
         };
-        const nameMap = {
-          'outbound': `delivery_note_${docId}.html`,
-          'inbound':  `receipt_note_${docId}.html`
-        };
-        const fetchUrl = urlMap[docType];
-        if (fetchUrl) {
-          const https = require('https');
-          const htmlContent = await new Promise((resolve, reject) => {
-            const urlObj = new URL(fetchUrl);
-            const options = { hostname: urlObj.hostname, port: 443, path: urlObj.pathname + urlObj.search, method: 'GET' };
-            const req2 = https.request(options, (r) => {
-              let data = '';
-              r.on('data', chunk => data += chunk);
-              r.on('end', () => resolve(data));
-            });
-            req2.on('error', reject);
-            req2.end();
-          });
-          let cleanHtml = htmlContent.replace(/<script[\s\S]*?<\/script>/g, '');
-          cleanHtml = cleanHtml.replace('</style>', '.no-print{display:none!important}.btn-bar{display:none!important}</style>');
+
+        let docHtml = '';
+        const nameMap = { 'outbound': `delivery_note_${docId}.html`, 'inbound': `receipt_note_${docId}.html` };
+
+        if (docType === 'outbound') {
+          const txRes = await query(`
+            SELECT ot.*, c.name as customer_name, c.address as customer_address,
+                   c.phone as customer_phone, c.email as customer_email,
+                   c.contact_person as customer_contact, u.username
+            FROM outbound_transactions ot
+            LEFT JOIN customers c ON ot.customer_id = c.id
+            LEFT JOIN users u ON ot.user_id = u.id
+            WHERE ot.id=$1`, [docId]);
+          const tx = txRes.rows[0];
+          const itemsRes = await query(`SELECT oi.*, p.name, p.name_he, p.name_pt, p.sku FROM outbound_items oi JOIN products p ON oi.product_id = p.id WHERE oi.transaction_id=$1`, [docId]);
+          const items = itemsRes.rows;
+          const title = lang==='he'?'תעודת משלוח':lang==='pt'?'Nota de Entrega':'Delivery Note';
+          const dir = lang==='he'?'rtl':'ltr';
+          const baseUrl = 'https://worldsecure-backend.onrender.com';
+          const logoHtml = company.logo_path ? `<img src="${baseUrl}${company.logo_path}" style="max-height:80px;max-width:200px;">` : '';
+          docHtml = `<!DOCTYPE html><html dir="${dir}"><head><meta charset="UTF-8"><title>${title} #${docId}</title>
+<style>body{font-family:Arial,sans-serif;max-width:800px;margin:20px auto;padding:20px}table{width:100%;border-collapse:collapse;margin:20px 0}th{background:#3498db;color:white;padding:10px}td{padding:10px;border:1px solid #ddd}.info-row{display:flex;gap:20px;margin-bottom:20px}.info-box{flex:1;padding:15px;border:1px solid #ddd;border-radius:5px}.info-box h3{margin-top:0;border-bottom:2px solid #3498db;padding-bottom:5px}</style>
+</head><body>
+${logoHtml ? `<div style="margin-bottom:15px">${logoHtml}</div>` : ''}
+<h1>${title}</h1>
+<p>${lang==='he'?'מספר':'Number'}: ${docId} | ${lang==='he'?'תאריך':'Date'}: ${formatDate(tx?.transaction_date)}</p>
+<div class="info-row">
+  <div class="info-box"><h3>${lang==='he'?'פרטי החברה':'Company Details'}</h3>
+    <p><strong>${lang==='he'?'שם':'Name'}:</strong> ${company.company_name||''}</p>
+    <p><strong>${lang==='he'?'טלפון':'Phone'}:</strong> ${company.phone||''}</p>
+    <p><strong>${lang==='he'?'אימייל':'Email'}:</strong> ${company.email||''}</p>
+  </div>
+  <div class="info-box"><h3>${lang==='he'?'פרטי הלקוח':'Customer Details'}</h3>
+    <p><strong>${lang==='he'?'שם':'Name'}:</strong> ${tx?.customer_type==='casual'?tx?.casual_customer_name:tx?.customer_name||''}</p>
+    ${tx?.customer_address?`<p><strong>${lang==='he'?'כתובת':'Address'}:</strong> ${tx.customer_address}</p>`:''}
+  </div>
+</div>
+<table><thead><tr><th>#</th><th>${lang==='he'?'מק"ט':'SKU'}</th><th>${lang==='he'?'שם מוצר':'Product'}</th><th>${lang==='he'?'כמות':'Qty'}</th></tr></thead>
+<tbody>${items.map((item,i)=>`<tr><td>${i+1}</td><td>${item.sku}</td><td>${lang==='he'&&item.name_he?item.name_he:lang==='pt'&&item.name_pt?item.name_pt:item.name}</td><td>${item.quantity}</td></tr>`).join('')}</tbody></table>
+${tx?.notes?`<p><strong>${lang==='he'?'הערות':'Notes'}:</strong> ${tx.notes}</p>`:''}
+<p style="margin-top:30px;color:#777">${lang==='he'?'נערך ע"י':'Prepared by'}: ${tx?.username||''}</p>
+<div style="margin-top:20px;padding-top:15px;border-top:1px solid #ddd;text-align:center;font-size:9pt;color:#888">${company.company_name||'WorldSecure LTD'} &bull; ${company.email||''}</div>
+</body></html>`;
+
+        } else if (docType === 'inbound') {
+          const txRes = await query(`
+            SELECT it.*, s.name as supplier_name, s.address as supplier_address,
+                   s.phone as supplier_phone, s.email as supplier_email, u.username
+            FROM inbound_transactions it
+            LEFT JOIN suppliers s ON it.supplier_id = s.id
+            LEFT JOIN users u ON it.user_id = u.id
+            WHERE it.id=$1`, [docId]);
+          const tx = txRes.rows[0];
+          const itemsRes = await query(`SELECT ii.*, p.name, p.name_he, p.name_pt, p.sku FROM inbound_items ii JOIN products p ON ii.product_id = p.id WHERE ii.transaction_id=$1`, [docId]);
+          const items = itemsRes.rows;
+          const title = lang==='he'?'תעודת קליטה':lang==='pt'?'Nota de Recebimento':'Receipt Note';
+          const dir = lang==='he'?'rtl':'ltr';
+          const baseUrl = 'https://worldsecure-backend.onrender.com';
+          const logoHtml = company.logo_path ? `<img src="${baseUrl}${company.logo_path}" style="max-height:80px;max-width:200px;">` : '';
+          docHtml = `<!DOCTYPE html><html dir="${dir}"><head><meta charset="UTF-8"><title>${title} #${docId}</title>
+<style>body{font-family:Arial,sans-serif;max-width:800px;margin:20px auto;padding:20px}table{width:100%;border-collapse:collapse;margin:20px 0}th{background:#3498db;color:white;padding:10px}td{padding:10px;border:1px solid #ddd}.info-section{padding:15px;background:#f8f9fa;border-radius:5px;margin-bottom:20px}</style>
+</head><body>
+${logoHtml ? `<div style="margin-bottom:15px">${logoHtml}</div>` : ''}
+<h1>${title}</h1>
+<p>${lang==='he'?'מספר':'Number'}: ${docId} | ${lang==='he'?'תאריך':'Date'}: ${formatDate(tx?.transaction_date)}</p>
+<div class="info-section">
+  <h3>${lang==='he'?'פרטי הספק':'Supplier Details'}</h3>
+  <p><strong>${lang==='he'?'שם':'Name'}:</strong> ${tx?.supplier_name||''}</p>
+  ${tx?.supplier_phone?`<p><strong>${lang==='he'?'טלפון':'Phone'}:</strong> ${tx.supplier_phone}</p>`:''}
+  ${tx?.supplier_email?`<p><strong>${lang==='he'?'אימייל':'Email'}:</strong> ${tx.supplier_email}</p>`:''}
+</div>
+<table><thead><tr><th>${lang==='he'?'מק"ט':'SKU'}</th><th>${lang==='he'?'שם מוצר':'Product'}</th><th>${lang==='he'?'כמות':'Qty'}</th></tr></thead>
+<tbody>${items.map(item=>`<tr><td>${item.sku}</td><td>${lang==='he'&&item.name_he?item.name_he:lang==='pt'&&item.name_pt?item.name_pt:item.name}</td><td>${item.quantity}</td></tr>`).join('')}
+<tr style="font-weight:bold;background:#f0f0f0"><td colspan="2">${lang==='he'?'סה"כ':'Total'}</td><td>${items.reduce((s,i)=>s+i.quantity,0)}</td></tr></tbody></table>
+${tx?.notes?`<p><strong>${lang==='he'?'הערות':'Notes'}:</strong> ${tx.notes}</p>`:''}
+<p style="margin-top:30px;color:#777">${lang==='he'?'התקבל ע"י':'Received by'}: ${tx?.username||''}</p>
+<div style="margin-top:20px;padding-top:15px;border-top:1px solid #ddd;text-align:center;font-size:9pt;color:#888">${company.company_name||'WorldSecure LTD'} &bull; ${company.email||''}</div>
+</body></html>`;
+        }
+
+        if (docHtml) {
           attachments.push({
             filename: nameMap[docType],
-            content: Buffer.from(cleanHtml, 'utf-8'),
+            content: Buffer.from(docHtml, 'utf-8'),
             contentType: 'text/html; charset=utf-8'
           });
         }
