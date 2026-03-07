@@ -589,9 +589,17 @@ app.get('/api/outbound/:id/delivery-note', authenticateToken, async (req, res) =
   .doc-footer{position:fixed;bottom:0;left:0;right:0;border-top:1px solid #ddd;padding:5px;text-align:center;font-size:8pt;color:#888;background:#fff}
 </style></head><body>
 <div class="btn-bar no-print">
-  <button class="btn-print" onclick="window.print()">🖨️ ${lang==='he'?'הדפס':lang==='pt'?'Imprimir':'Print'}</button>
+  <button class="btn-print" onclick="window.print()">🖨️ ${lang==='he'?'הדפס / שמור PDF':lang==='pt'?'Imprimir / Salvar PDF':'Print / Save as PDF'}</button>
+  <button onclick="sendByEmail()" style="background:#4CAF50;color:white">✉️ ${lang==='he'?'שלח במייל':lang==='pt'?'Enviar por Email':'Send by Email'}</button>
   <button class="btn-close" onclick="window.close()">❌ ${lang==='he'?'סגור':lang==='pt'?'Fechar':'Close'}</button>
 </div>
+<script>
+function sendByEmail() {
+  const subject = encodeURIComponent('${lang==="he"?"תעודת משלוח":lang==="pt"?"Nota de Entrega":"Delivery Note"} #${id}');
+  const body = encodeURIComponent('${lang==="he"?"מצורפת תעודת משלוח":lang==="pt"?"Segue em anexo a nota de entrega":"Please find attached the delivery note"} #${id}');
+  window.location.href = 'mailto:?subject=' + subject + '&body=' + body;
+}
+</script>
 <h1>${t.title}</h1>
 <p><strong>${t.num}:</strong> ${id} &nbsp;|&nbsp; <strong>${t.date}:</strong> ${formatDate(transaction.transaction_date)}</p>
 <div class="info-row">
@@ -671,7 +679,17 @@ app.get('/api/inbound/:id/receipt-note', authenticateToken, async (req, res) => 
   .doc-footer{position:fixed;bottom:0;left:0;right:0;border-top:1px solid #ddd;padding:5px;text-align:center;font-size:8pt;color:#888;background:#fff}
 </style></head><body>
 <div class="btn-bar no-print">
-  <button class="btn-print" onclick="window.print()">🖨️ ${lang==='he'?'הדפס':'Print'}</button>
+  <button class="btn-print" onclick="window.print()">🖨️ ${lang==='he'?'הדפס / שמור PDF':lang==='pt'?'Imprimir / Salvar PDF':'Print / Save as PDF'}</button>
+  <button onclick="sendByEmail()" style="background:#4CAF50;color:white">✉️ ${lang==='he'?'שלח במייל':lang==='pt'?'Enviar por Email':'Send by Email'}</button>
+  <button class="btn-close" onclick="window.close()">❌ ${lang==='he'?'סגור':lang==='pt'?'Fechar':'Close'}</button>
+</div>
+<script>
+function sendByEmail() {
+  const subject = encodeURIComponent('${lang==="he"?"תעודת קבלה":lang==="pt"?"Nota de Recebimento":"Receipt Note"} #${id}');
+  const body = encodeURIComponent('${lang==="he"?"מצורפת תעודת קבלה":lang==="pt"?"Segue em anexo a nota de recebimento":"Please find attached the receipt note"} #${id}');
+  window.location.href = 'mailto:?subject=' + subject + '&body=' + body;
+}
+</script>
   <button class="btn-close" onclick="window.close()">❌ ${lang==='he'?'סגור':'Close'}</button>
 </div>
 <h1>${t.title} #${id}</h1>
