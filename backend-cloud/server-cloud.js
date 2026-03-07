@@ -1405,7 +1405,7 @@ app.post('/api/sync/settings', authenticateToken, async (req, res) => {
         smtp_host=$9, smtp_port=$10, smtp_user=$11, smtp_pass=$12, smtp_from=$13`,
       [row.company_name, row.address, row.phone, row.phone2, row.phone3,
        row.email, row.tax_id, row.website,
-       row.smtp_host, row.smtp_port||587, row.smtp_user, row.smtp_pass, row.smtp_from]
+       row.smtp_host, 465, row.smtp_user, row.smtp_pass, row.smtp_from]
     );
     res.json({ message: 'settings synced' });
   } catch (err) { res.status(500).json({ error: err.message }); }
