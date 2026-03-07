@@ -327,10 +327,10 @@ function Outbound() {
     
     try {
       const contactParam = selectedContact ? `&contact=${encodeURIComponent(selectedContact)}` : '';
-      const token = localStorage.getItem('token') || '';
+      const token = sessionStorage.getItem('token') || '';
       const response = await axios.get(`/api/outbound/${selectedTransactionId}/delivery-note?lang=${lang}${contactParam}&token=${encodeURIComponent(token)}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${sessionStorage.getItem('token')}`
         }
       });
       

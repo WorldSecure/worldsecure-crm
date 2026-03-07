@@ -17,6 +17,7 @@ function Inbound() {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [qrCodes, setQrCodes] = useState([]);
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [selectedTransactionId, setSelectedTransactionId] = useState(null);
@@ -52,7 +53,8 @@ function Inbound() {
     casual_supplier_name: '',
     notes: '',
     items: [],
-    generate_receipt_note: false
+    generate_receipt_note: false,
+    qr_code_id: null
   });
 
   const [currentItem, setCurrentItem] = useState({
@@ -69,15 +71,23 @@ function Inbound() {
 
   const fetchData = async () => {
     try {
-      const [suppliersRes, productsRes, transactionsRes] = await Promise.all([
+      const [suppliersRes, productsRes, transactionsRes, qrRes] = await Promise.all([
         axios.get('/api/suppliers'),
         axios.get('/api/products'),
-        axios.get('/api/inbound')
+        axios.get('/api/inbound'),
+        axios.get('/api/qr-codes').catch(() => ({ data: [] }))
       ]);
       
       setSuppliers(suppliersRes.data);
       setProducts(productsRes.data);
       setTransactions(transactionsRes.data);
+      // המר פורמט DB לפורמט dropdown
+      const qrList = (qrRes.data || []).map(qr => ({
+        id: qr.id,
+        type: qr.type,
+        title: qr.title || `QR #${qr.id} - ${qr.type}`
+      }));
+      setQrCodes(qrList);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -221,8 +231,9 @@ function Inbound() {
   const handleGenerateWithLanguage = (lang) => {
     setShowLanguageModal(false);
     const contactParam = selectedContact ? `&contact=${encodeURIComponent(selectedContact)}` : '';
-    const token = localStorage.getItem('token') || '';
-    window.open(`http://localhost:3001/api/inbound/${selectedTransactionId}/receipt-note?lang=${lang}${contactParam}&token=${encodeURIComponent(token)}`, '_blank');
+    const token = sessionStorage.getItem('token') || '';
+    const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+    window.open(`${baseUrl}/api/inbound/${selectedTransactionId}/receipt-note?lang=${lang}${contactParam}&token=${encodeURIComponent(token)}`, '_blank');
   };
 
   const handleSubmit = async (e) => {
@@ -278,7 +289,8 @@ function Inbound() {
       casual_supplier_name: '',
       notes: '',
       items: [],
-      generate_receipt_note: false
+      generate_receipt_note: false,
+    qr_code_id: null
     });
     setCurrentItem({
       product_id: '',
@@ -312,8 +324,8 @@ function Inbound() {
           </button>
         </div>
 
-        <div className="table-container">
-          <table className="table">
+        <div className="table-container" style={{ overflowX:"visible" }}>
+          <table className="table" style={{ tableLayout:"fixed", width:"100%" }}>
             <thead>
               <tr>
                 <th>{t('transaction_date')}</th>
@@ -346,11 +358,11 @@ function Inbound() {
                     <td>{trans.notes || '-'}</td>
                     <td>{trans.username}</td>
                     <td>
-                      <div className="table-actions" style={{ display: 'flex', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
                         <button 
                           className="btn btn-success"
                           onClick={() => handleGenerateReceiptNote(trans.id)}
-                          style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
+                          style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
                         >
                           📄 {t('receipt_note')}
                         </button>
@@ -359,16 +371,16 @@ function Inbound() {
                             <button 
                               className="btn btn-secondary"
                               onClick={() => handleEdit(trans)}
-                              style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
+                              style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
                             >
-                              {t('edit')}
+                              ✏️
                             </button>
                             <button 
                               className="btn btn-danger"
                               onClick={() => handleDeleteTransaction(trans.id)}
-                              style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
+                              style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
                             >
-                              {t('delete')}
+                              🗑️
                             </button>
                           </>
                         )}
@@ -562,6 +574,23 @@ function Inbound() {
                     {t('generate_receipt_note_after_save')}
                   </span>
                 </label>
+                
+                {/* QR Code Selection */}
+                <div style={{ marginTop: '1rem' }}>
+                  <label className="form-label">{t('add_qr_code')}</label>
+                  <select
+                    className="form-input"
+                    value={formData.qr_code_id || ''}
+                    onChange={(e) => setFormData({...formData, qr_code_id: e.target.value ? parseInt(e.target.value) : null})}
+                  >
+                    <option value="">{qrCodes.length === 0 ? t('no_qr_codes_created') : t('select_qr_code')}</option>
+                    {qrCodes.map((qr, index) => (
+                      <option key={qr.id} value={qr.id}>
+                        QR #{index + 1} - {qr.type}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div className="modal-footer">
