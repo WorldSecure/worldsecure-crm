@@ -1150,8 +1150,21 @@ app.get('/api/support-tickets/stats', authenticateToken, async (req, res) => {
     const isAdmin = req.user.role === 'admin';
     const where = isAdmin ? '' : `WHERE t.owner_id=${req.user.id}`;
     const r = await query(`SELECT t.status, COUNT(*) as count FROM support_tickets t ${where} GROUP BY t.status`);
-    const stats = { open:0, in_progress:0, closed:0, pending:0, total:0 };
+    const stats = { open:0, in_progress:0, closed:0, pending:0, awaiting_customer:0, cancelled:0, total:0, agents:[] };
     r.rows.forEach(row => { stats[row.status] = parseInt(row.count); stats.total += parseInt(row.count); });
+    if (isAdmin) {
+      const agentsRes = await query(`
+        SELECT u.id, u.username,
+          COUNT(t.id) as total,
+          SUM(CASE WHEN t.status='open' THEN 1 ELSE 0 END) as open_count
+        FROM users u
+        LEFT JOIN support_tickets t ON t.owner_id = u.id
+        WHERE u.role != 'admin' OR EXISTS (SELECT 1 FROM support_tickets t2 WHERE t2.owner_id = u.id)
+        GROUP BY u.id, u.username
+        HAVING COUNT(t.id) > 0
+        ORDER BY u.username`);
+      stats.agents = agentsRes.rows.map(a => ({ id: a.id, username: a.username, total: parseInt(a.total), open_count: parseInt(a.open_count) }));
+    }
     res.json(stats);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
