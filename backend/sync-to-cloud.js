@@ -376,7 +376,13 @@ async function syncSupportFromCloud() {
   }
 
   for (const h of (history || [])) {
-    // בדוק לפי ticket_id + created_at + action (לא לפי id שיכול להתנגש עם IDs מקומיים)
+    // תרגם email ל-username אם צריך
+    let displayName = h.username || null;
+    if (displayName && displayName.includes('@')) {
+      const userRow = await sqliteGet('SELECT username FROM users WHERE email=?', [displayName]).catch(() => null);
+      if (userRow?.username) displayName = userRow.username;
+    }
+    // בדוק לפי ticket_id + created_at + action (לא לפי id שיכול להתנגש)
     const exists = await sqliteGet(
       'SELECT id FROM support_ticket_history WHERE ticket_id=? AND created_at=? AND action=?',
       [h.ticket_id, h.created_at, h.action]
@@ -386,7 +392,7 @@ async function syncSupportFromCloud() {
         INSERT INTO support_ticket_history
           (ticket_id, user_id, username, action, old_status, new_status, comment, created_at)
         VALUES (?,?,?,?,?,?,?,?)`,
-        [h.ticket_id, h.user_id||null, h.username||null, h.action,
+        [h.ticket_id, h.user_id||null, displayName, h.action,
          h.old_status||null, h.new_status||null, h.comment||null, h.created_at]
       ).catch(() => {});
     }
