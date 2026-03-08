@@ -1851,13 +1851,17 @@ app.get('/api/sync/pull/support', authenticateToken, async (req, res) => {
       LEFT JOIN users u1 ON t.created_by = u1.id
       LEFT JOIN users u2 ON t.owner_id = u2.id
       ORDER BY t.id`);
-    // החלף owner_name בשם מהJOIN (תמיד נכון)
     const rows = tickets.rows.map(t => ({
       ...t,
       owner_name: t.owner_name_resolved || t.owner_name,
       owner_name_resolved: undefined
     }));
-    const history = await query('SELECT * FROM support_ticket_history ORDER BY id');
+    // החזר username נכון בhistory דרך JOIN
+    const history = await query(`
+      SELECT h.*, COALESCE(u.username, h.username) as username
+      FROM support_ticket_history h
+      LEFT JOIN users u ON h.user_id = u.id
+      ORDER BY h.id`);
     res.json({ tickets: rows, history: history.rows });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
