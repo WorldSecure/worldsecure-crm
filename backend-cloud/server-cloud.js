@@ -1675,12 +1675,23 @@ app.post('/api/sync/support', authenticateToken, async (req, res) => {
     const validTicketIds = new Set(tickets.map(t => t.id));
     for (const h of (history || [])) {
       if (!validTicketIds.has(h.ticket_id)) continue;
+      // בדוק כפילות לפי ticket_id + created_at + action (IDs שונים בין מקומי לענן)
+      const exists = await client.query(
+        'SELECT id FROM support_ticket_history WHERE ticket_id=$1 AND created_at=$2 AND action=$3',
+        [h.ticket_id, h.created_at, h.action]
+      );
+      if (exists.rows.length > 0) continue;
+      // תרגם user_id לפי username בענן
+      let cloudUserId = null;
+      if (h.username) {
+        const uRes = await client.query('SELECT id FROM users WHERE username=$1 OR email=$1', [h.username]);
+        cloudUserId = uRes.rows[0]?.id || null;
+      }
       await client.query(`
         INSERT INTO support_ticket_history
-          (id, ticket_id, user_id, username, action, old_status, new_status, comment, created_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-        ON CONFLICT (id) DO NOTHING`,
-        [h.id, h.ticket_id, h.user_id||null, h.username||null, h.action,
+          (ticket_id, user_id, username, action, old_status, new_status, comment, created_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [h.ticket_id, cloudUserId, h.username||null, h.action,
          h.old_status||null, h.new_status||null, h.comment||null, h.created_at]
       );
     }
