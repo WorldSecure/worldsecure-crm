@@ -185,7 +185,7 @@ async function syncSupportToCloud() {
   // שלח username במקום user_id — user_id שונה בין מקומי לענן!
   const historyRaw = await sqliteAll(`
     SELECT h.id, h.ticket_id, NULL as user_id, h.username, h.action,
-           h.old_status, h.new_status, h.comment, h.created_at
+           h.old_status, h.new_status, h.comment, h.owner_name, h.created_at
     FROM support_ticket_history h
     ORDER BY h.id`);
   const history = historyRaw;
