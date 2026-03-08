@@ -375,6 +375,13 @@ async function syncSupportFromCloud() {
     count++;
   }
 
+  // תיקון חד-פעמי: עדכן רשומות קיימות עם email ל-username
+  await sqliteRun(`
+    UPDATE support_ticket_history SET username = (
+      SELECT username FROM users WHERE email = support_ticket_history.username
+    ) WHERE username LIKE '%@%'
+  `).catch(() => {});
+
   for (const h of (history || [])) {
     // תרגם email ל-username אם צריך
     let displayName = h.username || null;
