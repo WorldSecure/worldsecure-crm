@@ -1844,12 +1844,21 @@ app.delete('/api/sync/pending-deletions', authenticateToken, async (req, res) =>
 app.get('/api/sync/pull/support', authenticateToken, async (req, res) => {
   try {
     const tickets = await query(`
-      SELECT t.*, u.username as created_by_name
+      SELECT t.*,
+        u1.username as created_by_name,
+        u2.username as owner_name_resolved
       FROM support_tickets t
-      LEFT JOIN users u ON t.created_by = u.id
+      LEFT JOIN users u1 ON t.created_by = u1.id
+      LEFT JOIN users u2 ON t.owner_id = u2.id
       ORDER BY t.id`);
+    // החלף owner_name בשם מהJOIN (תמיד נכון)
+    const rows = tickets.rows.map(t => ({
+      ...t,
+      owner_name: t.owner_name_resolved || t.owner_name,
+      owner_name_resolved: undefined
+    }));
     const history = await query('SELECT * FROM support_ticket_history ORDER BY id');
-    res.json({ tickets: tickets.rows, history: history.rows });
+    res.json({ tickets: rows, history: history.rows });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
