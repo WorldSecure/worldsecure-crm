@@ -405,8 +405,14 @@ async function syncSupportFromCloud() {
         INSERT INTO support_ticket_history
           (ticket_id, user_id, username, action, old_status, new_status, comment, created_at)
         VALUES (?,?,?,?,?,?,?,?)`,
-        [h.ticket_id, h.user_id||null, displayName, h.action,
+        [h.ticket_id, null, displayName, h.action,
          h.old_status||null, h.new_status||null, h.comment||null, h.created_at]
+      ).catch(() => {});
+    } else if (displayName && displayName !== exists.username) {
+      // הענן = מקור האמת לusername — עדכן אם שונה
+      await sqliteRun(
+        'UPDATE support_ticket_history SET username=? WHERE id=?',
+        [displayName, exists.id]
       ).catch(() => {});
     }
   }
