@@ -105,6 +105,7 @@ function SupportManagement() {
       subject: tk.subject||'',         description: tk.description||'',
       priority: tk.priority||'medium', status: tk.status||'open',
       owner_id: tk.owner_id||'',       owner_name: tk.owner_name||'',
+      created_by_name: tk.created_by_name || tk.owner_name || '',
     });
     setImages([]); setEditingId(tk.id); setShowModal(true);
   };
@@ -308,7 +309,7 @@ function SupportManagement() {
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">👤 {t('created_by')}</label>
-                <input className="form-input" value={user?.username||''} readOnly style={{ background:'#f5f5f5', color:'#666' }} />
+                <input className="form-input" value={editingId ? (form.created_by_name||'') : (user?.username||'')} readOnly style={{ background:'#f5f5f5', color:'#666' }} />
               </div>
               <div className="form-group">
                 <label className="form-label">👤 {t('owner')}</label>
