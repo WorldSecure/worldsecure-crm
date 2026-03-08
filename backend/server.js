@@ -5150,7 +5150,7 @@ app.post('/api/support-tickets', authenticateToken, upload.array('images', 5), (
             [ticketId, file.originalname, '/uploads/' + file.filename, file.size], () => {});
         });
         logActivity(req.user.id, 'CREATE_TICKET', 'support_ticket', ticketId, { subject });
-        logTicketHistory(ticketId, req.user.id, req.user.email, 'created', { new_status: status||'open', owner_id: resolvedOwnerId, owner_name });
+        logTicketHistory(ticketId, req.user.id, req.user.username||req.user.email, 'created', { new_status: status||'open', owner_id: resolvedOwnerId, owner_name });
         res.json({ id: ticketId, ticket_number });
       }
     );
@@ -5203,7 +5203,7 @@ app.put('/api/support-tickets/:id', authenticateToken, upload.array('images', 5)
           }
           const action = oldRow?.status !== status ? 'status_changed' :
                          oldRow?.owner_id !== parseInt(ownerId) ? 'owner_changed' : 'updated';
-          logTicketHistory(id, req.user.id, req.user.email, action, histDetails);
+          logTicketHistory(id, req.user.id, req.user.username||req.user.email, action, histDetails);
           res.json({ message: 'Ticket updated' });
         }
       );

@@ -376,8 +376,9 @@ async function syncSupportFromCloud() {
   }
 
   for (const h of (history || [])) {
+    // INSERT OR IGNORE - אם כבר קיים (לפי id) אל תדרוס
     await sqliteRun(`
-      INSERT OR REPLACE INTO support_ticket_history
+      INSERT OR IGNORE INTO support_ticket_history
         (id, ticket_id, user_id, username, action, old_status, new_status, comment, created_at)
       VALUES (?,?,?,?,?,?,?,?,?)`,
       [h.id, h.ticket_id, h.user_id||null, h.username||null, h.action,
