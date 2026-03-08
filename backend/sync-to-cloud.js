@@ -357,8 +357,13 @@ async function syncSupportFromCloud() {
 
     // עדכן owner רק אם owner_updated_at מהענן חדש יותר מהמקומי
     const existing = await sqliteGet('SELECT owner_id, owner_name, owner_updated_at FROM support_tickets WHERE id=?', [t.id]).catch(() => null);
-    const cloudOwnerUpdated = t.owner_updated_at ? new Date(t.owner_updated_at).getTime() : 0;
-    const localOwnerUpdated = existing?.owner_updated_at ? new Date(existing.owner_updated_at).getTime() : 0;
+    const normalizeTs = (v) => {
+      if (!v) return 0;
+      const ts = new Date(String(v).replace(' ', 'T')).getTime();
+      return isNaN(ts) ? 0 : ts;
+    };
+    const cloudOwnerUpdated = normalizeTs(t.owner_updated_at);
+    const localOwnerUpdated = normalizeTs(existing?.owner_updated_at);
     const shouldUpdateOwner = !existing || cloudOwnerUpdated > localOwnerUpdated;
 
     const finalOwnerId = shouldUpdateOwner ? localOwnerId : existing.owner_id;
