@@ -356,7 +356,9 @@ async function syncSupportFromCloud() {
     }
 
     // עדכן owner: אם הענן מחזיר owner_name שונה ממה שיש מקומית — עדכן תמיד
-    const existing = await sqliteGet('SELECT owner_id, owner_name, owner_updated_at FROM support_tickets WHERE id=?', [t.id]).catch(() => null);
+    log(`  [DEBUG] cloud ticket ${t.id}: owner_name=${t.owner_name} owner_updated_at=${t.owner_updated_at} status=${t.status}`);
+    const existing = await sqliteGet('SELECT owner_id, owner_name, owner_updated_at, status FROM support_tickets WHERE id=?', [t.id]).catch(() => null);
+    log(`  [DEBUG] local ticket ${t.id}: owner_name=${existing?.owner_name} owner_updated_at=${existing?.owner_updated_at} status=${existing?.status}`);
     const normalizeTs = (v) => {
       if (!v) return 0;
       const ts = new Date(String(v).replace(' ', 'T')).getTime();
