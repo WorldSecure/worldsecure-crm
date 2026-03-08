@@ -355,7 +355,7 @@ async function syncSupportFromCloud() {
       localCreatedBy = row?.id || null;
     }
 
-    // עדכן owner רק אם owner_updated_at מהענן חדש יותר מהמקומי
+    // עדכן owner: אם הענן מחזיר owner_name שונה ממה שיש מקומית — עדכן תמיד
     const existing = await sqliteGet('SELECT owner_id, owner_name, owner_updated_at FROM support_tickets WHERE id=?', [t.id]).catch(() => null);
     const normalizeTs = (v) => {
       if (!v) return 0;
@@ -364,7 +364,10 @@ async function syncSupportFromCloud() {
     };
     const cloudOwnerUpdated = normalizeTs(t.owner_updated_at);
     const localOwnerUpdated = normalizeTs(existing?.owner_updated_at);
-    const shouldUpdateOwner = !existing || cloudOwnerUpdated > localOwnerUpdated;
+    // עדכן אם: ticket חדש, timestamp ענן חדש יותר, או owner_name שונה
+    const cloudOwnerName = t.owner_name || null;
+    const localOwnerName = existing?.owner_name || null;
+    const shouldUpdateOwner = !existing || cloudOwnerUpdated > localOwnerUpdated || cloudOwnerName !== localOwnerName;
 
     const finalOwnerId = shouldUpdateOwner ? localOwnerId : existing.owner_id;
     const finalOwnerName = shouldUpdateOwner ? (t.owner_name||null) : existing.owner_name;
