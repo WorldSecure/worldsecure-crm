@@ -339,7 +339,7 @@ async function syncSupportFromCloud() {
   const result = await apiRequest('GET', '/api/sync/pull/support');
   if (result.status !== 200) { log(`  ⚠ pull support: ${JSON.stringify(result.body)}`); return; }
 
-  const { tickets, history } = result.body;
+  const { tickets } = result.body; // history לא נמשך — המקומי הוא מקור האמת
   let count = 0;
 
   for (const t of (tickets || [])) {
@@ -389,50 +389,8 @@ async function syncSupportFromCloud() {
     count++;
   }
 
-  // תיקון חד-פעמי: עדכן רשומות קיימות עם email ל-username
-  await sqliteRun(`
-    UPDATE support_ticket_history SET username = (
-      SELECT username FROM users WHERE email = support_ticket_history.username
-    ) WHERE username LIKE '%@%'
-  `).catch(() => {});
-
-  for (const h of (history || [])) {
-    // תרגם email ל-username אם צריך
-    let displayName = h.username || null;
-    if (displayName && displayName.includes('@')) {
-      const userRow = await sqliteGet('SELECT username FROM users WHERE email=?', [displayName]).catch(() => null);
-      if (userRow?.username) displayName = userRow.username;
-    }
-    // בדוק לפי ticket_id + action + זמן מנורמל (ענן=UTC, מקומי=שעון מקומי)
-    const normalizeTs = (v) => {
-      if (!v) return '';
-      const ts = new Date(String(v).replace(' ', 'T')).getTime();
-      return isNaN(ts) ? String(v) : Math.floor(ts/1000).toString();
-    };
-    const hNorm = normalizeTs(h.created_at);
-    const allLocal = await sqliteAll(
-      'SELECT id, username, owner_name, created_at FROM support_ticket_history WHERE ticket_id=? AND action=?',
-      [h.ticket_id, h.action]
-    ).catch(() => []);
-    const exists = allLocal.find(r => normalizeTs(r.created_at) === hNorm) || null;
-    if (!exists) {
-      await sqliteRun(`
-        INSERT INTO support_ticket_history
-          (ticket_id, user_id, username, action, old_status, new_status, comment, owner_name, created_at)
-        VALUES (?,?,?,?,?,?,?,?,?)`,
-        [h.ticket_id, null, displayName, h.action,
-         h.old_status||null, h.new_status||null, h.comment||null, h.owner_name||null, h.created_at]
-      ).catch(() => {});
-    } else {
-      // הענן = מקור האמת — עדכן username ו-owner_name
-      await sqliteRun(
-        'UPDATE support_ticket_history SET username=?, owner_name=? WHERE id=?',
-        [displayName || exists.username, h.owner_name||null, exists.id]
-      ).catch(() => {});
-    }
-  }
-
-  if (count > 0) log(`  ↳ support from cloud: ${count} tickets`);
+  // history לא נמשך מהענן — המקומי הוא מקור האמת ל-history
+    if (count > 0) log(`  ↳ support from cloud: ${count} tickets`);
 }
 
 // ── PDF documents מהענן ───────────────────────────────────────────────────────
