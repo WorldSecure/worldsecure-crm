@@ -1178,7 +1178,7 @@ app.post('/api/support-tickets', authenticateToken, upload.array('images', 5), a
         [ticketId, file.originalname, '/uploads/'+file.filename, file.size]);
     }
     await logActivity(req.user.id, 'CREATE_TICKET', 'support_ticket', ticketId, { subject });
-    await logTicketHistory(ticketId, req.user.id, req.user.email, 'created', { new_status: status||'open', owner_id: resolvedOwnerId, owner_name });
+    await logTicketHistory(ticketId, req.user.id, req.user.username||req.user.email, 'created', { new_status: status||'open', owner_id: resolvedOwnerId, owner_name });
     res.json({ id: ticketId, ticket_number });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -1217,7 +1217,7 @@ app.put('/api/support-tickets/:id', authenticateToken, upload.array('images', 5)
         [id, file.originalname, '/uploads/'+file.filename, file.size]);
     }
     const action = old.status !== status ? 'status_changed' : old.owner_id !== parseInt(ownerId) ? 'owner_changed' : 'updated';
-    await logTicketHistory(id, req.user.id, req.user.email, action, {
+    await logTicketHistory(id, req.user.id, req.user.username||req.user.email, action, {
       old_status: old.status, new_status: status||'open',
       owner_id: ownerId, owner_name: ownerName,
       awaiting_channel: awaiting_channel||null, awaiting_note: awaiting_note||null, awaiting_deadline: awaiting_deadline||null
