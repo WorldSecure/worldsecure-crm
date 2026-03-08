@@ -403,16 +403,16 @@ async function syncSupportFromCloud() {
     if (!exists) {
       await sqliteRun(`
         INSERT INTO support_ticket_history
-          (ticket_id, user_id, username, action, old_status, new_status, comment, created_at)
-        VALUES (?,?,?,?,?,?,?,?)`,
+          (ticket_id, user_id, username, action, old_status, new_status, comment, owner_name, created_at)
+        VALUES (?,?,?,?,?,?,?,?,?)`,
         [h.ticket_id, null, displayName, h.action,
-         h.old_status||null, h.new_status||null, h.comment||null, h.created_at]
+         h.old_status||null, h.new_status||null, h.comment||null, h.owner_name||null, h.created_at]
       ).catch(() => {});
-    } else if (displayName && displayName !== exists.username) {
-      // הענן = מקור האמת לusername — עדכן אם שונה
+    } else {
+      // הענן = מקור האמת — עדכן username ו-owner_name
       await sqliteRun(
-        'UPDATE support_ticket_history SET username=? WHERE id=?',
-        [displayName, exists.id]
+        'UPDATE support_ticket_history SET username=?, owner_name=? WHERE id=?',
+        [displayName || exists.username, h.owner_name||null, exists.id]
       ).catch(() => {});
     }
   }
