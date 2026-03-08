@@ -343,30 +343,7 @@ function SupportCaseManagementModal({ ticket, customers, products, users, onClos
               <div style={{ fontSize:'0.75rem', color:'#90caf9', marginTop:'0.3rem' }}>{t('ctrl_enter_hint')}</div>
             </div>
 
-            {/* ── SECTION 3: Action Buttons ── */}
-            <div style={{ display:'flex', gap:'0.6rem', flexWrap:'wrap', marginBottom:'1rem', padding:'0.8rem', background:'#fafafa', borderRadius:'10px', border:'1px solid #e0e0e0' }}>
-              {/* Save */}
-              <button onClick={handleSave} disabled={saving}
-                style={{ padding:'0.5rem 1.2rem', background:'#2196F3', color:'white', border:'none', borderRadius:'8px', fontWeight:700, cursor:'pointer', fontSize:'0.88rem' }}>
-                {saving ? '...' : `🎯 ${t('save')}`}
-              </button>
-
-              {/* Send Product */}
-              <button onClick={() => setShowSendProduct(true)}
-                style={{ padding:'0.5rem 1.2rem', background:'#ea580c', color:'white', border:'none', borderRadius:'8px', fontWeight:700, cursor:'pointer', fontSize:'0.88rem' }}>
-                📦 {t('send_product')||'Send Product'}
-              </button>
-
-              {/* Delete — admin only */}
-              {isAdmin && (
-                <button onClick={handleDelete}
-                  style={{ padding:'0.5rem 1.2rem', background:'#fee2e2', color:'#dc2626', border:'1px solid #fca5a5', borderRadius:'8px', fontWeight:600, cursor:'pointer', fontSize:'0.88rem', marginLeft:'auto' }}>
-                  🗑️ {t('delete')||'Delete'}
-                </button>
-              )}
-            </div>
-
-            {/* ── SECTION 4: History / Timeline ── */}
+            {/* ── SECTION 3: History / Timeline ── */}
             <div style={{ background:'#f8f9fa', borderRadius:'10px', padding:'1rem', border:'1px solid #e9ecef' }}>
               <div style={{ fontWeight:700, fontSize:'0.88rem', color:'#666', marginBottom:'0.8rem', textTransform:'uppercase', letterSpacing:'0.05em' }}>
                 📅 {t('history')||'History'} / Timeline
@@ -448,7 +425,23 @@ function SupportCaseManagementModal({ ticket, customers, products, users, onClos
           </div>
 
           {/* Sticky footer */}
-          <div className="modal-footer" style={{ flexShrink:0, background:'white', borderTop:'1px solid #eee', zIndex:10 }}>
+          <div className="modal-footer" style={{ flexShrink:0, background:'white', borderTop:'1px solid #eee', zIndex:10, display:'flex', justifyContent:'space-between', alignItems:'center', gap:'0.6rem', flexWrap:'wrap' }}>
+            <div style={{ display:'flex', gap:'0.6rem', flexWrap:'wrap' }}>
+              <button onClick={handleSave} disabled={saving}
+                style={{ padding:'0.5rem 1.2rem', background:'#2196F3', color:'white', border:'none', borderRadius:'8px', fontWeight:700, cursor:'pointer', fontSize:'0.88rem' }}>
+                {saving ? '...' : `🎯 ${t('save')}`}
+              </button>
+              <button onClick={() => setShowSendProduct(true)}
+                style={{ padding:'0.5rem 1.2rem', background:'#ea580c', color:'white', border:'none', borderRadius:'8px', fontWeight:700, cursor:'pointer', fontSize:'0.88rem' }}>
+                📦 {t('send_product')||'Send Product'}
+              </button>
+              {isAdmin && (
+                <button onClick={handleDelete}
+                  style={{ padding:'0.5rem 1.2rem', background:'#fee2e2', color:'#dc2626', border:'1px solid #fca5a5', borderRadius:'8px', fontWeight:600, cursor:'pointer', fontSize:'0.88rem' }}>
+                  🗑️ {t('delete')||'Delete'}
+                </button>
+              )}
+            </div>
             <button className="btn btn-secondary" onClick={onClose}>{t('close')}</button>
           </div>
         </div>
