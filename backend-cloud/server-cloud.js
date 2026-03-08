@@ -1844,25 +1844,12 @@ app.delete('/api/sync/pending-deletions', authenticateToken, async (req, res) =>
 app.get('/api/sync/pull/support', authenticateToken, async (req, res) => {
   try {
     const tickets = await query(`
-      SELECT t.*,
-        u1.username as created_by_name,
-        u2.username as owner_name_resolved
+      SELECT t.*, u.username as created_by_name
       FROM support_tickets t
-      LEFT JOIN users u1 ON t.created_by = u1.id
-      LEFT JOIN users u2 ON t.owner_id = u2.id
+      LEFT JOIN users u ON t.created_by = u.id
       ORDER BY t.id`);
-    const rows = tickets.rows.map(t => ({
-      ...t,
-      owner_name: t.owner_name_resolved || t.owner_name,
-      owner_name_resolved: undefined
-    }));
-    // החזר username נכון בhistory דרך JOIN
-    const history = await query(`
-      SELECT h.*, COALESCE(u.username, h.username) as username
-      FROM support_ticket_history h
-      LEFT JOIN users u ON h.user_id = u.id
-      ORDER BY h.id`);
-    res.json({ tickets: rows, history: history.rows });
+    const history = await query('SELECT * FROM support_ticket_history ORDER BY id');
+    res.json({ tickets: tickets.rows, history: history.rows });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -2099,6 +2086,8 @@ app.post('/api/run-migrations', authenticateToken, async (req, res) => {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_sales BOOLEAN DEFAULT FALSE`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_service BOOLEAN DEFAULT TRUE`,
     `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS owner_updated_at TIMESTAMPTZ`,
+    `ALTER TABLE support_ticket_history ADD COLUMN IF NOT EXISTS owner_id INTEGER`,
+    `ALTER TABLE support_ticket_history ADD COLUMN IF NOT EXISTS owner_name TEXT`,
     `ALTER TABLE inbound_transactions ADD COLUMN IF NOT EXISTS username TEXT`,
     `ALTER TABLE outbound_transactions ADD COLUMN IF NOT EXISTS username TEXT`,
   ];
