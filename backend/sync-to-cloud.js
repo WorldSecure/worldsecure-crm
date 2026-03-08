@@ -182,7 +182,13 @@ async function syncSupportToCloud() {
     if (t.owner_name_resolved) t.owner_name = t.owner_name_resolved;
     delete t.owner_name_resolved;
   });
-  const history  = await sqliteAll('SELECT * FROM support_ticket_history ORDER BY id');
+  // שלח username במקום user_id — user_id שונה בין מקומי לענן!
+  const historyRaw = await sqliteAll(`
+    SELECT h.id, h.ticket_id, NULL as user_id, h.username, h.action,
+           h.old_status, h.new_status, h.comment, h.created_at
+    FROM support_ticket_history h
+    ORDER BY h.id`);
+  const history = historyRaw;
   // שלח רשימת IDs שנמחקו מקומית (לא את כל ה-IDs הקיימים!)
   const deletedIds = await sqliteAll('SELECT ticket_id FROM deleted_support_tickets').catch(() => []);
   const result = await apiRequest('POST', '/api/sync/support', {
