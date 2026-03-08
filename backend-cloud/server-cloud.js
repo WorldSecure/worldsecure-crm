@@ -1692,10 +1692,10 @@ app.post('/api/sync/support', authenticateToken, async (req, res) => {
       }
       await client.query(`
         INSERT INTO support_ticket_history
-          (ticket_id, user_id, username, action, old_status, new_status, comment, created_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+          (ticket_id, user_id, username, action, old_status, new_status, comment, owner_name, created_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
         [h.ticket_id, cloudUserId, h.username||null, h.action,
-         h.old_status||null, h.new_status||null, h.comment||null, normalizedTime]
+         h.old_status||null, h.new_status||null, h.comment||null, h.owner_name||null, normalizedTime]
       );
     }
 
@@ -2086,8 +2086,6 @@ app.post('/api/run-migrations', authenticateToken, async (req, res) => {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_sales BOOLEAN DEFAULT FALSE`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_service BOOLEAN DEFAULT TRUE`,
     `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS owner_updated_at TIMESTAMPTZ`,
-    `ALTER TABLE support_ticket_history ADD COLUMN IF NOT EXISTS owner_id INTEGER`,
-    `ALTER TABLE support_ticket_history ADD COLUMN IF NOT EXISTS owner_name TEXT`,
     `ALTER TABLE inbound_transactions ADD COLUMN IF NOT EXISTS username TEXT`,
     `ALTER TABLE outbound_transactions ADD COLUMN IF NOT EXISTS username TEXT`,
   ];
