@@ -184,17 +184,17 @@ function SupportCaseManagementModal({ ticket, customers, products, users, onClos
     <>
       {/* Main Case Management Modal */}
       <div className="modal-overlay">
-        <div className="modal" style={{ maxWidth:'780px', width:'96%', maxHeight:'92vh', overflowY:'auto', display:'flex', flexDirection:'column' }}>
+        <div className="modal" style={{ maxWidth:'780px', width:'96%', maxHeight:'92vh', overflowY:'hidden', display:'flex', flexDirection:'column' }}>
 
           {/* Header */}
-          <div className="modal-header" style={{ position:'sticky', top:0, background:'white', zIndex:10, borderBottom:'2px solid #e0e0e0' }}>
+          <div className="modal-header" style={{ flexShrink:0, background:'white', zIndex:10, borderBottom:'2px solid #e0e0e0' }}>
             <h3 className="modal-title" style={{ fontSize:'1rem' }}>
               🗂️ {t('case_management')||'Case Management'} — <span style={{ color:'#2196F3', fontWeight:800 }}>{ticket.ticket_number || `#${ticket.id}`}</span>
             </h3>
             <button className="modal-close" onClick={onClose}>✕</button>
           </div>
 
-          <div style={{ padding:'1.2rem', flex:1 }}>
+          <div style={{ padding:'1.2rem', flex:1, overflowY:'auto' }}>
 
             {/* ── SECTION 1: Ticket Form ── */}
             <div style={{ background:'#f8f9fa', borderRadius:'10px', padding:'1rem', marginBottom:'1rem', border:'1px solid #e9ecef' }}>
@@ -448,7 +448,7 @@ function SupportCaseManagementModal({ ticket, customers, products, users, onClos
           </div>
 
           {/* Sticky footer */}
-          <div className="modal-footer" style={{ position:'sticky', bottom:0, background:'white', borderTop:'1px solid #eee', zIndex:10 }}>
+          <div className="modal-footer" style={{ flexShrink:0, background:'white', borderTop:'1px solid #eee', zIndex:10 }}>
             <button className="btn btn-secondary" onClick={onClose}>{t('close')}</button>
           </div>
         </div>
