@@ -1634,8 +1634,21 @@ app.post('/api/sync/support', authenticateToken, async (req, res) => {
         resolvedCreatedBy = r.rows[0]?.id || null;
       }
 
+      // בדוק אם צריך לעדכן owner - השווה owner_updated_at ב-JavaScript
+      const existingRes = await client.query(
+        'SELECT owner_id, owner_name, owner_updated_at FROM support_tickets WHERE id=$1', [t.id]
+      );
+      const existing = existingRes.rows[0];
+      const incomingOwnerTs = t.owner_updated_at ? new Date(t.owner_updated_at).getTime() : 0;
+      const existingOwnerTs = existing?.owner_updated_at ? new Date(existing.owner_updated_at).getTime() : 0;
+      const shouldUpdateOwner = !existing || incomingOwnerTs > existingOwnerTs;
+
+      const finalOwnerId = shouldUpdateOwner ? resolvedOwnerId : existing?.owner_id;
+      const finalOwnerName = shouldUpdateOwner ? t.owner_name||null : existing?.owner_name;
+      const finalOwnerUpdatedAt = shouldUpdateOwner ? (t.owner_updated_at||null) : existing?.owner_updated_at;
+
       // INSERT: קבע owner ו-created_by לפי username
-      // ON CONFLICT: עדכן owner רק אם owner_updated_at מהמקומי חדש יותר מהענן
+      // ON CONFLICT: עדכן owner רק אם חדש יותר (נבדק למעלה)
       await client.query(`
         INSERT INTO support_tickets
           (id, ticket_number, customer_id, customer_name, product_id, product_name,
@@ -1648,15 +1661,13 @@ app.post('/api/sync/support', authenticateToken, async (req, res) => {
           product_name=$6, subject=$7, description=$8, status=$9, priority=$10,
           awaiting_channel=$14, awaiting_note=$15, awaiting_deadline=$16,
           updated_at=$18, closed_at=$19, cancelled_at=$20,
-          owner_id=CASE WHEN $21::TIMESTAMPTZ IS NOT NULL AND ($21::TIMESTAMPTZ > support_tickets.owner_updated_at OR support_tickets.owner_updated_at IS NULL) THEN $11 ELSE support_tickets.owner_id END,
-          owner_name=CASE WHEN $21::TIMESTAMPTZ IS NOT NULL AND ($21::TIMESTAMPTZ > support_tickets.owner_updated_at OR support_tickets.owner_updated_at IS NULL) THEN $12 ELSE support_tickets.owner_name END,
-          owner_updated_at=CASE WHEN $21::TIMESTAMPTZ IS NOT NULL AND ($21::TIMESTAMPTZ > support_tickets.owner_updated_at OR support_tickets.owner_updated_at IS NULL) THEN $21 ELSE support_tickets.owner_updated_at END`,
+          owner_id=$11, owner_name=$12, owner_updated_at=$21`,
         [t.id, t.ticket_number, t.customer_id||null, t.customer_name||null,
          t.product_id||null, t.product_name||null, t.subject, t.description||null,
-         t.status||'open', t.priority||'medium', resolvedOwnerId, t.owner_name||null,
+         t.status||'open', t.priority||'medium', finalOwnerId, finalOwnerName,
          resolvedCreatedBy, t.awaiting_channel||null, t.awaiting_note||null,
          t.awaiting_deadline||null, t.created_at, t.updated_at||null,
-         t.closed_at||null, t.cancelled_at||null, t.owner_updated_at||null]
+         t.closed_at||null, t.cancelled_at||null, finalOwnerUpdatedAt]
       );
     }
 
