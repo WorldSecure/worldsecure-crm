@@ -1639,8 +1639,14 @@ app.post('/api/sync/support', authenticateToken, async (req, res) => {
         'SELECT owner_id, owner_name, owner_updated_at FROM support_tickets WHERE id=$1', [t.id]
       );
       const existing = existingRes.rows[0];
-      const incomingOwnerTs = t.owner_updated_at ? new Date(t.owner_updated_at).getTime() : 0;
-      const existingOwnerTs = existing?.owner_updated_at ? new Date(existing.owner_updated_at).getTime() : 0;
+      // נרמל זמן — SQLite שולח "2026-03-08 10:45:55" בלי T, צריך להחליף לISO
+      const normalizeTs = (v) => {
+        if (!v) return 0;
+        const ts = new Date(String(v).replace(' ', 'T')).getTime();
+        return isNaN(ts) ? 0 : ts;
+      };
+      const incomingOwnerTs = normalizeTs(t.owner_updated_at);
+      const existingOwnerTs = normalizeTs(existing?.owner_updated_at);
       const shouldUpdateOwner = !existing || incomingOwnerTs > existingOwnerTs;
 
       const finalOwnerId = shouldUpdateOwner ? resolvedOwnerId : existing?.owner_id;
