@@ -403,11 +403,18 @@ async function syncSupportFromCloud() {
       const userRow = await sqliteGet('SELECT username FROM users WHERE email=?', [displayName]).catch(() => null);
       if (userRow?.username) displayName = userRow.username;
     }
-    // בדוק לפי ticket_id + created_at + action (לא לפי id שיכול להתנגש)
-    const exists = await sqliteGet(
-      'SELECT id FROM support_ticket_history WHERE ticket_id=? AND created_at=? AND action=?',
-      [h.ticket_id, h.created_at, h.action]
-    ).catch(() => null);
+    // בדוק לפי ticket_id + action + זמן מנורמל (ענן=UTC, מקומי=שעון מקומי)
+    const normalizeTs = (v) => {
+      if (!v) return '';
+      const ts = new Date(String(v).replace(' ', 'T')).getTime();
+      return isNaN(ts) ? String(v) : Math.floor(ts/1000).toString();
+    };
+    const hNorm = normalizeTs(h.created_at);
+    const allLocal = await sqliteAll(
+      'SELECT id, username, owner_name, created_at FROM support_ticket_history WHERE ticket_id=? AND action=?',
+      [h.ticket_id, h.action]
+    ).catch(() => []);
+    const exists = allLocal.find(r => normalizeTs(r.created_at) === hNorm) || null;
     if (!exists) {
       await sqliteRun(`
         INSERT INTO support_ticket_history
