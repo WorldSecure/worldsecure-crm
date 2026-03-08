@@ -410,15 +410,16 @@ async function syncSupportFromCloud() {
     if (!exists) {
       await sqliteRun(`
         INSERT INTO support_ticket_history
-          (ticket_id, user_id, username, action, old_status, new_status, comment, owner_name, created_at)
-        VALUES (?,?,?,?,?,?,?,?,?)`,
+          (ticket_id, user_id, username, action, old_status, new_status, comment, owner_name, awaiting_channel, awaiting_note, created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
         [h.ticket_id, null, displayName, h.action,
-         h.old_status||null, h.new_status||null, h.comment||null, h.owner_name||null, h.created_at]
+         h.old_status||null, h.new_status||null, h.comment||null, h.owner_name||null,
+         h.awaiting_channel||null, h.awaiting_note||null, h.created_at]
       ).catch(() => {});
     } else {
       await sqliteRun(
-        'UPDATE support_ticket_history SET username=?, owner_name=? WHERE id=?',
-        [displayName || exists.username, h.owner_name||null, exists.id]
+        'UPDATE support_ticket_history SET username=?, owner_name=?, awaiting_channel=?, awaiting_note=? WHERE id=?',
+        [displayName || exists.username, h.owner_name||null, h.awaiting_channel||null, h.awaiting_note||null, exists.id]
       ).catch(() => {});
     }
   }
