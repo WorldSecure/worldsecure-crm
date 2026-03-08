@@ -1850,11 +1850,18 @@ app.delete('/api/sync/pending-deletions', authenticateToken, async (req, res) =>
 app.get('/api/sync/pull/support', authenticateToken, async (req, res) => {
   try {
     const tickets = await query(`
-      SELECT t.*, u.username as created_by_name
+      SELECT t.*,
+        u1.username as created_by_name,
+        u2.username as owner_name
       FROM support_tickets t
-      LEFT JOIN users u ON t.created_by = u.id
+      LEFT JOIN users u1 ON t.created_by = u1.id
+      LEFT JOIN users u2 ON t.owner_id = u2.id
       ORDER BY t.id`);
-    const history = await query('SELECT * FROM support_ticket_history ORDER BY id');
+    const history = await query(`
+      SELECT h.*, COALESCE(u.username, h.username) as username
+      FROM support_ticket_history h
+      LEFT JOIN users u ON h.user_id = u.id
+      ORDER BY h.id`);
     res.json({ tickets: tickets.rows, history: history.rows });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
