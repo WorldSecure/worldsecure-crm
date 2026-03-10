@@ -89,25 +89,7 @@ function SupportDashboard() {
 
       {/* Stat Cards — זהה למחסן ולמכירות */}
       <div className="stats-grid">
-        <div className="stat-card" style={{ borderLeft: '4px solid #e67e22' }}>
-          <div className="stat-value">{stats.open}</div>
-          <div className="stat-label">🟡 {t('status_open') }</div>
-        </div>
-
-        <div className="stat-card" style={{ borderLeft: '4px solid #8b5cf6' }}>
-          <div className="stat-value">{stats.in_progress}</div>
-          <div className="stat-label">🟠 {t('status_in_progress') }</div>
-        </div>
-
-        <div className="stat-card" style={{ borderLeft: '4px solid #4CAF50' }}>
-          <div className="stat-value">{stats.awaiting_customer || 0}</div>
-          <div className="stat-label">🟢 {t('status_awaiting_customer') }</div>
-        </div>
-
-        <div className="stat-card" style={{ borderLeft: '4px solid #9E9E9E' }}>
-          <div className="stat-value">{stats.cancelled || 0}</div>
-          <div className="stat-label">⚪ {t('status_cancelled') }</div>
-        </div>
+        
 
         <div className="stat-card" style={{ borderLeft: '4px solid #27ae60' }}>
           <div className="stat-value">{stats.closed}</div>
