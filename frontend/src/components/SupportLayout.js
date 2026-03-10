@@ -50,13 +50,7 @@ function SupportLayout() {
             
             {hasModuleAccess('warehouse') && (
               <>
- {user?.role === 'admin' && (
 
-                <Link to="/support/suppliers" className={isActive('/support/suppliers')}>
-                  <span className="sidebar-icon">🏭</span>
-                  {t('suppliers')}
-                </Link>
-)}
                 
                 <Link to="/support/customers" className={isActive('/support/customers')}>
                   <span className="sidebar-icon">👥</span>
