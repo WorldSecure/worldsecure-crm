@@ -81,24 +81,34 @@ function Layout() {
                   {t('products')}
                 </Link>
                 
-                <Link to="/suppliers" className={isActive('/suppliers')}>
-                  <span className="sidebar-icon">🏭</span>
-                  {t('suppliers')}
-                </Link>
-                
-                <Link to="/customers" className={isActive('/customers')}>
-                  <span className="sidebar-icon">👥</span>
-                  {t('customers')}
-                </Link>
+
               </>
             )}
             
-            {/* Reports - available to all */}
+            {/* Reports - admin only */}
+            {user?.role === 'admin' && (
             <Link to="/reports" className={isActive('/reports')}>
               <span className="sidebar-icon">📈</span>
               {t('reports')}
             </Link>
-            
+            )}
+
+
+            {/* suppliers - admin only */}
+                {user?.role === 'admin' && (
+                <Link to="/suppliers" className={isActive('/suppliers')}>
+                  <span className="sidebar-icon">🏭</span>
+                  {t('suppliers')}
+                </Link>
+                )}
+                
+               {/* customers - admin only */}
+               {user?.role === 'admin' && (
+                <Link to="/customers" className={isActive('/customers')}>
+                  <span className="sidebar-icon">👥</span>
+                  {t('customers')}
+                </Link>
+           )}
             {/* Settings - admin only */}
             {user?.role === 'admin' && (
               <Link to="/settings" className={isActive('/settings')}>
