@@ -162,20 +162,6 @@ function Dashboard() {
           <div className="stat-label">{t('total_products')}</div>
         </div>
 
-        <div className="stat-card low-stock">
-          <div className="stat-value">{stats?.lowStockProducts || 0}</div>
-          <div className="stat-label">{t('low_stock')}</div>
-        </div>
-
-        <div className="stat-card normal">
-          <div className="stat-value">{stats?.totalCustomers || 0}</div>
-          <div className="stat-label">{t('total_customers')}</div>
-        </div>
-
-        <div className="stat-card normal">
-          <div className="stat-value">{stats?.totalSuppliers || 0}</div>
-          <div className="stat-label">{t('total_suppliers')}</div>
-        </div>
 
         <div className="stat-card normal">
           <div className="stat-value">{stats?.todayTransactions || 0}</div>
