@@ -120,8 +120,8 @@ function Layout() {
             {/* Reports - admin only */}
             {user?.role === 'admin' && (
             <Link to="/reports" className={isActive('/reports')}>
-              <span className="sidebar-icon">📈</span>
-              {t('reports')}
+              <span className="sidebar-icon">📦</span>
+              {t('Warehouse Reports')}
             </Link>
             )}
             
