@@ -114,7 +114,7 @@ function SupportDashboard() {
                 <tr>
                   <th>👤 {t('agent') }</th>
                   <th>{t('total_tickets') }</th>
-                  <th>{t('status_open') }</th>
+                 
                 </tr>
               </thead>
               <tbody>
@@ -122,10 +122,8 @@ function SupportDashboard() {
                   <tr key={a.id}>
                     <td>{a.username}</td>
                     <td>{a.total}</td>
-                    <td>
-                      <span style={{ background: a.open_count > 0 ? '#fff3cd' : '#d4edda', color: a.open_count > 0 ? '#856404' : '#155724', padding: '0.2rem 0.6rem', borderRadius: '12px', fontSize: '0.82rem', fontWeight: 500 }}>
-                        {a.open_count}
-                      </span>
+                    
+                      <td>
                     </td>
                   </tr>
                 ))}
