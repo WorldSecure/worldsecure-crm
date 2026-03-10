@@ -85,15 +85,7 @@ function Layout() {
               </>
             )}
             
-            {/* Reports - admin only */}
-            {user?.role === 'admin' && (
-            <Link to="/reports" className={isActive('/reports')}>
-              <span className="sidebar-icon">📈</span>
-              {t('reports')}
-            </Link>
-            )}
-
-
+          
             {/* suppliers - admin only */}
                 {user?.role === 'admin' && (
                 <Link to="/suppliers" className={isActive('/suppliers')}>
@@ -123,6 +115,14 @@ function Layout() {
                 <span className="sidebar-icon">👥</span>
                 {t('users')}
               </Link>
+            )}
+           
+            {/* Reports - admin only */}
+            {user?.role === 'admin' && (
+            <Link to="/reports" className={isActive('/reports')}>
+              <span className="sidebar-icon">📈</span>
+              {t('reports')}
+            </Link>
             )}
             
             {/* Activity Log - admin only */}
