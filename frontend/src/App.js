@@ -74,7 +74,7 @@ const NewHeader = ({ activeTab }) => {
         boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
       }}>
         <div style={{ fontSize: isMobile ? '1.1rem' : '2rem', fontWeight: '600', color: 'white', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
-          🌐 WorldSecure
+          🌐 WorldSecure Business Hub
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', color: 'white', flexWrap: 'wrap' }}>
           {/* שם משתמש */}
