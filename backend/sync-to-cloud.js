@@ -359,9 +359,11 @@ async function syncSupportFromCloud() {
     // עדכן owner: אם הענן מחזיר owner_name שונה ממה שיש מקומית — עדכן תמיד
     const existing = await sqliteGet('SELECT owner_id, owner_name, owner_updated_at FROM support_tickets WHERE id=?', [t.id]).catch(() => null);
     const normalizeTs = (v) => {
-      if (!v) return 0;
-      const ts = new Date(String(v).replace(' ', 'T')).getTime();
-      return isNaN(ts) ? 0 : ts;
+      if (!v) return '';
+      // השוואה לפי string בלי המרת timezone
+      // "2026-03-13T16:29:46.000Z" → "2026-03-13T16:29:46"
+      // "2026-03-13 16:29:46"      → "2026-03-13T16:29:46"
+      return String(v).replace(' ', 'T').slice(0, 19);
     };
     const cloudOwnerUpdated = normalizeTs(t.owner_updated_at);
     const localOwnerUpdated = normalizeTs(existing?.owner_updated_at);
