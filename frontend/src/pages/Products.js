@@ -328,6 +328,7 @@ function Products() {
                     {isAdmin && <td>{product.price ? `${parseFloat(product.price).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ${product.currency || 'ILS'}` : '-'}</td>}
                     <td>{getUnitTranslation(product.unit)}</td>
                     <td>
+                      {isAdmin && (
                       <div className="table-actions">
                         <button 
                           className="btn btn-secondary"
@@ -342,6 +343,7 @@ function Products() {
                           {t('delete')}
                         </button>
                       </div>
+                      )}
                     </td>
                   </tr>
                 ))
