@@ -399,9 +399,10 @@ async function syncSupportFromCloud() {
     }
     const normalizeTs = (v) => {
       if (!v) return '';
-      const ts = new Date(String(v).replace(' ', 'T'));
-      if (isNaN(ts.getTime())) return String(v).trim();
-      return ts.toISOString().slice(0, 19); // "YYYY-MM-DDTHH:MM:SS"
+      // השוואה לפי תווים בלבד — ללא המרת timezone
+      // "2026-03-13T16:16:07.000Z" → "2026-03-13T16:16:07"
+      // "2026-03-13 16:16:07"      → "2026-03-13T16:16:07"
+      return String(v).replace(' ', 'T').slice(0, 19);
     };
     const hNorm = normalizeTs(h.created_at);
     const allLocal = await sqliteAll(
