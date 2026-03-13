@@ -156,6 +156,9 @@ app.delete('/api/users/:id', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
   if (req.user.id === parseInt(req.params.id)) return res.status(400).json({ error: 'Cannot delete self' });
   try {
+    await query('DELETE FROM activity_log WHERE user_id=$1', [req.params.id]);
+    await query('DELETE FROM support_ticket_history WHERE user_id=$1', [req.params.id]);
+    await query('UPDATE support_tickets SET owner_id=NULL, owner_name=NULL WHERE owner_id=$1', [req.params.id]);
     await query('DELETE FROM users WHERE id=$1', [req.params.id]);
     res.json({ message: 'Deleted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
