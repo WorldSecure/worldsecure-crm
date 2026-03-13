@@ -177,6 +177,7 @@ function Suppliers() {
       <div className="card">
         <div className="card-header">
           <h3 className="card-title">{t('suppliers')}</h3>
+          {isAdmin && (
           <button 
             className="btn btn-primary"
             onClick={() => {
@@ -186,6 +187,7 @@ function Suppliers() {
           >
             {t('add_supplier')}
           </button>
+          )}
         </div>
 
         <div className="form-group" style={{ marginBottom: '1rem' }}>

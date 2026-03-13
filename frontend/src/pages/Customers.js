@@ -194,6 +194,7 @@ function Customers() {
       <div className="card">
         <div className="card-header">
           <h3 className="card-title">{t('customers')}</h3>
+          {isAdmin && (
           <button 
             className="btn btn-primary"
             onClick={() => {
@@ -203,6 +204,7 @@ function Customers() {
           >
             {t('add_customer')}
           </button>
+          )}
         </div>
 
         <div className="form-group" style={{ marginBottom: '1rem' }}>

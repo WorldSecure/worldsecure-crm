@@ -217,18 +217,100 @@ app.get('/api/categories', authenticateToken, async (req, res) => {
 });
 
 // ── חסימת עריכה ───────────────────────────────────────────────────────────────
-const readOnly = (req, res) =>
-  res.status(403).json({ error: 'This data is managed locally. Connect to local system to edit.' });
+const adminOnly = (req, res, next) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  next();
+};
 
-app.post('/api/customers',   authenticateToken, readOnly);
-app.put('/api/customers/:id', authenticateToken, readOnly);
-app.delete('/api/customers/:id', authenticateToken, readOnly);
-app.post('/api/products',    authenticateToken, readOnly);
-app.put('/api/products/:id', authenticateToken, readOnly);
-app.delete('/api/products/:id', authenticateToken, readOnly);
-app.post('/api/suppliers',   authenticateToken, readOnly);
-app.put('/api/suppliers/:id', authenticateToken, readOnly);
-app.delete('/api/suppliers/:id', authenticateToken, readOnly);
+// ── Customers write ───────────────────────────────────────────────────────────
+app.post('/api/customers', authenticateToken, adminOnly, async (req, res) => {
+  const { name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes } = req.body;
+  try {
+    const r = await query(
+      'INSERT INTO customers (name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',
+      [name, contact_person||null, address||null, phone||null, email||null, tax_id||null, country||null, is_sensitive ? true : false, notes||null]
+    );
+    res.json(r.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/customers/:id', authenticateToken, adminOnly, async (req, res) => {
+  const { name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes } = req.body;
+  try {
+    await query(
+      'UPDATE customers SET name=$1, contact_person=$2, address=$3, phone=$4, email=$5, tax_id=$6, country=$7, is_sensitive=$8, notes=$9 WHERE id=$10',
+      [name, contact_person||null, address||null, phone||null, email||null, tax_id||null, country||null, is_sensitive ? true : false, notes||null, req.params.id]
+    );
+    res.json({ message: 'Customer updated' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/customers/:id', authenticateToken, adminOnly, async (req, res) => {
+  try {
+    await query('DELETE FROM customers WHERE id=$1', [req.params.id]);
+    res.json({ message: 'Customer deleted' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Products write ────────────────────────────────────────────────────────────
+app.post('/api/products', authenticateToken, adminOnly, async (req, res) => {
+  const { sku, name, description, category_id, price, currency, unit, quantity, min_quantity, name_he, name_pt } = req.body;
+  try {
+    const r = await query(
+      'INSERT INTO products (sku, name, description, category_id, price, currency, unit, quantity, min_quantity, name_he, name_pt) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *',
+      [sku, name, description||null, category_id||null, price||null, currency||'ILS', unit||null, quantity||0, min_quantity||0, name_he||null, name_pt||null]
+    );
+    res.json(r.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
+  const { sku, name, description, category_id, price, currency, unit, quantity, min_quantity, name_he, name_pt } = req.body;
+  try {
+    await query(
+      'UPDATE products SET sku=$1, name=$2, description=$3, category_id=$4, price=$5, currency=$6, unit=$7, quantity=$8, min_quantity=$9, name_he=$10, name_pt=$11 WHERE id=$12',
+      [sku, name, description||null, category_id||null, price||null, currency||'ILS', unit||null, quantity||0, min_quantity||0, name_he||null, name_pt||null, req.params.id]
+    );
+    res.json({ message: 'Product updated' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
+  try {
+    await query('DELETE FROM products WHERE id=$1', [req.params.id]);
+    res.json({ message: 'Product deleted' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Suppliers write ───────────────────────────────────────────────────────────
+app.post('/api/suppliers', authenticateToken, adminOnly, async (req, res) => {
+  const { name, address, phone, email, tax_id, notes, country, contact_person } = req.body;
+  try {
+    const r = await query(
+      'INSERT INTO suppliers (name, address, phone, email, tax_id, notes, country, contact_person) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
+      [name, address||null, phone||null, email||null, tax_id||null, notes||null, country||null, contact_person||null]
+    );
+    res.json(r.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/suppliers/:id', authenticateToken, adminOnly, async (req, res) => {
+  const { name, address, phone, email, tax_id, notes, country, contact_person } = req.body;
+  try {
+    await query(
+      'UPDATE suppliers SET name=$1, address=$2, phone=$3, email=$4, tax_id=$5, notes=$6, country=$7, contact_person=$8 WHERE id=$9',
+      [name, address||null, phone||null, email||null, tax_id||null, notes||null, country||null, contact_person||null, req.params.id]
+    );
+    res.json({ message: 'Supplier updated' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/suppliers/:id', authenticateToken, adminOnly, async (req, res) => {
+  try {
+    await query('DELETE FROM suppliers WHERE id=$1', [req.params.id]);
+    res.json({ message: 'Supplier deleted' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 // ════════════════════════════════════════════════════════════════════════════
 //  COMPANY SETTINGS

@@ -265,12 +265,14 @@ function Products() {
                 🌐 {t('translate_products') || 'תרגם מוצרים'}
               </button>
             )}
+            {isAdmin && (
             <button 
               className="btn btn-primary"
               onClick={() => { resetForm(); setShowModal(true); }}
             >
               {t('add_product')}
             </button>
+            )}
           </div>
         </div>
 
