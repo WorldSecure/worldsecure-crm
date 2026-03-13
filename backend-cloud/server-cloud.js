@@ -1497,6 +1497,39 @@ app.post('/api/test-smtp', authenticateToken, async (req, res) => {
 // ════════════════════════════════════════════════════════════════════════════
 
 // ── Sync: Settings ───────────────────────────────────────────────────────────
+
+// ── Pull settings to local ────────────────────────────────────────────────────
+app.get('/api/sync/pull/settings', authenticateToken, async (req, res) => {
+  try {
+    const r = await query('SELECT * FROM company_settings WHERE id=1');
+    res.json(r.rows[0] || null);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── QR Codes sync ─────────────────────────────────────────────────────────────
+app.post('/api/sync/qr-codes', authenticateToken, async (req, res) => {
+  const { rows } = req.body;
+  if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows required' });
+  try {
+    for (const r of rows) {
+      await query(
+        `INSERT INTO qr_codes (id, type, qr_data, image_url, title, created_by, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)
+         ON CONFLICT (id) DO UPDATE SET type=$2, qr_data=$3, image_url=$4, title=$5`,
+        [r.id, r.type, r.qr_data, r.image_url||null, r.title||null, r.created_by||null, r.created_at||null]
+      );
+    }
+    res.json({ message: 'qr-codes synced', count: rows.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/sync/pull/qr-codes', authenticateToken, async (req, res) => {
+  try {
+    const r = await query('SELECT * FROM qr_codes ORDER BY id');
+    res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.post('/api/sync/settings', authenticateToken, async (req, res) => {
   const { row } = req.body;
   if (!row) return res.status(400).json({ error: 'row required' });
