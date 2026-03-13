@@ -2211,6 +2211,9 @@ app.post('/api/run-migrations', authenticateToken, async (req, res) => {
     `ALTER TABLE support_ticket_history ADD COLUMN IF NOT EXISTS awaiting_channel TEXT`,
     `ALTER TABLE support_ticket_history ADD COLUMN IF NOT EXISTS awaiting_note TEXT`,
     `ALTER TABLE support_ticket_history ADD COLUMN IF NOT EXISTS awaiting_deadline TEXT`,
+    `ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS phone1_primary BOOLEAN DEFAULT FALSE`,
+    `ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS phone2_primary BOOLEAN DEFAULT FALSE`,
+    `ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS phone3_primary BOOLEAN DEFAULT FALSE`,
   ];
   const results = [];
   for (const sql of migrations) {
