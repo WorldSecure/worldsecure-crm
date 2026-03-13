@@ -243,14 +243,17 @@ app.get('/api/company', authenticateToken, async (req, res) => {
 
 // ── PUT: Company Settings ─────────────────────────────────────────────────────
 app.put('/api/company', authenticateToken, async (req, res) => {
-  const { company_name, address, phone, phone2, phone3, email, tax_id, website } = req.body;
+  const { company_name, address, phone, phone2, phone3, email, tax_id, website,
+          phone1_primary, phone2_primary, phone3_primary } = req.body;
   try {
     await query(`
       UPDATE company_settings SET
         company_name=$1, address=$2, phone=$3, phone2=$4, phone3=$5,
-        email=$6, tax_id=$7, website=$8
+        email=$6, tax_id=$7, website=$8,
+        phone1_primary=$9, phone2_primary=$10, phone3_primary=$11
       WHERE id=1`,
-      [company_name, address, phone, phone2, phone3, email, tax_id, website]
+      [company_name, address, phone, phone2, phone3, email, tax_id, website,
+       phone1_primary ? true : false, phone2_primary ? true : false, phone3_primary ? true : false]
     );
     const r = await query('SELECT * FROM company_settings WHERE id=1');
     res.json(r.rows[0]);
@@ -1552,15 +1555,18 @@ app.post('/api/sync/settings', authenticateToken, async (req, res) => {
     await query(`
       INSERT INTO company_settings
         (id, company_name, address, phone, phone2, phone3, email, tax_id, website,
-         smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from)
-      VALUES (1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+         smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from,
+         phone1_primary, phone2_primary, phone3_primary)
+      VALUES (1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
       ON CONFLICT (id) DO UPDATE SET
         company_name=$1, address=$2, phone=$3, phone2=$4, phone3=$5,
         email=$6, tax_id=$7, website=$8,
-        smtp_host=$9, smtp_port=$10, smtp_user=$11, smtp_pass=$12, smtp_from=$13`,
+        smtp_host=$9, smtp_port=$10, smtp_user=$11, smtp_pass=$12, smtp_from=$13,
+        phone1_primary=$14, phone2_primary=$15, phone3_primary=$16`,
       [row.company_name, row.address, row.phone, row.phone2, row.phone3,
        row.email, row.tax_id, row.website,
-       row.smtp_host, 465, row.smtp_user, row.smtp_pass, row.smtp_from]
+       row.smtp_host, 465, row.smtp_user, row.smtp_pass, row.smtp_from,
+       row.phone1_primary ? true : false, row.phone2_primary ? true : false, row.phone3_primary ? true : false]
     );
     res.json({ message: 'settings synced' });
   } catch (err) { res.status(500).json({ error: err.message }); }
