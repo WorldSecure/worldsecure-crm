@@ -224,9 +224,9 @@ function Customers() {
                 <th onClick={() => handleSort('name')} style={{ cursor: 'pointer', userSelect: 'none' }}>
                   {t('name')} {sortField === 'name' && (sortDirection === 'asc' ? '▲' : '▼')}
                 </th>
-                <th>{t('contact_person')}</th>
-                <th>{t('address')}</th>
-                <th>{t('tax_id')}</th>
+                {isAdmin && <th>{t('contact_person')}</th>}
+                {isAdmin && <th>{t('address')}</th>}
+                {isAdmin && <th>{t('tax_id')}</th>}
                 <th onClick={() => handleSort('country')} style={{ cursor: 'pointer', userSelect: 'none' }}>
                   {t('country')} {sortField === 'country' && (sortDirection === 'asc' ? '▲' : '▼')}
                 </th>
@@ -236,7 +236,7 @@ function Customers() {
             <tbody>
               {getSortedCustomers(filteredCustomers).length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="text-center">{t('no_data')}</td>
+                  <td colSpan={isAdmin ? "6" : "3"} className="text-center">{t('no_data')}</td>
                 </tr>
               ) : (
                 getSortedCustomers(filteredCustomers).map(customer => (
@@ -246,7 +246,7 @@ function Customers() {
                         {customer.is_sensitive && !isAdmin ? '*** ' + t('restricted') + ' ***' : customer.name}
                       </strong>
                     </td>
-                    <td>{(() => {
+                    {isAdmin && <td>{(() => {
                       try {
                         const p = JSON.parse(customer.contact_person);
                         if (Array.isArray(p) && p.length > 0) {
@@ -271,9 +271,9 @@ function Customers() {
                           {customer.email && <div>✉️ {customer.email}</div>}
                         </div>
                       );
-                    })()}</td>
-                    <td>{customer.address || '-'}</td>
-                    <td>{customer.tax_id || '-'}</td>
+                    })()}</td>}
+                    {isAdmin && <td>{customer.address || '-'}</td>}
+                    {isAdmin && <td>{customer.tax_id || '-'}</td>}
                     <td>{customer.country || '-'}</td>
                     <td>
                       {isAdmin && (
