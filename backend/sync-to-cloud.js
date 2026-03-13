@@ -548,14 +548,34 @@ async function syncSettingsFromCloud() {
   const result = await apiRequest('GET', '/api/sync/pull/settings');
   if (result.status !== 200 || !result.body) { log('  ⚠ pull settings: ' + JSON.stringify(result.body)); return; }
   const s = result.body;
+
+  // הורד קובץ לוגו מהענן אם קיים ולא קיים מקומית
+  let localLogoPath = null;
+  if (s.logo_path) {
+    const logoFilename = path.basename(s.logo_path);
+    const localUploadsDir = path.join(__dirname, 'uploads');
+    if (!fs.existsSync(localUploadsDir)) fs.mkdirSync(localUploadsDir, { recursive: true });
+    const localPath = path.join(localUploadsDir, logoFilename);
+    if (!fs.existsSync(localPath)) {
+      try {
+        await downloadFile(CLOUD_API_URL + s.logo_path, localPath);
+        log('  ↳ logo downloaded: ' + logoFilename);
+      } catch (e) {
+        log('  ⚠ logo download failed: ' + e.message);
+      }
+    }
+    localLogoPath = '/uploads/' + logoFilename;
+  }
+
   await sqliteRun(`
     INSERT OR REPLACE INTO company_settings
       (id, company_name, address, phone, phone2, phone3, email, tax_id, website,
-       smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from)
-    VALUES (1,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, logo_path)
+    VALUES (1,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [s.company_name||null, s.address||null, s.phone||null, s.phone2||null, s.phone3||null,
      s.email||null, s.tax_id||null, s.website||null,
-     s.smtp_host||null, s.smtp_port||null, s.smtp_user||null, s.smtp_pass||null, s.smtp_from||null]
+     s.smtp_host||null, s.smtp_port||null, s.smtp_user||null, s.smtp_pass||null, s.smtp_from||null,
+     localLogoPath||null]
   ).catch(() => {});
   log('  ↳ settings from cloud: synced');
 }
