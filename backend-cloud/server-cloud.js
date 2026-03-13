@@ -1654,9 +1654,8 @@ app.post('/api/sync/support', authenticateToken, async (req, res) => {
       const existing = existingRes.rows[0];
       // נרמל זמן — SQLite שולח "2026-03-08 10:45:55" בלי T, צריך להחליף לISO
       const normalizeTs = (v) => {
-        if (!v) return 0;
-        const ts = new Date(String(v).replace(' ', 'T')).getTime();
-        return isNaN(ts) ? 0 : ts;
+        if (!v) return '';
+        return String(v).replace(' ', 'T').slice(0, 19);
       };
       const incomingOwnerTs = normalizeTs(t.owner_updated_at);
       const existingOwnerTs = normalizeTs(existing?.owner_updated_at);
