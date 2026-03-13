@@ -313,7 +313,6 @@ function Inbound() {
       <div className="card">
         <div className="card-header">
           <h3 className="card-title">{t('inbound_transactions')}</h3>
-          {isAdmin && (
           <button 
             className="btn btn-primary"
             onClick={() => {
@@ -323,7 +322,6 @@ function Inbound() {
           >
             {t('new_inbound')}
           </button>
-          )}
         </div>
 
         <div className="table-container" >

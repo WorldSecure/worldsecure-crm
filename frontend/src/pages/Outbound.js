@@ -422,7 +422,6 @@ function Outbound() {
       <div className="card">
         <div className="card-header">
           <h3 className="card-title">{t('outbound_transactions')}</h3>
-          {isAdmin && (
           <button 
             className="btn btn-primary"
             onClick={() => {
@@ -432,7 +431,6 @@ function Outbound() {
           >
             {t('new_outbound')}
           </button>
-          )}
         </div>
 
         <div className="table-container" >
