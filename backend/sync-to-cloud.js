@@ -399,8 +399,9 @@ async function syncSupportFromCloud() {
     }
     const normalizeTs = (v) => {
       if (!v) return '';
-      const ts = new Date(String(v).replace(' ', 'T')).getTime();
-      return isNaN(ts) ? String(v) : Math.floor(ts/1000).toString();
+      const ts = new Date(String(v).replace(' ', 'T'));
+      if (isNaN(ts.getTime())) return String(v).trim();
+      return ts.toISOString().slice(0, 19); // "YYYY-MM-DDTHH:MM:SS"
     };
     const hNorm = normalizeTs(h.created_at);
     const allLocal = await sqliteAll(
