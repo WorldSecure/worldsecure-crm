@@ -522,16 +522,21 @@ async function syncUsersFromCloud() {
   const users = result.body;
   let count = 0;
   for (const u of (users || [])) {
-    // INSERT OR IGNORE — לא דורס סיסמאות קיימות
-    await sqliteRun(
-      'INSERT OR IGNORE INTO users (id, username, email, role) VALUES (?,?,?,?)',
-      [u.id, u.username, u.email, u.role]
-    ).catch(() => {});
-    // עדכן username/email/role אם המשתמש כבר קיים
-    await sqliteRun(
-      'UPDATE users SET username=?, email=?, role=? WHERE id=?',
-      [u.username, u.email, u.role, u.id]
-    ).catch(() => {});
+    // בדוק אם המשתמש קיים מקומית לפי EMAIL (לא לפי ID — IDs שונים בין ענן למקומי)
+    const existing = await sqliteGet('SELECT id FROM users WHERE email=?', [u.email]).catch(() => null);
+    if (existing) {
+      // עדכן username ו-role בלבד — לא סיסמה, לא ID
+      await sqliteRun(
+        'UPDATE users SET username=?, role=? WHERE email=?',
+        [u.username, u.role, u.email]
+      ).catch(() => {});
+    } else {
+      // משתמש חדש שלא קיים מקומית — הוסף עם סיסמה זמנית
+      await sqliteRun(
+        'INSERT OR IGNORE INTO users (username, email, role, password) VALUES (?,?,?,?)',
+        [u.username, u.email, u.role, 'TEMP_NEEDS_RESET']
+      ).catch(() => {});
+    }
     count++;
   }
   if (count > 0) log('  ↳ users from cloud: ' + count + ' synced');
