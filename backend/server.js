@@ -789,7 +789,11 @@ app.delete('/api/suppliers/:id', authenticateToken, (req, res) => {
 // ============ CUSTOMERS ROUTES ============
 
 app.get('/api/customers', authenticateToken, (req, res) => {
-  db.all('SELECT * FROM customers ORDER BY name', [], (err, rows) => {
+  const isAdmin = req.user.role === 'admin';
+  const sql = isAdmin
+    ? 'SELECT * FROM customers ORDER BY name'
+    : 'SELECT * FROM customers WHERE is_sensitive != 1 ORDER BY name';
+  db.all(sql, [], (err, rows) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }

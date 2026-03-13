@@ -177,7 +177,11 @@ app.put('/api/users/:id/username', authenticateToken, async (req, res) => {
 
 app.get('/api/customers', authenticateToken, async (req, res) => {
   try {
-    const r = await query('SELECT * FROM customers ORDER BY name');
+    const isAdmin = req.user.role === 'admin';
+    const sql = isAdmin
+      ? 'SELECT * FROM customers ORDER BY name'
+      : 'SELECT * FROM customers WHERE is_sensitive != true ORDER BY name';
+    const r = await query(sql);
     res.json(r.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
