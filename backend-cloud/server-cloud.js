@@ -394,11 +394,14 @@ app.get('/api/inbound/:id/details', authenticateToken, async (req, res) => {
 
 app.get('/api/outbound', authenticateToken, async (req, res) => {
   try {
+    const isAdmin = req.user.role === 'admin';
+    const sensitiveFilter = isAdmin ? '' : 'AND (c.is_sensitive IS NULL OR c.is_sensitive = false)';
     const r = await query(`
       SELECT ot.*, c.name as customer_name, COALESCE(ot.username, u.username) as username
       FROM outbound_transactions ot
       LEFT JOIN customers c ON ot.customer_id = c.id
       LEFT JOIN users u ON ot.user_id = u.id
+      WHERE 1=1 ${sensitiveFilter}
       ORDER BY ot.transaction_date DESC
     `);
     res.json(r.rows);

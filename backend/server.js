@@ -1039,15 +1039,18 @@ app.put('/api/inbound/:id', authenticateToken, (req, res) => {
 // ============ OUTBOUND TRANSACTIONS (SHIPPING) ============
 
 app.get('/api/outbound', authenticateToken, (req, res) => {
-  const query = `
+  const isAdmin = req.user.role === 'admin';
+  const sensitiveFilter = isAdmin ? '' : 'AND (c.is_sensitive IS NULL OR c.is_sensitive = 0)';
+  const sql = `
     SELECT ot.*, c.name as customer_name, u.username
     FROM outbound_transactions ot
     LEFT JOIN customers c ON ot.customer_id = c.id
     LEFT JOIN users u ON ot.user_id = u.id
+    WHERE 1=1 ${sensitiveFilter}
     ORDER BY ot.transaction_date DESC
   `;
   
-  db.all(query, [], (err, rows) => {
+  db.all(sql, [], (err, rows) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -5175,13 +5178,7 @@ app.put('/api/support-tickets/:id', authenticateToken, upload.array('images', 5)
   console.log('[PUT support-tickets] id='+id+' owner_id='+owner_id+' role='+req.user.role);
   if (!subject) return res.status(400).json({ error: 'Subject is required' });
   // בדוק אם לקוח רגיש ומנסים להעביר למשתמש שאינו admin
-  if (owner_id) {
-    const customerRow = customer_id ? await new Promise(r => db.get('SELECT is_sensitive FROM customers WHERE id=?', [customer_id], (e,row) => r(row))) : null;
-    const newOwnerRow = await new Promise(r => db.get('SELECT role FROM users WHERE id=?', [owner_id], (e,row) => r(row)));
-    if (customerRow?.is_sensitive && newOwnerRow?.role !== 'admin') {
-      return res.status(400).json({ error: 'לקוח זה מסומן כרגיש — לא ניתן להעביר ownership למשתמש שאינו admin' });
-    }
-  }
+  const proceedWithUpdate = () => {
   const closedCol = status === 'closed' ? ", closed_at=datetime('now')" : '';
   const ownerChangedByAdmin = !!(owner_id && req.user.role === 'admin');
   const ownerUpdatedCol = ownerChangedByAdmin ? ", owner_updated_at=datetime('now')" : '';
@@ -5230,6 +5227,19 @@ app.put('/api/support-tickets/:id', authenticateToken, upload.array('images', 5)
       );
     });
   });
+  }; // end proceedWithUpdate
+  if (owner_id && req.user.role === 'admin') {
+    db.get('SELECT is_sensitive FROM customers WHERE id=?', [customer_id||0], (e, custRow) => {
+      db.get('SELECT role FROM users WHERE id=?', [owner_id], (e2, ownerRow) => {
+        if (custRow?.is_sensitive && ownerRow?.role !== 'admin') {
+          return res.status(400).json({ error: 'לקוח זה מסומן כרגיש — לא ניתן להעביר ownership למשתמש שאינו admin' });
+        }
+        proceedWithUpdate();
+      });
+    });
+  } else {
+    proceedWithUpdate();
+  }
 });
 
 app.get('/api/support-tickets/:id/history', authenticateToken, (req, res) => {
