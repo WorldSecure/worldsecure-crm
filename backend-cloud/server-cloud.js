@@ -1530,10 +1530,25 @@ app.get('/api/sync/pull/qr-codes', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// מחיקות QR מסונכרנות
+app.post('/api/sync/qr-codes/deletions', authenticateToken, async (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids required' });
+  try {
+    for (const id of ids) {
+      await query('DELETE FROM qr_codes WHERE id=$1', [id]);
+    }
+    res.json({ message: 'deleted', count: ids.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.post('/api/sync/settings', authenticateToken, async (req, res) => {
   const { row } = req.body;
   if (!row) return res.status(400).json({ error: 'row required' });
   try {
+    // logo_path — עדכן רק אם הענן לא כבר מכיל לוגו (הענן הוא מקור הסמכות ללוגו)
+    const existingLogo = await query('SELECT logo_path FROM company_settings WHERE id=1');
+    const cloudLogo = existingLogo.rows[0]?.logo_path || null;
     await query(`
       INSERT INTO company_settings
         (id, company_name, address, phone, phone2, phone3, email, tax_id, website,

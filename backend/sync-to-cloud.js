@@ -582,27 +582,48 @@ async function syncSettingsFromCloud() {
 
 // ── QR Codes סינק ─────────────────────────────────────────────────────────────
 async function syncQrToCloud() {
+  await sqliteRun('CREATE TABLE IF NOT EXISTS qr_codes (id INTEGER PRIMARY KEY, type TEXT, qr_data TEXT, image_url TEXT, title TEXT, created_by INTEGER, created_at DATETIME)').catch(() => {});
   const rows = await sqliteAll('SELECT * FROM qr_codes ORDER BY id').catch(() => []);
-  if (!rows.length) return;
-  const result = await apiRequest('POST', '/api/sync/qr-codes', { rows });
-  if (result.status === 200) log('  ↳ qr-codes to cloud: ' + rows.length + ' synced');
-  else log('  ⚠ qr-codes to cloud: ' + JSON.stringify(result.body));
+  // שלח QR קיימים
+  if (rows.length) {
+    const result = await apiRequest('POST', '/api/sync/qr-codes', { rows });
+    if (result.status === 200) log('  ↳ qr-codes to cloud: ' + rows.length + ' synced');
+    else log('  ⚠ qr-codes to cloud: ' + JSON.stringify(result.body));
+  }
+  // שלח מחיקות — QR שנמחקו מקומית אבל עדיין בענן
+  const cloudResult = await apiRequest('GET', '/api/sync/pull/qr-codes');
+  if (cloudResult.status === 200) {
+    const cloudIds = (cloudResult.body || []).map(r => r.id);
+    const localIds = rows.map(r => r.id);
+    const deletedIds = cloudIds.filter(id => !localIds.includes(id));
+    if (deletedIds.length) {
+      await apiRequest('POST', '/api/sync/qr-codes/deletions', { ids: deletedIds });
+      log('  ↳ qr-codes deletions to cloud: ' + deletedIds.length);
+    }
+  }
 }
 
 async function syncQrFromCloud() {
   const result = await apiRequest('GET', '/api/sync/pull/qr-codes');
   if (result.status !== 200) { log('  ⚠ pull qr-codes: ' + JSON.stringify(result.body)); return; }
-  const rows = result.body || [];
+  const cloudRows = result.body || [];
   await sqliteRun('CREATE TABLE IF NOT EXISTS qr_codes (id INTEGER PRIMARY KEY, type TEXT, qr_data TEXT, image_url TEXT, title TEXT, created_by INTEGER, created_at DATETIME)').catch(() => {});
-  let count = 0;
-  for (const r of rows) {
+  // הוסף/עדכן QR מהענן
+  for (const r of cloudRows) {
     await sqliteRun(
       'INSERT OR REPLACE INTO qr_codes (id, type, qr_data, image_url, title, created_by, created_at) VALUES (?,?,?,?,?,?,?)',
       [r.id, r.type, r.qr_data, r.image_url||null, r.title||null, r.created_by||null, r.created_at||null]
     ).catch(() => {});
-    count++;
   }
-  if (count > 0) log('  ↳ qr-codes from cloud: ' + count + ' synced');
+  // מחק QR מקומי שנמחק בענן
+  const localRows = await sqliteAll('SELECT id FROM qr_codes').catch(() => []);
+  const cloudIds = cloudRows.map(r => r.id);
+  for (const local of localRows) {
+    if (!cloudIds.includes(local.id)) {
+      await sqliteRun('DELETE FROM qr_codes WHERE id=?', [local.id]).catch(() => {});
+    }
+  }
+  if (cloudRows.length > 0) log('  ↳ qr-codes from cloud: ' + cloudRows.length + ' synced');
 }
 
 async function syncAll() {
