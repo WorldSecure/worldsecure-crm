@@ -1698,12 +1698,14 @@ app.post('/api/sync/users', authenticateToken, async (req, res) => {
   if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows array required' });
   try {
     for (const u of rows) {
-      await query(
-        `INSERT INTO users (id, username, email, role)
-         VALUES ($1,$2,$3,$4)
-         ON CONFLICT (id) DO UPDATE SET username=$2, email=$3, role=$4`,
-        [u.id, u.username, u.email, u.role]
-      );
+      // בדוק לפי email — IDs שונים בין מקומי לענן
+      const existing = await query('SELECT id FROM users WHERE email=$1', [u.email]);
+      if (existing.rows.length > 0) {
+        // עדכן username ו-role בלבד — לא סיסמה
+        await query('UPDATE users SET username=$1, role=$2 WHERE email=$3',
+          [u.username, u.role, u.email]);
+      }
+      // אם לא קיים — לא מוסיפים מהמקומי לענן (משתמשים חדשים נרשמים ישירות בענן)
     }
     res.json({ message: 'users synced', count: rows.length });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -2211,9 +2213,6 @@ app.post('/api/run-migrations', authenticateToken, async (req, res) => {
     `ALTER TABLE support_ticket_history ADD COLUMN IF NOT EXISTS awaiting_channel TEXT`,
     `ALTER TABLE support_ticket_history ADD COLUMN IF NOT EXISTS awaiting_note TEXT`,
     `ALTER TABLE support_ticket_history ADD COLUMN IF NOT EXISTS awaiting_deadline TEXT`,
-    `ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS phone1_primary BOOLEAN DEFAULT FALSE`,
-    `ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS phone2_primary BOOLEAN DEFAULT FALSE`,
-    `ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS phone3_primary BOOLEAN DEFAULT FALSE`,
   ];
   const results = [];
   for (const sql of migrations) {

@@ -122,7 +122,6 @@ function downloadFile(fileUrl, destPath) {
 async function syncLocalToCloud() {
   log('▶ LOCAL → CLOUD sync...');
   try {
-    await syncSettings();
     await syncUsersToCloud();
     await syncQrToCloud();
     await syncEntityToCloud('customers',  'SELECT * FROM customers');
@@ -511,7 +510,9 @@ async function pullDeletionsFromCloud() {
 
 async function syncUsersToCloud() {
   const rows = await sqliteAll('SELECT id, username, email, role FROM users ORDER BY id');
-  const result = await apiRequest('POST', '/api/sync/users', { rows });
+  // הוסף password placeholder למניעת null constraint בענן
+  const rowsWithPass = rows.map(r => ({ ...r, password: r.password || 'SYNC_PLACEHOLDER' }));
+  const result = await apiRequest('POST', '/api/sync/users', { rows: rowsWithPass });
   if (result.status === 200) log('  ↳ users to cloud: ' + rows.length + ' synced');
   else log('  ⚠ users to cloud: ' + JSON.stringify(result.body));
 }
