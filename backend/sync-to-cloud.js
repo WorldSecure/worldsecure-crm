@@ -123,6 +123,7 @@ async function syncLocalToCloud() {
   log('▶ LOCAL → CLOUD sync...');
   try {
     await syncSettings();
+    await syncUsersToCloud();
     await syncEntityToCloud('customers',  'SELECT * FROM customers');
     await syncEntityToCloud('products',   'SELECT * FROM products');
     await syncEntityToCloud('suppliers',  'SELECT * FROM suppliers');
@@ -213,6 +214,7 @@ async function syncSupportToCloud() {
 async function syncCloudToLocal() {
   log('▶ CLOUD → LOCAL sync...');
   try {
+    await syncUsersFromCloud();
     await syncInboundFromCloud();
     await syncOutboundFromCloud();
     await syncSupportFromCloud();
@@ -497,6 +499,39 @@ async function pullDeletionsFromCloud() {
   } catch (err) {
     log(`  ⚠ pullDeletions error: ${err.message}`);
   }
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+//  USERS sync (דו-כיווני, ללא סיסמאות)
+// ════════════════════════════════════════════════════════════════════════════
+
+async function syncUsersToCloud() {
+  const rows = await sqliteAll('SELECT id, username, email, role FROM users ORDER BY id');
+  const result = await apiRequest('POST', '/api/sync/users', { rows });
+  if (result.status === 200) log('  ↳ users to cloud: ' + rows.length + ' synced');
+  else log('  ⚠ users to cloud: ' + JSON.stringify(result.body));
+}
+
+async function syncUsersFromCloud() {
+  const result = await apiRequest('GET', '/api/sync/pull/users');
+  if (result.status !== 200) { log('  ⚠ pull users: ' + JSON.stringify(result.body)); return; }
+  const users = result.body;
+  let count = 0;
+  for (const u of (users || [])) {
+    // INSERT OR IGNORE — לא דורס סיסמאות קיימות
+    await sqliteRun(
+      'INSERT OR IGNORE INTO users (id, username, email, role) VALUES (?,?,?,?)',
+      [u.id, u.username, u.email, u.role]
+    ).catch(() => {});
+    // עדכן username/email/role אם המשתמש כבר קיים
+    await sqliteRun(
+      'UPDATE users SET username=?, email=?, role=? WHERE id=?',
+      [u.username, u.email, u.role, u.id]
+    ).catch(() => {});
+    count++;
+  }
+  if (count > 0) log('  ↳ users from cloud: ' + count + ' synced');
 }
 
 async function syncAll() {

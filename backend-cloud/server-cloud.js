@@ -1634,6 +1634,31 @@ app.post('/api/sync/outbound', authenticateToken, async (req, res) => {
   }
 });
 
+
+// ── Users sync ────────────────────────────────────────────────────────────────
+app.post('/api/sync/users', authenticateToken, async (req, res) => {
+  const { rows } = req.body;
+  if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows array required' });
+  try {
+    for (const u of rows) {
+      await query(
+        `INSERT INTO users (id, username, email, role)
+         VALUES ($1,$2,$3,$4)
+         ON CONFLICT (id) DO UPDATE SET username=$2, email=$3, role=$4`,
+        [u.id, u.username, u.email, u.role]
+      );
+    }
+    res.json({ message: 'users synced', count: rows.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/sync/pull/users', authenticateToken, async (req, res) => {
+  try {
+    const r = await query('SELECT id, username, email, role FROM users ORDER BY id');
+    res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.post('/api/sync/support', authenticateToken, async (req, res) => {
   const { tickets, history, deletedIds } = req.body;
   if (!Array.isArray(tickets)) return res.status(400).json({ error: 'tickets array required' });
