@@ -76,6 +76,12 @@ function SupportCaseManagementModal({ ticket, customers, products, users, onClos
     if (!form.customer_id)    { alert(t('customer_required')); return; }
     if (!form.product_id)     { alert(t('product_required')); return; }
     if (!form.subject.trim()) { alert(t('subject_required')); return; }
+    const selectedCustomer = customers.find(c => c.id === parseInt(form.customer_id));
+    const selectedOwner = users.find(u => u.id === parseInt(form.owner_id));
+    if (selectedCustomer?.is_sensitive && selectedOwner?.role !== 'admin') {
+      alert('⚠️ לקוח זה מסומן כרגיש — לא ניתן להעביר ownership למשתמש שאינו admin');
+      return;
+    }
     try {
       setSaving(true);
       const fd = new FormData();
@@ -213,6 +219,11 @@ function SupportCaseManagementModal({ ticket, customers, products, users, onClos
                   {isAdmin ? (
                     <select className="form-select" value={form.owner_id} onChange={e => {
                       const u = users.find(u => u.id === parseInt(e.target.value));
+                      const selectedCustomer = customers.find(c => c.id === parseInt(form.customer_id));
+                      if (selectedCustomer?.is_sensitive && u?.role !== 'admin') {
+                        alert('⚠️ לקוח זה מסומן כרגיש — לא ניתן להעביר ownership למשתמש שאינו admin');
+                        return;
+                      }
                       setForm(f => ({...f, owner_id: e.target.value, owner_name: u?.username||''}));
                     }}>
                       {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}

@@ -177,11 +177,7 @@ app.put('/api/users/:id/username', authenticateToken, async (req, res) => {
 
 app.get('/api/customers', authenticateToken, async (req, res) => {
   try {
-    const isAdmin = req.user.role === 'admin';
-    const sql = isAdmin
-      ? 'SELECT * FROM customers ORDER BY name'
-      : 'SELECT * FROM customers WHERE is_sensitive != true ORDER BY name';
-    const r = await query(sql);
+    const r = await query('SELECT * FROM customers ORDER BY name');
     res.json(r.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -1205,6 +1201,14 @@ app.put('/api/support-tickets/:id', authenticateToken, upload.array('images', 5)
   const { customer_id, customer_name, product_id, product_name, subject, description, status, priority, owner_id, awaiting_channel, awaiting_note, awaiting_deadline } = req.body;
   if (!subject) return res.status(400).json({ error: 'Subject required' });
   try {
+    // בדוק אם לקוח רגיש ומנסים להעביר למשתמש שאינו admin
+    if (owner_id) {
+      const customerRes = customer_id ? await query('SELECT is_sensitive FROM customers WHERE id=$1', [customer_id]) : null;
+      const newOwnerRes = await query('SELECT role FROM users WHERE id=$1', [owner_id]);
+      if (customerRes?.rows[0]?.is_sensitive && newOwnerRes.rows[0]?.role !== 'admin') {
+        return res.status(400).json({ error: 'לקוח זה מסומן כרגיש — לא ניתן להעביר ownership למשתמש שאינו admin' });
+      }
+    }
     const oldRes = await query('SELECT status, owner_id, owner_name FROM support_tickets WHERE id=$1', [id]);
     const old = oldRes.rows[0] || {};
     let ownerId = old.owner_id, ownerName = old.owner_name;

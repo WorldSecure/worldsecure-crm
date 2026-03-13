@@ -789,11 +789,7 @@ app.delete('/api/suppliers/:id', authenticateToken, (req, res) => {
 // ============ CUSTOMERS ROUTES ============
 
 app.get('/api/customers', authenticateToken, (req, res) => {
-  const isAdmin = req.user.role === 'admin';
-  const sql = isAdmin
-    ? 'SELECT * FROM customers ORDER BY name'
-    : 'SELECT * FROM customers WHERE is_sensitive != 1 ORDER BY name';
-  db.all(sql, [], (err, rows) => {
+  db.all('SELECT * FROM customers ORDER BY name', [], (err, rows) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -5178,6 +5174,14 @@ app.put('/api/support-tickets/:id', authenticateToken, upload.array('images', 5)
   const { customer_id, customer_name, product_id, product_name, subject, description, status, priority, owner_id } = req.body;
   console.log('[PUT support-tickets] id='+id+' owner_id='+owner_id+' role='+req.user.role);
   if (!subject) return res.status(400).json({ error: 'Subject is required' });
+  // בדוק אם לקוח רגיש ומנסים להעביר למשתמש שאינו admin
+  if (owner_id) {
+    const customerRow = customer_id ? await new Promise(r => db.get('SELECT is_sensitive FROM customers WHERE id=?', [customer_id], (e,row) => r(row))) : null;
+    const newOwnerRow = await new Promise(r => db.get('SELECT role FROM users WHERE id=?', [owner_id], (e,row) => r(row)));
+    if (customerRow?.is_sensitive && newOwnerRow?.role !== 'admin') {
+      return res.status(400).json({ error: 'לקוח זה מסומן כרגיש — לא ניתן להעביר ownership למשתמש שאינו admin' });
+    }
+  }
   const closedCol = status === 'closed' ? ", closed_at=datetime('now')" : '';
   const ownerChangedByAdmin = !!(owner_id && req.user.role === 'admin');
   const ownerUpdatedCol = ownerChangedByAdmin ? ", owner_updated_at=datetime('now')" : '';
