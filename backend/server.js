@@ -400,7 +400,8 @@ app.post('/api/send-email', authenticateToken, async (req, res) => {
           const ext = path.extname(logoFullPath).toLowerCase().replace('.', '');
           const mime = ext === 'png' ? 'image/png' : ext === 'svg' ? 'image/svg+xml' : 'image/jpeg';
           const b64 = logoData.toString('base64');
-          logoHtmlSignature = `<tr><td colspan="2" style="padding-top: 14px;"><img src="data:${mime};base64,${b64}" alt="${company.company_name || ''}" style="max-height: 60px; max-width: 160px; object-fit: contain;"></td></tr>`;
+          logoHtmlSignature = `<tr><td colspan="2" style="padding-top: 8px; text-align: left;"><img src="data:${mime};base64,${b64}" alt="${company.company_name || ''}" style="max-height: 60px; max-width: 200px; object-fit: contain;"></td></tr>`;
+
         }
       } catch (logoErr) {
         console.error('Logo embed error:', logoErr.message);
@@ -415,17 +416,28 @@ app.post('/api/send-email', authenticateToken, async (req, res) => {
         <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px;">
           <p style="margin-bottom: 20px;">${body || 'מצורף מסמך לעיונך.'}</p>
           <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 24px 0;">
-          <table style="font-size: 13px; color: #333; line-height: 1.8;">
-            <tr><td colspan="2" style="font-weight: 700; font-size: 14px; padding-bottom: 2px;">Amit Schlossberger</td></tr>
-            <tr><td colspan="2" style="color: #555; padding-bottom: 8px;">Founder &amp; CEO</td></tr>
-            <tr><td style="color: #888; padding-right: 8px; white-space: nowrap;">Office:</td><td><a href="tel:+97235350080" style="color: #333; text-decoration: none;">+972 3 535 0080</a></td></tr>
-            <tr><td style="color: #888; padding-right: 8px; white-space: nowrap;">Mobile:</td><td><a href="tel:+972545701005" style="color: #333; text-decoration: none;">+972 54 570 1005</a></td></tr>
-            <tr><td style="color: #888; padding-right: 8px; white-space: nowrap;">Mobile:</td><td><a href="tel:+244946565005" style="color: #333; text-decoration: none;">+244 946 565 005</a></td></tr>
-            <tr><td style="color: #888; padding-right: 8px; white-space: nowrap;">Mobile:</td><td><a href="tel:+254111922955" style="color: #333; text-decoration: none;">+254 111 922 955</a></td></tr>
-            <tr><td style="color: #888; padding-right: 8px; white-space: nowrap;">Mobile:</td><td><a href="tel:+943980000924" style="color: #333; text-decoration: none;">+943 980 000 924</a></td></tr>
-            <tr><td colspan="2" style="padding-top: 6px;"><a href="https://www.world-secure.com" style="color: #1a73e8; text-decoration: none; font-weight: 500;">www.world-secure.com</a></td></tr>
-            ${logoHtmlSignature}
-          </table>
+          <table style="font-size: 13px; color: #333; line-height: 1.6;">
+  <tr>
+    <td colspan="2" style="font-weight: 700; font-size: 16px; padding-bottom: 12px; color: #1a1a1a;">
+      WorldSecure Professional Services Team
+    </td>
+  </tr>
+  <tr>
+   
+
+   <td colspan="2" style="text-align: left; padding-bottom: 20px; font-size: 16px;">
+  <a href="https://www.world-secure.com" 
+     target="_blank" 
+     style="color: #1a73e8; text-decoration: none; font-weight: 600;">
+    www.world-secure.com
+  </a>
+</td>
+
+    </tr>
+  ${logoHtmlSignature}
+</table>
+
+
         </div>
       `,
       attachments
@@ -5160,6 +5172,7 @@ app.post('/api/support-tickets', authenticateToken, upload.array('images', 5), (
 app.put('/api/support-tickets/:id', authenticateToken, upload.array('images', 5), (req, res) => {
   const { id } = req.params;
   const { customer_id, customer_name, product_id, product_name, subject, description, status, priority, owner_id } = req.body;
+  console.log('[PUT support-tickets] id='+id+' owner_id='+owner_id+' role='+req.user.role);
   if (!subject) return res.status(400).json({ error: 'Subject is required' });
   const closedCol = status === 'closed' ? ", closed_at=datetime('now')" : '';
   const ownerChangedByAdmin = !!(owner_id && req.user.role === 'admin');
