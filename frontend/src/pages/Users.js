@@ -145,11 +145,11 @@ function Users() {
 
   const handleChangePassword = async () => {
     if (passwordData.password.length < 6) {
-      alert('הסיסמה חייבת להיות לפחות 6 תווים');
+      alert(t('password_min_length'));
       return;
     }
     if (passwordData.password !== passwordData.confirm) {
-      alert('הסיסמאות אינן תואמות');
+      alert(t('passwords_not_match'));
       return;
     }
     try {
@@ -517,29 +517,29 @@ function Users() {
         <div className="modal-overlay" onClick={() => setShowPasswordModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px' }}>
             <div className="modal-header">
-              <h3 className="modal-title">🔑 שינוי סיסמה — {passwordData.username}</h3>
+              <h3 className="modal-title">🔑 {t('change_password')} — {passwordData.username}</h3>
               <button className="modal-close" onClick={() => setShowPasswordModal(false)}>×</button>
             </div>
             <div style={{ padding: '1.5rem' }}>
               <div className="form-group">
-                <label className="form-label">סיסמה חדשה *</label>
+                <label className="form-label">{t('new_password')} *</label>
                 <input
                   type="password"
                   className="form-input"
                   value={passwordData.password}
                   onChange={(e) => setPasswordData({...passwordData, password: e.target.value})}
-                  placeholder="לפחות 6 תווים"
+                  placeholder={t('password_min_length')}
                   minLength="6"
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">אימות סיסמה *</label>
+                <label className="form-label">{t('confirm_password')} *</label>
                 <input
                   type="password"
                   className="form-input"
                   value={passwordData.confirm}
                   onChange={(e) => setPasswordData({...passwordData, confirm: e.target.value})}
-                  placeholder="הקש שוב את הסיסמה"
+                  placeholder={t('confirm_password')}
                 />
               </div>
             </div>
@@ -549,7 +549,7 @@ function Users() {
               </button>
               <button type="button" onClick={handleChangePassword}
                 style={{ background: '#f59e0b', color: 'white', border: 'none', borderRadius: '4px', padding: '0.5rem 1.5rem', cursor: 'pointer', fontWeight: '600' }}>
-                🔑 שמור סיסמה
+                🔑 {t('save_password')}
               </button>
             </div>
           </div>
