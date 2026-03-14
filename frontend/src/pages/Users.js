@@ -12,6 +12,8 @@ function Users() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingUsername, setEditingUsername] = useState({ id: null, username: '' });
   const [editingUser, setEditingUser] = useState(null);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordData, setPasswordData] = useState({ id: null, username: '', password: '', confirm: '' });
   
   const [formData, setFormData] = useState({
     username: '',
@@ -141,6 +143,25 @@ function Users() {
     }
   };
 
+  const handleChangePassword = async () => {
+    if (passwordData.password.length < 6) {
+      alert('הסיסמה חייבת להיות לפחות 6 תווים');
+      return;
+    }
+    if (passwordData.password !== passwordData.confirm) {
+      alert('הסיסמאות אינן תואמות');
+      return;
+    }
+    try {
+      await axios.put(`/api/users/${passwordData.id}/password`, { password: passwordData.password });
+      alert(t('success'));
+      setShowPasswordModal(false);
+      setPasswordData({ id: null, username: '', password: '', confirm: '' });
+    } catch (error) {
+      alert(t('error') + ': ' + (error.response?.data?.error || error.message));
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       username: '',
@@ -229,6 +250,10 @@ function Users() {
                         style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}>
                         ✏️
                       </button>
+                      <button className="btn btn-warning" onClick={() => { setPasswordData({ id: userItem.id, username: userItem.username, password: '', confirm: '' }); setShowPasswordModal(true); }}
+                        style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                        🔑
+                      </button>
                       {userItem.id !== user.id && (
                         <button className="btn btn-danger" onClick={() => handleDelete(userItem.id)}
                           style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}>
@@ -279,6 +304,12 @@ function Users() {
                           onClick={() => handleEditUsername(userItem)}
                         >
                           ✏️ Edit Name
+                        </button>
+                        <button
+                          onClick={() => { setPasswordData({ id: userItem.id, username: userItem.username, password: '', confirm: '' }); setShowPasswordModal(true); }}
+                          style={{ background: '#f59e0b', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem 0.75rem', cursor: 'pointer', fontWeight: '500' }}
+                        >
+                          🔑 סיסמה
                         </button>
                         {userItem.id !== user.id && (
                           <button 
@@ -476,6 +507,49 @@ function Users() {
               </button>
               <button type="button" className="btn btn-primary" onClick={handleSaveUsername}>
                 {t('save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Change Password Modal */}
+      {showPasswordModal && (
+        <div className="modal-overlay" onClick={() => setShowPasswordModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">🔑 שינוי סיסמה — {passwordData.username}</h3>
+              <button className="modal-close" onClick={() => setShowPasswordModal(false)}>×</button>
+            </div>
+            <div style={{ padding: '1.5rem' }}>
+              <div className="form-group">
+                <label className="form-label">סיסמה חדשה *</label>
+                <input
+                  type="password"
+                  className="form-input"
+                  value={passwordData.password}
+                  onChange={(e) => setPasswordData({...passwordData, password: e.target.value})}
+                  placeholder="לפחות 6 תווים"
+                  minLength="6"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">אימות סיסמה *</label>
+                <input
+                  type="password"
+                  className="form-input"
+                  value={passwordData.confirm}
+                  onChange={(e) => setPasswordData({...passwordData, confirm: e.target.value})}
+                  placeholder="הקש שוב את הסיסמה"
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setShowPasswordModal(false)}>
+                {t('cancel')}
+              </button>
+              <button type="button" onClick={handleChangePassword}
+                style={{ background: '#f59e0b', color: 'white', border: 'none', borderRadius: '4px', padding: '0.5rem 1.5rem', cursor: 'pointer', fontWeight: '600' }}>
+                🔑 שמור סיסמה
               </button>
             </div>
           </div>

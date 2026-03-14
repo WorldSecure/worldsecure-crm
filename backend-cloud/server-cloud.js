@@ -174,6 +174,17 @@ app.put('/api/users/:id/username', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.put('/api/users/:id/password', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  const { password } = req.body;
+  if (!password || password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  try {
+    const hashed = await bcrypt.hash(password, 10);
+    await query('UPDATE users SET password=$1 WHERE id=$2', [hashed, req.params.id]);
+    res.json({ message: 'Password updated successfully' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ════════════════════════════════════════════════════════════════════════════
 //  READ-ONLY: לקוחות / מוצרים / ספקים (מסונכרנים מהמחשב)
 // ════════════════════════════════════════════════════════════════════════════
