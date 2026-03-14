@@ -371,7 +371,7 @@ function Outbound() {
         transactionId = editingTransaction.id;
       } else {
         // Create new transaction
-        const response = await axios.post('/api/outbound', formData);
+        const response = await axios.post('/api/outbound', { ...formData, transaction_date: new Date().toISOString() });
         alert(t('success') + '! ' + t('inventory_updated'));
         transactionId = response.data.id;
       }

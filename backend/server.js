@@ -864,9 +864,10 @@ app.get('/api/inbound', authenticateToken, (req, res) => {
 app.post('/api/inbound', authenticateToken, (req, res) => {
   const { supplier_id, supplier_type, casual_supplier_name, items, notes } = req.body;
   
+  const inboundDate = req.body.transaction_date || new Date().toISOString();
   db.run(
-    'INSERT INTO inbound_transactions (supplier_id, supplier_type, casual_supplier_name, notes, user_id, qr_code_id) VALUES (?, ?, ?, ?, ?, ?)',
-    [supplier_id, supplier_type, casual_supplier_name, notes, req.user.id, req.body.qr_code_id || null],
+    'INSERT INTO inbound_transactions (supplier_id, supplier_type, casual_supplier_name, notes, user_id, qr_code_id, transaction_date) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [supplier_id, supplier_type, casual_supplier_name, notes, req.user.id, req.body.qr_code_id || null, inboundDate],
     function(err) {
       if (err) {
         return res.status(500).json({ error: err.message });
@@ -1077,8 +1078,8 @@ app.post('/api/outbound', authenticateToken, (req, res) => {
   Promise.all(checkPromises)
     .then(() => {
       db.run(
-        'INSERT INTO outbound_transactions (customer_id, customer_type, casual_customer_name, notes, status, user_id, qr_code_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [customer_id, customer_type, casual_customer_name, notes, status || 'pending', req.user.id, req.body.qr_code_id || null],
+        'INSERT INTO outbound_transactions (customer_id, customer_type, casual_customer_name, notes, status, user_id, qr_code_id, transaction_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [customer_id, customer_type, casual_customer_name, notes, status || 'pending', req.user.id, req.body.qr_code_id || null, req.body.transaction_date || new Date().toISOString()],
         function(err) {
           if (err) {
             return res.status(500).json({ error: err.message });
