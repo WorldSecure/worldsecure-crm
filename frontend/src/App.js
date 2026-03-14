@@ -304,6 +304,12 @@ function AppRoutes() {
             <Route path="customers" element={<Customers />} />
             <Route path="settings" element={<Settings />} />
             <Route path="users" element={<Users />} />
+            {window.location.hostname !== 'app.world-secure.com' && (
+              <Route path="reports" element={<Reports />} />
+            )}
+            {window.location.hostname !== 'app.world-secure.com' && (
+              <Route path="sales-reports" element={<SalesReports />} />
+            )}
             <Route path="activity-log" element={<ActivityLog />} />
           </Route>
 
