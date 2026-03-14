@@ -1691,18 +1691,7 @@ app.post('/api/sync/inbound', authenticateToken, async (req, res) => {
 
     // הכמות מתעדכנת ע"י sync/products בלבד
 
-    // מחק תעודות שנמחקו במקומי (רק אם נוצרו לפני יותר מ-10 דקות)
-    if (Array.isArray(localIds) && localIds.length >= 0) {
-      const cloudRows = await client.query(
-        `SELECT id FROM inbound_transactions WHERE transaction_date < NOW() - INTERVAL '10 minutes'`
-      );
-      for (const row of cloudRows.rows) {
-        if (!localIds.includes(row.id)) {
-          await client.query('DELETE FROM inbound_items WHERE transaction_id=$1', [row.id]);
-          await client.query('DELETE FROM inbound_transactions WHERE id=$1', [row.id]);
-        }
-      }
-    }
+    // מחיקות מטופלות דרך pending_deletions - לא מוחקים עסקאות שנוצרו בענן
 
     await client.query('COMMIT');
     res.json({ message: 'inbound synced', count: transactions.length });
@@ -1753,18 +1742,7 @@ app.post('/api/sync/outbound', authenticateToken, async (req, res) => {
       );
     }
 
-    // מחק תעודות שנמחקו במקומי (רק אם נוצרו לפני יותר מ-10 דקות)
-    if (Array.isArray(localIds) && localIds.length >= 0) {
-      const cloudRows = await client.query(
-        `SELECT id FROM outbound_transactions WHERE transaction_date < NOW() - INTERVAL '10 minutes'`
-      );
-      for (const row of cloudRows.rows) {
-        if (!localIds.includes(row.id)) {
-          await client.query('DELETE FROM outbound_items WHERE transaction_id=$1', [row.id]);
-          await client.query('DELETE FROM outbound_transactions WHERE id=$1', [row.id]);
-        }
-      }
-    }
+    // מחיקות מטופלות דרך pending_deletions - לא מוחקים עסקאות שנוצרו בענן
 
     await client.query('COMMIT');
     res.json({ message: 'outbound synced', count: transactions.length });
