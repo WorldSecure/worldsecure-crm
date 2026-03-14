@@ -160,7 +160,7 @@ const NewHeader = ({ activeTab }) => {
           </a>
         )}
         
-        {hasModuleAccess('sales') && (
+        {hasModuleAccess('sales') && window.location.hostname !== 'app.world-secure.com' && (
           <a href="/sales-portal" style={activeTab === 'sales' 
             ? buttonActiveStyle('#cc0000', '#a80000') 
             : buttonInactiveStyle()
