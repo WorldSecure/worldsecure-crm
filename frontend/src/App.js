@@ -304,8 +304,6 @@ function AppRoutes() {
             <Route path="customers" element={<Customers />} />
             <Route path="settings" element={<Settings />} />
             <Route path="users" element={<Users />} />
-            <Route path="reports" element={<Reports />} />
-            <Route path="sales-reports" element={<SalesReports />} />
             <Route path="activity-log" element={<ActivityLog />} />
           </Route>
 
