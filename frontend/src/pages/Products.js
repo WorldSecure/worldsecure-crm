@@ -28,7 +28,14 @@ function Products() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  
+
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -286,7 +293,68 @@ function Products() {
           />
         </div>
 
-        <div className="table-container">
+        {isMobile ? (
+          /* ===== MOBILE CARD VIEW ===== */
+          <div style={{ padding: '0.5rem' }}>
+            {sortedProducts.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>{t('no_data')}</div>
+            ) : (
+              sortedProducts.map(product => (
+                <div key={product.id} style={{
+                  background: '#fff',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '10px',
+                  padding: '1rem',
+                  marginBottom: '0.75rem',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.07)'
+                }}>
+                  {/* Row 1: Name + stock badge */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                    <span style={{ fontWeight: '700', fontSize: '1rem' }}>
+                      {getProductName(product, language)}
+                    </span>
+                    {product.quantity <= product.min_quantity ? (
+                      <span className="badge badge-danger">{product.quantity}</span>
+                    ) : (
+                      <span className="badge badge-success">{product.quantity}</span>
+                    )}
+                  </div>
+
+                  {/* Row 2: SKU + Category */}
+                  <div style={{ fontSize: '0.82rem', color: '#555', marginBottom: '0.35rem' }}>
+                    <span>🔖 {product.sku}</span>
+                    {product.category_name && <span style={{ marginLeft: '0.75rem' }}>📂 {getCategoryName(product, language)}</span>}
+                  </div>
+
+                  {/* Row 3: Unit + Min stock + Price (admin) */}
+                  <div style={{ fontSize: '0.82rem', color: '#666', marginBottom: '0.5rem' }}>
+                    <span>📦 {getUnitTranslation(product.unit)}</span>
+                    <span style={{ marginLeft: '0.75rem' }}>⬇️ min: {product.min_quantity}</span>
+                    {isAdmin && product.price && (
+                      <span style={{ marginLeft: '0.75rem' }}>💰 {parseFloat(product.price).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} {product.currency || 'ILS'}</span>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  {isAdmin && (
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button className="btn btn-secondary" onClick={() => handleEdit(product)}
+                        style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem', flex: 1 }}>
+                        ✏️ {t('edit')}
+                      </button>
+                      <button className="btn btn-danger" onClick={() => handleDelete(product.id)}
+                        style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}>
+                        🗑️
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
+          /* ===== DESKTOP TABLE VIEW ===== */
+          <div className="table-container">
           <table className="table">
             <thead>
               <tr>
@@ -350,7 +418,8 @@ function Products() {
               )}
             </tbody>
           </table>
-        </div>
+          </div>
+        )}
       </div>
 
       {showModal && (

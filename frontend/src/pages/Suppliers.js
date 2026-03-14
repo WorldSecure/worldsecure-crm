@@ -16,6 +16,12 @@ function Suppliers() {
   const [sortDirection, setSortDirection] = useState('asc');
   
   const isAdmin = user?.role === 'admin';
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   const [contacts, setContacts] = useState([{ name: '', phone: '' }]);
 
   const addContact = () => { if (contacts.length < 3) setContacts([...contacts, { name: '', phone: '', email: '' }]); };
@@ -200,7 +206,79 @@ function Suppliers() {
           />
         </div>
 
-        <div className="table-container">
+        {isMobile ? (
+          /* ===== MOBILE CARD VIEW ===== */
+          <div style={{ padding: '0.5rem' }}>
+            {sortedSuppliers().length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>{t('no_data')}</div>
+            ) : (
+              sortedSuppliers().map(supplier => (
+                <div key={supplier.id} style={{
+                  background: '#fff',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '10px',
+                  padding: '1rem',
+                  marginBottom: '0.75rem',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.07)'
+                }}>
+                  {/* Row 1: Name + Country */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                    <span style={{ fontWeight: '700', fontSize: '1rem' }}>🏭 {supplier.name}</span>
+                    {supplier.country && <span style={{ fontSize: '0.82rem', color: '#555' }}>🌍 {supplier.country}</span>}
+                  </div>
+
+                  {/* Row 2: Tax ID */}
+                  {supplier.tax_id && (
+                    <div style={{ fontSize: '0.82rem', color: '#666', marginBottom: '0.35rem' }}>
+                      🪪 {supplier.tax_id}
+                    </div>
+                  )}
+
+                  {/* Row 3: Contact info */}
+                  {(() => {
+                    try {
+                      const p = JSON.parse(supplier.contact_person);
+                      if (Array.isArray(p) && p.length > 0) return (
+                        <div style={{ fontSize: '0.82rem', color: '#555', marginBottom: '0.5rem' }}>
+                          {p.map((c, i) => (
+                            <div key={i}>
+                              {c.name && <span>👤 {c.name} </span>}
+                              {c.phone && <span>📞 {c.phone} </span>}
+                              {c.email && <span>✉️ {c.email}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    } catch(e) {}
+                    return (supplier.contact_person || supplier.phone || supplier.email) ? (
+                      <div style={{ fontSize: '0.82rem', color: '#555', marginBottom: '0.5rem' }}>
+                        {supplier.contact_person && <div>👤 {supplier.contact_person}</div>}
+                        {supplier.phone && <div>📞 {supplier.phone}</div>}
+                        {supplier.email && <div>✉️ {supplier.email}</div>}
+                      </div>
+                    ) : null;
+                  })()}
+
+                  {/* Actions */}
+                  {isAdmin && (
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button className="btn btn-secondary" onClick={() => handleEdit(supplier)}
+                        style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem', flex: 1 }}>
+                        ✏️ {t('edit')}
+                      </button>
+                      <button className="btn btn-danger" onClick={() => handleDelete(supplier.id)}
+                        style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}>
+                        🗑️
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
+          /* ===== DESKTOP TABLE VIEW ===== */
+          <div className="table-container">
           <table className="table">
             <thead>
               <tr>
@@ -274,7 +352,8 @@ function Suppliers() {
               )}
             </tbody>
           </table>
-        </div>
+          </div>
+        )}
       </div>
 
       {showModal && (

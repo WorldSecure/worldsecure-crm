@@ -25,6 +25,13 @@ function Users() {
 
   const isAdmin = user?.role === 'admin';
 
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   useEffect(() => {
     fetchUsers();
   }, []);
@@ -180,7 +187,63 @@ function Users() {
           </div>
         )}
 
-        <div className="table-container">
+        {isMobile ? (
+          /* ===== MOBILE CARD VIEW ===== */
+          <div style={{ padding: '0.5rem' }}>
+            {users.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>{t('no_data')}</div>
+            ) : (
+              users.map(userItem => (
+                <div key={userItem.id} style={{
+                  background: '#fff',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '10px',
+                  padding: '1rem',
+                  marginBottom: '0.75rem',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.07)'
+                }}>
+                  {/* Row 1: Username + Role badge */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                    <span style={{ fontWeight: '700', fontSize: '1rem' }}>
+                      {userItem.role === 'admin' ? '👑' : '👤'} {userItem.username}
+                    </span>
+                    <span className={`badge ${userItem.role === 'admin' ? 'badge-danger' : 'badge-info'}`}>
+                      {userItem.role === 'admin' ? t('admin') : t('user')}
+                    </span>
+                  </div>
+
+                  {/* Row 2: Email + Date */}
+                  <div style={{ fontSize: '0.82rem', color: '#555', marginBottom: '0.5rem' }}>
+                    <div>✉️ {userItem.email}</div>
+                    <div>📅 {new Date(userItem.created_at).toLocaleDateString('he-IL')}</div>
+                  </div>
+
+                  {/* Actions */}
+                  {isAdmin && (
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <button className="btn btn-secondary" onClick={() => handleEdit(userItem)}
+                        style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem', flex: 1 }}>
+                        {t('change_role')}
+                      </button>
+                      <button className="btn btn-primary" onClick={() => handleEditUsername(userItem)}
+                        style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}>
+                        ✏️
+                      </button>
+                      {userItem.id !== user.id && (
+                        <button className="btn btn-danger" onClick={() => handleDelete(userItem.id)}
+                          style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}>
+                          🗑️
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
+          /* ===== DESKTOP TABLE VIEW ===== */
+          <div className="table-container">
           <table className="table">
             <thead>
               <tr>
@@ -232,7 +295,8 @@ function Users() {
               ))}
             </tbody>
           </table>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Info Card */}

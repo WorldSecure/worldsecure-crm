@@ -8,7 +8,14 @@ function Customers() {
   const { t } = useLanguage();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  
+
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -217,7 +224,90 @@ function Customers() {
           />
         </div>
 
-        <div className="table-container">
+        {isMobile ? (
+          /* ===== MOBILE CARD VIEW ===== */
+          <div style={{ padding: '0.5rem' }}>
+            {getSortedCustomers(filteredCustomers).length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>{t('no_data')}</div>
+            ) : (
+              getSortedCustomers(filteredCustomers).map(customer => (
+                <div key={customer.id} style={{
+                  background: '#fff',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '10px',
+                  padding: '1rem',
+                  marginBottom: '0.75rem',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.07)'
+                }}>
+                  {/* Row 1: Name + sensitive badge */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                    <span style={{ fontWeight: '700', fontSize: '1rem' }}>
+                      🏢 {customer.is_sensitive && !isAdmin ? '*** ' + t('restricted') + ' ***' : customer.name}
+                    </span>
+                    {customer.is_sensitive && isAdmin && (
+                      <span className="badge badge-danger" style={{ fontSize: '0.7rem' }}>🔒 {t('sensitive_customer')}</span>
+                    )}
+                  </div>
+
+                  {/* Row 2: Country */}
+                  {customer.country && (
+                    <div style={{ fontSize: '0.82rem', color: '#555', marginBottom: '0.35rem' }}>
+                      🌍 {customer.country}
+                    </div>
+                  )}
+
+                  {/* Row 3: Contact info (admin only) */}
+                  {isAdmin && (() => {
+                    try {
+                      const p = JSON.parse(customer.contact_person);
+                      if (Array.isArray(p) && p.length > 0) return (
+                        <div style={{ fontSize: '0.82rem', color: '#555', marginBottom: '0.35rem' }}>
+                          {p.map((c, i) => (
+                            <div key={i}>
+                              {c.name && <span>👤 {c.name} </span>}
+                              {c.phone && <span>📞 {c.phone} </span>}
+                              {c.email && <span>✉️ {c.email}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    } catch(e) {}
+                    return customer.contact_person || customer.phone ? (
+                      <div style={{ fontSize: '0.82rem', color: '#555', marginBottom: '0.35rem' }}>
+                        {customer.contact_person && <span>👤 {customer.contact_person} </span>}
+                        {customer.phone && <span>📞 {customer.phone}</span>}
+                      </div>
+                    ) : null;
+                  })()}
+
+                  {/* Row 4: Address + Tax ID (admin only) */}
+                  {isAdmin && (customer.address || customer.tax_id) && (
+                    <div style={{ fontSize: '0.82rem', color: '#666', marginBottom: '0.5rem' }}>
+                      {customer.address && <span>📍 {customer.address} </span>}
+                      {customer.tax_id && <span>🪪 {customer.tax_id}</span>}
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  {isAdmin && (
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                      <button className="btn btn-secondary" onClick={() => handleEdit(customer)}
+                        style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem', flex: 1 }}>
+                        ✏️ {t('edit')}
+                      </button>
+                      <button className="btn btn-danger" onClick={() => handleDelete(customer.id)}
+                        style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}>
+                        🗑️
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
+          /* ===== DESKTOP TABLE VIEW ===== */
+          <div className="table-container">
           <table className="table">
             <thead>
               <tr>
@@ -263,7 +353,6 @@ function Customers() {
                           );
                         }
                       } catch(e) {}
-                      // פורמט ישן
                       return (
                         <div style={{ fontSize: '0.85rem' }}>
                           {customer.contact_person && <div>👤 {customer.contact_person}</div>}
@@ -298,7 +387,8 @@ function Customers() {
               )}
             </tbody>
           </table>
-        </div>
+          </div>
+        )}
       </div>
 
       {showModal && (
