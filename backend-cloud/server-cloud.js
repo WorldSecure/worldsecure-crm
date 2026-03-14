@@ -565,6 +565,7 @@ app.delete('/api/inbound/:id', authenticateToken, async (req, res) => {
     }
     await client.query('DELETE FROM inbound_items WHERE transaction_id=$1', [req.params.id]);
     await client.query('DELETE FROM inbound_transactions WHERE id=$1', [req.params.id]);
+    await client.query(`INSERT INTO pending_deletions (entity_type, entity_id, deleted_at) VALUES ('inbound', $1, NOW()) ON CONFLICT DO NOTHING`, [req.params.id]);
     await client.query('COMMIT');
     res.json({ message: 'Inbound transaction deleted' });
   } catch (err) {
@@ -585,6 +586,7 @@ app.delete('/api/outbound/:id', authenticateToken, async (req, res) => {
     }
     await client.query('DELETE FROM outbound_items WHERE transaction_id=$1', [req.params.id]);
     await client.query('DELETE FROM outbound_transactions WHERE id=$1', [req.params.id]);
+    await client.query(`INSERT INTO pending_deletions (entity_type, entity_id, deleted_at) VALUES ('outbound', $1, NOW()) ON CONFLICT DO NOTHING`, [req.params.id]);
     await client.query('COMMIT');
     res.json({ message: 'Outbound transaction deleted' });
   } catch (err) {

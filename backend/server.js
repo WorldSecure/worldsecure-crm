@@ -1351,6 +1351,9 @@ app.delete('/api/inbound/:id', authenticateToken, (req, res) => {
             db.run('DELETE FROM inbound_transactions WHERE id = ?', [id], (err) => {
               if (err) return res.status(500).json({ error: err.message });
               
+              // רשום מחיקה לסינק עם הענן
+              db.run(`CREATE TABLE IF NOT EXISTS deleted_inbound (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
+              db.run(`INSERT OR IGNORE INTO deleted_inbound (id) VALUES (?)`, [id]);
               logActivity(req.user.id, 'DELETE_INBOUND', 'inbound', id, {});
               res.json({ message: 'Inbound transaction deleted' });
             });
@@ -1397,6 +1400,9 @@ app.delete('/api/outbound/:id', authenticateToken, (req, res) => {
             db.run('DELETE FROM outbound_transactions WHERE id = ?', [id], (err) => {
               if (err) return res.status(500).json({ error: err.message });
               
+              // רשום מחיקה לסינק עם הענן
+              db.run(`CREATE TABLE IF NOT EXISTS deleted_outbound (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
+              db.run(`INSERT OR IGNORE INTO deleted_outbound (id) VALUES (?)`, [id]);
               logActivity(req.user.id, 'DELETE_OUTBOUND', 'outbound', id, {});
               res.json({ message: 'Outbound transaction deleted' });
             });

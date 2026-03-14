@@ -152,6 +152,16 @@ async function syncEntityToCloud(entityName, sql) {
 }
 
 async function syncInboundToCloud() {
+  // שלח מחיקות מקומיות לענן
+  await sqliteRun('CREATE TABLE IF NOT EXISTS deleted_inbound (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
+  const deletedInbound = await sqliteAll('SELECT id FROM deleted_inbound').catch(() => []);
+  for (const d of deletedInbound) {
+    await apiRequest('DELETE', `/api/inbound/${d.id}`).catch(() => {});
+  }
+  if (deletedInbound.length > 0) {
+    await sqliteRun('DELETE FROM deleted_inbound').catch(() => {});
+    log(`  ↳ inbound deletions pushed to cloud: ${deletedInbound.length}`);
+  }
   const transactions = await sqliteAll('SELECT it.*, u.username FROM inbound_transactions it LEFT JOIN users u ON it.user_id = u.id ORDER BY it.id');
   const items        = await sqliteAll('SELECT * FROM inbound_items ORDER BY id');
   const localIds     = transactions.map(t => t.id);
@@ -161,6 +171,16 @@ async function syncInboundToCloud() {
 }
 
 async function syncOutboundToCloud() {
+  // שלח מחיקות מקומיות לענן
+  await sqliteRun('CREATE TABLE IF NOT EXISTS deleted_outbound (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
+  const deletedOutbound = await sqliteAll('SELECT id FROM deleted_outbound').catch(() => []);
+  for (const d of deletedOutbound) {
+    await apiRequest('DELETE', `/api/outbound/${d.id}`).catch(() => {});
+  }
+  if (deletedOutbound.length > 0) {
+    await sqliteRun('DELETE FROM deleted_outbound').catch(() => {});
+    log(`  ↳ outbound deletions pushed to cloud: ${deletedOutbound.length}`);
+  }
   const transactions = await sqliteAll('SELECT ot.*, u.username FROM outbound_transactions ot LEFT JOIN users u ON ot.user_id = u.id ORDER BY ot.id');
   const items        = await sqliteAll('SELECT * FROM outbound_items ORDER BY id');
   const localIds     = transactions.map(t => t.id);
@@ -487,10 +507,21 @@ async function pullDeletionsFromCloud() {
       if (d.entity_type === 'support_ticket') {
         await sqliteRun('DELETE FROM support_ticket_history WHERE ticket_id = ?', [d.entity_id]);
         await sqliteRun('DELETE FROM support_tickets WHERE id = ?', [d.entity_id]);
-        // הסר מ-deleted_support_tickets אם קיים שם (למנוע לולאה)
         await sqliteRun('DELETE FROM deleted_support_tickets WHERE ticket_id = ?', [d.entity_id]).catch(() => {});
         handled.push(d);
         log(`  ↳ pulled deletion: support_ticket #${d.entity_id}`);
+      } else if (d.entity_type === 'inbound') {
+        await sqliteRun('DELETE FROM inbound_items WHERE transaction_id = ?', [d.entity_id]).catch(() => {});
+        await sqliteRun('DELETE FROM inbound_transactions WHERE id = ?', [d.entity_id]).catch(() => {});
+        await sqliteRun('DELETE FROM deleted_inbound WHERE id = ?', [d.entity_id]).catch(() => {});
+        handled.push(d);
+        log(`  ↳ pulled deletion: inbound #${d.entity_id}`);
+      } else if (d.entity_type === 'outbound') {
+        await sqliteRun('DELETE FROM outbound_items WHERE transaction_id = ?', [d.entity_id]).catch(() => {});
+        await sqliteRun('DELETE FROM outbound_transactions WHERE id = ?', [d.entity_id]).catch(() => {});
+        await sqliteRun('DELETE FROM deleted_outbound WHERE id = ?', [d.entity_id]).catch(() => {});
+        handled.push(d);
+        log(`  ↳ pulled deletion: outbound #${d.entity_id}`);
       }
     }
 
