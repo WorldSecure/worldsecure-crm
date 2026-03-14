@@ -2243,6 +2243,7 @@ ${tx?.notes?`<p><strong>${lang==='he'?'הערות':'Notes'}:</strong> ${tx.notes
     }
 
     // לוגו לחתימה
+    const baseUrl = 'https://worldsecure-backend.onrender.com';
     const logoHtmlSignature = company.logo_path
       ? `<tr><td colspan="2" style="padding-top:8px;text-align:left;"><img src="${baseUrl}${company.logo_path}" alt="${company.company_name||''}" style="max-height:60px;max-width:200px;object-fit:contain;"></td></tr>`
       : '';
