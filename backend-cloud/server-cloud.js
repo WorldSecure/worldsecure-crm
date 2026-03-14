@@ -611,14 +611,25 @@ async function saveDocument(type, referenceId, htmlContent, language, userId, en
   const relPath   = `/documents/${type}/${filename}`;
 
   try {
-    const puppeteer = require('puppeteer');
-    const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox','--disable-setuid-sandbox'] });
-    const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-    await page.emulateMediaType('print');
-    await page.pdf({ path: filepath, format: 'A4', printBackground: true,
-      margin: { top:'15mm', bottom:'15mm', left:'15mm', right:'15mm' } });
-    await browser.close();
+    const pdfshiftKey = process.env.PDFSHIFT_API_KEY;
+    if (!pdfshiftKey) throw new Error('PDFSHIFT_API_KEY not set');
+    const pdfRes = await fetch('https://api.pdfshift.io/v3/convert/pdf', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + Buffer.from('api:' + pdfshiftKey).toString('base64'),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        source: htmlContent,
+        format: 'A4',
+        margin: { top: '15mm', bottom: '15mm', left: '15mm', right: '15mm' },
+        print_background: true
+      })
+    });
+    if (!pdfRes.ok) throw new Error('PDFShift error: ' + await pdfRes.text());
+    const pdfBuffer = Buffer.from(await pdfRes.arrayBuffer());
+    fs.writeFileSync(filepath, pdfBuffer);
+    console.log(`PDF generated via PDFShift: ${filename}`);
   } catch (err) {
     console.error('PDF generation failed, saving HTML:', err.message);
     const htmlFile = filepath.replace('.pdf', '.html');
