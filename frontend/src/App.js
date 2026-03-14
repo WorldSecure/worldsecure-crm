@@ -58,8 +58,10 @@ const NewHeader = ({ activeTab }) => {
       background: 'linear-gradient(135deg, #0a3d6b 0%, #1a6fa8 100%)',
       padding: isMobile ? '0.6rem' : '1rem',
       boxSizing: 'border-box',
-      position: 'sticky',
+      position: 'fixed',
       top: 0,
+      left: 0,
+      right: 0,
       zIndex: 1000,
       boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
     }}>
@@ -227,10 +229,10 @@ function AppRoutes() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', width: '100%', overflowX: 'hidden', background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)' }}>
+    <div style={{ minHeight: '100vh', width: '100%', overflowX: 'hidden', background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)', display: 'flex', flexDirection: 'column' }}>
       <NewHeader activeTab={getActiveTab()} />
       
-      <div style={{ width: '100%' }}>
+      <div style={{ width: '100%', flex: 1 }}>
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<Navigate to="/dashboard" />} />

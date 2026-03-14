@@ -52,7 +52,7 @@ function Layout() {
   };
 
   return (
-    <div className="app">
+    <div>
       <div className="main-layout">
         <aside className="sidebar">
           <nav>

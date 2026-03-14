@@ -28,7 +28,7 @@ function SupportLayout() {
   };
 
   return (
-    <div className="app">
+    <div>
       {/* Header removed - now in App.js */}
 
       <div className="main-layout">
