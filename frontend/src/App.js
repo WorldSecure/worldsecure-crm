@@ -57,7 +57,11 @@ const NewHeader = ({ activeTab }) => {
       width: '100%',
       background: 'linear-gradient(135deg, #0a3d6b 0%, #1a6fa8 100%)',
       padding: isMobile ? '0.6rem' : '1rem',
-      boxSizing: 'border-box'
+      boxSizing: 'border-box',
+      position: 'sticky',
+      top: 0,
+      zIndex: 1000,
+      boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
     }}>
       {/* Header עליון */}
       <div style={{
