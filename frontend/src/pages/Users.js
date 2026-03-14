@@ -309,7 +309,7 @@ function Users() {
                           onClick={() => { setPasswordData({ id: userItem.id, username: userItem.username, password: '', confirm: '' }); setShowPasswordModal(true); }}
                           style={{ background: '#f59e0b', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem 0.75rem', cursor: 'pointer', fontWeight: '500' }}
                         >
-                          🔑 סיסמה
+                          🔑 {t('change_password')}
                         </button>
                         {userItem.id !== user.id && (
                           <button 
