@@ -324,32 +324,27 @@ function Inbound() {
           </button>
         </div>
 
-        <div className="table-container" >
-          <table className="table" >
-            <thead>
-              <tr>
-                <th>{t('transaction_date')}</th>
-                <th>{t('supplier')}</th>
-                <th>{t('supplier_type')}</th>
-                <th>{t('notes')}</th>
-                <th>{t('username')}</th>
-                <th>{t('actions')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {transactions.length === 0 ? (
+        {/* Desktop Table */}
+        <div style={{ display: window.innerWidth <= 768 ? 'none' : 'block' }}>
+          <div className="table-container">
+            <table className="table">
+              <thead>
                 <tr>
-                  <td colSpan="6" className="text-center">{t('no_data')}</td>
+                  <th>{t('transaction_date')}</th>
+                  <th>{t('supplier')}</th>
+                  <th>{t('supplier_type')}</th>
+                  <th>{t('notes')}</th>
+                  <th>{t('username')}</th>
+                  <th>{t('actions')}</th>
                 </tr>
-              ) : (
-                transactions.map(trans => (
+              </thead>
+              <tbody>
+                {transactions.length === 0 ? (
+                  <tr><td colSpan="6" className="text-center">{t('no_data')}</td></tr>
+                ) : transactions.map(trans => (
                   <tr key={trans.id}>
                     <td>{new Date(trans.transaction_date).toLocaleString('he-IL')}</td>
-                    <td>
-                      {trans.supplier_type === 'casual' 
-                        ? trans.casual_supplier_name 
-                        : trans.supplier_name || '-'}
-                    </td>
+                    <td>{trans.supplier_type === 'casual' ? trans.casual_supplier_name : trans.supplier_name || '-'}</td>
                     <td>
                       <span className={`badge ${trans.supplier_type === 'casual' ? 'badge-warning' : 'badge-success'}`}>
                         {trans.supplier_type === 'casual' ? t('casual') : t('registered')}
@@ -359,38 +354,54 @@ function Inbound() {
                     <td>{trans.username}</td>
                     <td>
                       <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
-                        <button 
-                          className="btn btn-success"
-                          onClick={() => handleGenerateReceiptNote(trans.id)}
-                          style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
-                        >
+                        <button className="btn btn-success" onClick={() => handleGenerateReceiptNote(trans.id)} style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}>
                           📄 {t('receipt_note')}
                         </button>
                         {isAdmin && (
                           <>
-                            <button 
-                              className="btn btn-secondary"
-                              onClick={() => handleEdit(trans)}
-                              style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
-                            >
-                              ✏️
-                            </button>
-                            <button 
-                              className="btn btn-danger"
-                              onClick={() => handleDeleteTransaction(trans.id)}
-                              style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
-                            >
-                              🗑️
-                            </button>
+                            <button className="btn btn-secondary" onClick={() => handleEdit(trans)} style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}>✏️</button>
+                            <button className="btn btn-danger" onClick={() => handleDeleteTransaction(trans.id)} style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}>🗑️</button>
                           </>
                         )}
                       </div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Mobile Cards */}
+        <div style={{ display: window.innerWidth <= 768 ? 'flex' : 'none', flexDirection: 'column', gap: '0.75rem', padding: '0.5rem 0' }}>
+          {transactions.length === 0 ? (
+            <div className="text-center" style={{ padding: '2rem', color: '#888' }}>{t('no_data')}</div>
+          ) : transactions.map(trans => (
+            <div key={trans.id} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <span style={{ fontSize: '0.82rem', color: '#64748b' }}>{new Date(trans.transaction_date).toLocaleString('he-IL')}</span>
+                <span className={`badge ${trans.supplier_type === 'casual' ? 'badge-warning' : 'badge-success'}`} style={{ fontSize: '0.75rem' }}>
+                  {trans.supplier_type === 'casual' ? t('casual') : t('registered')}
+                </span>
+              </div>
+              <div style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: '0.25rem', color: '#1e293b' }}>
+                🏭 {trans.supplier_type === 'casual' ? trans.casual_supplier_name : trans.supplier_name || '-'}
+              </div>
+              {trans.notes && <div style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '0.25rem' }}>📝 {trans.notes}</div>}
+              {trans.username && <div style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '0.5rem' }}>👤 {trans.username}</div>}
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                <button className="btn btn-success" onClick={() => handleGenerateReceiptNote(trans.id)} style={{ fontSize: '0.78rem', padding: '0.3rem 0.6rem' }}>
+                  📄 {t('receipt_note')}
+                </button>
+                {isAdmin && (
+                  <>
+                    <button className="btn btn-secondary" onClick={() => handleEdit(trans)} style={{ fontSize: '0.78rem', padding: '0.3rem 0.6rem' }}>✏️</button>
+                    <button className="btn btn-danger" onClick={() => handleDeleteTransaction(trans.id)} style={{ fontSize: '0.78rem', padding: '0.3rem 0.6rem' }}>🗑️</button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
