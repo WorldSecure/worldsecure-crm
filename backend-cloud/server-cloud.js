@@ -2242,17 +2242,34 @@ ${tx?.notes?`<p><strong>${lang==='he'?'הערות':'Notes'}:</strong> ${tx.notes
       }
     }
 
+    // לוגו לחתימה
+    const logoHtmlSignature = company.logo_path
+      ? `<tr><td colspan="2" style="padding-top:8px;text-align:left;"><img src="${baseUrl}${company.logo_path}" alt="${company.company_name||''}" style="max-height:60px;max-width:200px;object-fit:contain;"></td></tr>`
+      : '';
+
     // Build email payload for Brevo API
     const emailPayload = {
       sender: { name: company.company_name || 'WorldSecure', email: company.smtp_from || company.smtp_user },
       to: [{ email: to }],
       subject: subject || `Document from ${company.company_name || 'WorldSecure'}`,
       htmlContent: `<div style="font-family:Arial,sans-serif;padding:20px;max-width:600px;">
-        <p>${body || 'Please find the attached document.'}</p>
-        <hr style="border:none;border-top:1px solid #e0e0e0;margin:20px 0">
-        <p style="color:#555;font-size:13px;">${company.company_name || 'WorldSecure LTD'}<br>
-        ${company.email || ''} | ${company.phone || ''}<br>
-        <a href="https://www.world-secure.com">www.world-secure.com</a></p>
+        <p style="margin-bottom:20px;">${body || 'Please find the attached document.'}</p>
+        <hr style="border:none;border-top:1px solid #e0e0e0;margin:24px 0">
+        <table style="font-size:13px;color:#333;line-height:1.6;">
+          <tr>
+            <td colspan="2" style="font-weight:700;font-size:16px;padding-bottom:12px;color:#1a1a1a;">
+              WorldSecure Professional Services Team
+            </td>
+          </tr>
+          <tr>
+            <td colspan="2" style="text-align:left;padding-bottom:20px;font-size:16px;">
+              <a href="https://www.world-secure.com" target="_blank" style="color:#1a73e8;text-decoration:none;font-weight:600;">
+                www.world-secure.com
+              </a>
+            </td>
+          </tr>
+          ${logoHtmlSignature}
+        </table>
       </div>`
     };
 
