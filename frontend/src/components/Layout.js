@@ -86,52 +86,7 @@ function Layout() {
             )}
             
           
-            {/* suppliers - admin only */}
-                {user?.role === 'admin' && (
-                <Link to="/suppliers" className={isActive('/suppliers')}>
-                  <span className="sidebar-icon">🏭</span>
-                  {t('suppliers')}
-                </Link>
-                )}
-                
-               {/* customers - admin only */}
-               {user?.role === 'admin' && (
-                <Link to="/customers" className={isActive('/customers')}>
-                  <span className="sidebar-icon">👥</span>
-                  {t('customers')}
-                </Link>
-           )}
-            {/* Settings - admin only */}
-            {user?.role === 'admin' && (
-              <Link to="/settings" className={isActive('/settings')}>
-                <span className="sidebar-icon">⚙️</span>
-                {t('settings')}
-              </Link>
-            )}
-            
-            {/* Users - admin only */}
-            {user?.role === 'admin' && (
-              <Link to="/users" className={isActive('/users')}>
-                <span className="sidebar-icon">👥</span>
-                {t('users')}
-              </Link>
-            )}
-           
-            {/* Reports - admin only */}
-            {user?.role === 'admin' && (
-            <Link to="/reports" className={isActive('/reports')}>
-              <span className="sidebar-icon">📦</span>
-              {t('Warehouse Reports')}
-            </Link>
-            )}
-            
-            {/* Activity Log - admin only */}
-            {user?.role === 'admin' && (
-              <Link to="/activity-log" className={isActive('/activity-log')}>
-                <span className="sidebar-icon">📝</span>
-                {t('activity_log')}
-              </Link>
-            )}
+       
           </nav>
         </aside>
 

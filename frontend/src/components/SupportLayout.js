@@ -58,27 +58,7 @@ function SupportLayout() {
                 </Link>
               </>
             )}
-{user?.role === 'admin' && (
-            
-            <Link to="/support/settings" className={isActive('/support/settings')}>
-              <span className="sidebar-icon">⚙️</span>
-              {t('settings')}
-            </Link>
-)}
-            
-            {user?.role === 'admin' && (
-              <Link to="/support/users" className={isActive('/support/users')}>
-                <span className="sidebar-icon">👤</span>
-                {t('users')}
-              </Link>
-            )}
 
-            {user?.role === 'admin' && (
-              <Link to="/support/activity-log" className={isActive('/support/activity-log')}>
-                <span className="sidebar-icon">📝</span>
-                {t('activity_log')}
-              </Link>
-            )}
           </nav>
         </aside>
 

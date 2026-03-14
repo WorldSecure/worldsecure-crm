@@ -30,50 +30,6 @@ function SalesLayout() {
               <span className="sidebar-icon">💰</span>
               {t('sales_management')}
             </Link>
-
-            <Link to="/sales-portal/customers" className={isActive('/sales-portal/customers')}>
-              <span className="sidebar-icon">👥</span>
-              {t('customers')}
-            </Link>
-
-            <Link to="/sales-portal/products" className={isActive('/sales-portal/products')}>
-              <span className="sidebar-icon">📦</span>
-              {t('products')}
-            </Link>
-
-            <Link to="/sales-portal/suppliers" className={isActive('/sales-portal/suppliers')}>
-              <span className="sidebar-icon">🏭</span>
-              {t('suppliers')}
-            </Link>
-
-            <Link to="/sales-portal/reports" className={isActive('/sales-portal/reports')}>
-              <span className="sidebar-icon">📦</span>
-              {t('warehouse_reports') || 'דוחות מחסן'}
-            </Link>
-
-            <Link to="/sales-portal/sales-reports" className={isActive('/sales-portal/sales-reports')}>
-              <span className="sidebar-icon">📊</span>
-              {t('sales_reports') || 'דוחות מכירות'}
-            </Link>
-
-            <Link to="/sales-portal/settings" className={isActive('/sales-portal/settings')}>
-              <span className="sidebar-icon">⚙️</span>
-              {t('settings')}
-            </Link>
-
-            {user?.role === 'admin' && (
-              <Link to="/sales-portal/users" className={isActive('/sales-portal/users')}>
-                <span className="sidebar-icon">👤</span>
-                {t('users')}
-              </Link>
-            )}
-
-            {user?.role === 'admin' && (
-              <Link to="/sales-portal/activity-log" className={isActive('/sales-portal/activity-log')}>
-                <span className="sidebar-icon">📝</span>
-                {t('activity_log')}
-              </Link>
-            )}
           </nav>
         </aside>
 
