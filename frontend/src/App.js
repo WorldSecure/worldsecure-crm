@@ -28,6 +28,19 @@ const NewHeader = ({ activeTab }) => {
   const { user, logout } = useAuth();
   const { language, setLanguage } = useLanguage();
   const navigate = useNavigate();
+  const headerRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const updateHeight = () => {
+      if (headerRef.current) {
+        const h = headerRef.current.getBoundingClientRect().height;
+        document.documentElement.style.setProperty('--header-height', h + 'px');
+      }
+    };
+    updateHeight();
+    window.addEventListener('resize', updateHeight);
+    return () => window.removeEventListener('resize', updateHeight);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -53,7 +66,7 @@ const NewHeader = ({ activeTab }) => {
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
 
   return (
-    <div style={{
+    <div ref={headerRef} style={{
       width: '100%',
       background: 'linear-gradient(135deg, #0a3d6b 0%, #1a6fa8 100%)',
       padding: isMobile ? '0.6rem' : '1rem',
