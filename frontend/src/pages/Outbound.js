@@ -26,6 +26,14 @@ function Outbound() {
   const [editingItemIndex, setEditingItemIndex] = useState(null);
 
   const isAdmin = user?.role === 'admin';
+
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   // Debug - check user role
   useEffect(() => {
@@ -433,8 +441,91 @@ function Outbound() {
           </button>
         </div>
 
-        <div className="table-container" >
-          <table className="table" >
+        {isMobile ? (
+          /* ===== MOBILE CARD VIEW ===== */
+          <div style={{ padding: '0.5rem' }}>
+            {transactions.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>{t('no_data')}</div>
+            ) : (
+              transactions.map(trans => (
+                <div key={trans.id} style={{
+                  background: '#fff',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '10px',
+                  padding: '1rem',
+                  marginBottom: '0.75rem',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.07)'
+                }}>
+                  {/* Row 1: Date + Status */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '0.82rem', color: '#555' }}>
+                      📅 {new Date(trans.transaction_date).toLocaleString('he-IL')}
+                    </span>
+                    <span className={`badge ${
+                      trans.status === 'delivered' ? 'badge-success' :
+                      trans.status === 'shipped' ? 'badge-info' :
+                      'badge-warning'
+                    }`}>
+                      {trans.status === 'pending' ? t('status_pending') :
+                       trans.status === 'ready' ? t('status_ready') :
+                       trans.status === 'shipped' ? t('status_shipped') : t('status_delivered')}
+                    </span>
+                  </div>
+
+                  {/* Row 2: Customer */}
+                  <div style={{ marginBottom: '0.4rem' }}>
+                    <span style={{ fontWeight: '600', fontSize: '1rem' }}>
+                      👤 {trans.customer_type === 'casual' ? trans.casual_customer_name : trans.customer_name || '-'}
+                    </span>
+                    {' '}
+                    <span className={`badge ${trans.customer_type === 'casual' ? 'badge-warning' : 'badge-success'}`}
+                      style={{ fontSize: '0.72rem' }}>
+                      {trans.customer_type === 'casual' ? t('casual') : t('registered')}
+                    </span>
+                  </div>
+
+                  {/* Row 3: Username + Notes */}
+                  <div style={{ fontSize: '0.82rem', color: '#666', marginBottom: '0.75rem' }}>
+                    <span>🧑 {trans.username}</span>
+                    {trans.notes && <span style={{ marginLeft: '0.75rem' }}>📝 {trans.notes}</span>}
+                  </div>
+
+                  {/* Row 4: Action Buttons */}
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <button
+                      className="btn btn-success"
+                      onClick={() => handleGenerateDeliveryNote(trans.id)}
+                      style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem', flex: '1', minWidth: '120px' }}
+                    >
+                      📄 {t('delivery_note')}
+                    </button>
+                    {isAdmin && (
+                      <>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => handleEdit(trans)}
+                          style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}
+                        >
+                          ✏️ {t('edit')}
+                        </button>
+                        <button
+                          className="btn btn-danger"
+                          onClick={() => handleDeleteTransaction(trans.id)}
+                          style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}
+                        >
+                          🗑️
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
+          /* ===== DESKTOP TABLE VIEW ===== */
+          <div className="table-container">
+          <table className="table">
             <thead>
               <tr>
                 <th>{t('transaction_date')}</th>
@@ -512,7 +603,8 @@ function Outbound() {
               )}
             </tbody>
           </table>
-        </div>
+          </div>
+        )}
       </div>
 
       {showModal && (
