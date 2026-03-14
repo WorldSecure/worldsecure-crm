@@ -21,6 +21,7 @@ import ActivityLog from './pages/ActivityLog';
 import Users from './pages/Users';
 import SupportDashboard from './pages/SupportDashboard';
 import SupportManagement from './pages/SupportManagement';
+import AdminLayout from './components/AdminLayout';
 import './App.css';
 
 // Header חדש עם הרשאות
@@ -177,6 +178,14 @@ const NewHeader = ({ activeTab }) => {
             📞 {language === 'he' ? 'תמיכה' : language === 'pt' ? 'SUPORTE' : 'SUPPORT'}
           </a>
         )}
+        {user?.role === 'admin' && (
+          <a href="/admin" style={activeTab === 'admin'
+            ? buttonActiveStyle('#FF5722', '#E64A19')
+            : {...buttonInactiveStyle(), background: '#FF9800'}
+          }>
+            👨‍💼 {language === 'he' ? 'ניהול' : language === 'pt' ? 'ADMIN' : 'ADMIN'}
+          </a>
+        )}
       </div>
     </div>
   );
@@ -228,6 +237,7 @@ function AppRoutes() {
     if (location.pathname === '/' || location.pathname.startsWith('/dashboard') || location.pathname.startsWith('/products') || location.pathname.startsWith('/suppliers') || location.pathname.startsWith('/customers') || location.pathname.startsWith('/inbound') || location.pathname.startsWith('/outbound') || location.pathname.startsWith('/reports') || location.pathname.startsWith('/settings') || location.pathname.startsWith('/users') || location.pathname.startsWith('/activity-log')) return 'warehouse';
     if (location.pathname.startsWith('/sales-portal')) return 'sales';
     if (location.pathname.startsWith('/support')) return 'support';
+    if (location.pathname.startsWith('/admin')) return 'admin';
     return 'warehouse';
   };
 
@@ -285,6 +295,18 @@ function AppRoutes() {
             <Route path="settings" element={<AdminRoute><Settings /></AdminRoute>} />
             <Route path="users" element={<Users />} />
             <Route path="activity-log" element={<AdminRoute><ActivityLog /></AdminRoute>} />
+          </Route>
+
+          <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
+            <Route index element={<Navigate to="/admin/products" />} />
+            <Route path="products" element={<Products />} />
+            <Route path="suppliers" element={<Suppliers />} />
+            <Route path="customers" element={<Customers />} />
+            <Route path="settings" element={<Settings />} />
+            <Route path="users" element={<Users />} />
+            <Route path="reports" element={<Reports />} />
+            <Route path="sales-reports" element={<SalesReports />} />
+            <Route path="activity-log" element={<ActivityLog />} />
           </Route>
 
           <Route path="/login" element={<Login />} />
