@@ -239,7 +239,7 @@ function SupportManagement() {
       </div>
 
 
-      {/* Table */}
+      {/* Table / Cards */}
       <div className="card">
         <div className="card-header">
           <h3 className="card-title">
@@ -247,52 +247,90 @@ function SupportManagement() {
           </h3>
         </div>
         {loading ? <div className="loading">{t('loading')}</div> : (
-          <div className="table-container" style={{ overflowX:'visible' }}>
-            <table className="table" style={{ tableLayout:'fixed', width:'100%' }}>
-              <thead>
-                <tr>
-                  <th onClick={() => handleSort('ticket_number')} style={{ cursor:'pointer', userSelect:'none', width:'120px' }}><SortIcon column="ticket_number" sortBy={sortBy} sortOrder={sortOrder} />{t('ticket_number')||'Ticket'}</th>
-                  <th onClick={() => handleSort('customer_name')} style={{ cursor:'pointer', userSelect:'none' }}><SortIcon column="customer_name" sortBy={sortBy} sortOrder={sortOrder} />{t('customer')}</th>
-                  <th onClick={() => handleSort('subject')} style={{ cursor:'pointer', userSelect:'none' }}><SortIcon column="subject" sortBy={sortBy} sortOrder={sortOrder} />{t('subject')}</th>
-                  <th onClick={() => handleSort('priority')} style={{ cursor:'pointer', userSelect:'none', width:'90px' }}><SortIcon column="priority" sortBy={sortBy} sortOrder={sortOrder} />{t('priority')}</th>
-                  <th onClick={() => handleSort('status')} style={{ cursor:'pointer', userSelect:'none', width:'130px' }}><SortIcon column="status" sortBy={sortBy} sortOrder={sortOrder} />{t('status')}</th>
-                  <th onClick={() => handleSort('created_at')} style={{ cursor:'pointer', userSelect:'none', width:'100px' }}><SortIcon column="created_at" sortBy={sortBy} sortOrder={sortOrder} />{t('date')}</th>
-                  <th style={{ width:'120px', minWidth:'120px' }}>{t('actions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.length === 0 ? (
-                  <tr><td colSpan="7" className="text-center">{t('no_tickets')}</td></tr>
-                ) : sorted.map(tk => (
-                  <tr key={tk.id}>
-                    <td style={{ fontWeight:700, color:'#2196F3', fontSize:'0.85rem', whiteSpace:'nowrap' }}>{tk.ticket_number || `#${tk.id}`}</td>
-                    <td style={{ wordBreak:'break-word' }}>{tk.customer_name||'-'}</td>
-                    <td style={{ wordBreak:'break-word' }}>{tk.subject}</td>
-                    <td>{getPriorityLabel(tk.priority)}</td>
-                    <td>
-                      <div style={{ display:'flex', alignItems:'center', gap:'0.3rem', flexWrap:'wrap' }}>
-                        {getStatusBadge(tk.status)}
-                        {tk.status === 'awaiting_customer' && tk.awaiting_channel && (
-                          <span style={{ fontSize:'1rem' }}>
-                            {tk.awaiting_channel === 'phone' ? '☎️' : tk.awaiting_channel === 'email' ? '📧' : '📱'}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td>{tk.created_at ? new Date(tk.created_at).toLocaleDateString() : '-'}</td>
-                    <td>
-                      <button
-                        onClick={() => { setCaseTicket(tk); setShowCaseModal(true); }}
-                        style={{ padding:'0.4rem 0.5rem', background:'#1e40af', color:'white', border:'none', borderRadius:'8px', cursor:'pointer', fontSize:'0.82rem', fontWeight:700, whiteSpace:'normal', lineHeight:'1.3', textAlign:'center', width:'100%' }}
-                      >
-                        🗂️ {t('case_management')||'Case Management'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            {/* Desktop Table */}
+            <div style={{ display: window.innerWidth <= 768 ? 'none' : 'block' }}>
+              <div className="table-container" style={{ overflowX:'auto' }}>
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th onClick={() => handleSort('ticket_number')} style={{ cursor:'pointer', userSelect:'none', width:'120px' }}><SortIcon column="ticket_number" sortBy={sortBy} sortOrder={sortOrder} />{t('ticket_number')||'Ticket'}</th>
+                      <th onClick={() => handleSort('customer_name')} style={{ cursor:'pointer', userSelect:'none' }}><SortIcon column="customer_name" sortBy={sortBy} sortOrder={sortOrder} />{t('customer')}</th>
+                      <th onClick={() => handleSort('subject')} style={{ cursor:'pointer', userSelect:'none' }}><SortIcon column="subject" sortBy={sortBy} sortOrder={sortOrder} />{t('subject')}</th>
+                      <th onClick={() => handleSort('priority')} style={{ cursor:'pointer', userSelect:'none', width:'90px' }}><SortIcon column="priority" sortBy={sortBy} sortOrder={sortOrder} />{t('priority')}</th>
+                      <th onClick={() => handleSort('status')} style={{ cursor:'pointer', userSelect:'none', width:'130px' }}><SortIcon column="status" sortBy={sortBy} sortOrder={sortOrder} />{t('status')}</th>
+                      <th onClick={() => handleSort('created_at')} style={{ cursor:'pointer', userSelect:'none', width:'100px' }}><SortIcon column="created_at" sortBy={sortBy} sortOrder={sortOrder} />{t('date')}</th>
+                      <th style={{ width:'120px', minWidth:'120px' }}>{t('actions')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sorted.length === 0 ? (
+                      <tr><td colSpan="7" className="text-center">{t('no_tickets')}</td></tr>
+                    ) : sorted.map(tk => (
+                      <tr key={tk.id}>
+                        <td style={{ fontWeight:700, color:'#2196F3', fontSize:'0.85rem', whiteSpace:'nowrap' }}>{tk.ticket_number || `#${tk.id}`}</td>
+                        <td style={{ wordBreak:'break-word' }}>{tk.customer_name||'-'}</td>
+                        <td style={{ wordBreak:'break-word' }}>{tk.subject}</td>
+                        <td>{getPriorityLabel(tk.priority)}</td>
+                        <td>
+                          <div style={{ display:'flex', alignItems:'center', gap:'0.3rem', flexWrap:'wrap' }}>
+                            {getStatusBadge(tk.status)}
+                            {tk.status === 'awaiting_customer' && tk.awaiting_channel && (
+                              <span style={{ fontSize:'1rem' }}>
+                                {tk.awaiting_channel === 'phone' ? '☎️' : tk.awaiting_channel === 'email' ? '📧' : '📱'}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td>{tk.created_at ? new Date(tk.created_at).toLocaleDateString() : '-'}</td>
+                        <td>
+                          <button
+                            onClick={() => { setCaseTicket(tk); setShowCaseModal(true); }}
+                            style={{ padding:'0.4rem 0.5rem', background:'#1e40af', color:'white', border:'none', borderRadius:'8px', cursor:'pointer', fontSize:'0.82rem', fontWeight:700, whiteSpace:'normal', lineHeight:'1.3', textAlign:'center', width:'100%' }}
+                          >
+                            🗂️ {t('case_management')||'Case Management'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Mobile Cards */}
+            <div style={{ display: window.innerWidth <= 768 ? 'flex' : 'none', flexDirection:'column', gap:'0.75rem', padding:'0.5rem 0' }}>
+              {sorted.length === 0 ? (
+                <div className="text-center" style={{ padding:'2rem', color:'#888' }}>{t('no_tickets')}</div>
+              ) : sorted.map(tk => (
+                <div key={tk.id} style={{ background:'white', border:'1px solid #e2e8f0', borderRadius:'10px', padding:'1rem', boxShadow:'0 1px 4px rgba(0,0,0,0.08)' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.5rem' }}>
+                    <span style={{ fontWeight:700, color:'#2196F3', fontSize:'0.9rem' }}>{tk.ticket_number || `#${tk.id}`}</span>
+                    <div style={{ display:'flex', alignItems:'center', gap:'0.3rem' }}>
+                      {getStatusBadge(tk.status)}
+                      {tk.status === 'awaiting_customer' && tk.awaiting_channel && (
+                        <span>{tk.awaiting_channel === 'phone' ? '☎️' : tk.awaiting_channel === 'email' ? '📧' : '📱'}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ fontSize:'0.9rem', fontWeight:600, marginBottom:'0.25rem', color:'#1e293b' }}>{tk.subject}</div>
+                  <div style={{ fontSize:'0.82rem', color:'#64748b', marginBottom:'0.25rem' }}>👥 {tk.customer_name||'-'}</div>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:'0.5rem' }}>
+                    <div style={{ display:'flex', gap:'0.5rem', alignItems:'center' }}>
+                      {getPriorityLabel(tk.priority)}
+                      <span style={{ fontSize:'0.78rem', color:'#94a3b8' }}>{tk.created_at ? new Date(tk.created_at).toLocaleDateString() : '-'}</span>
+                    </div>
+                    <button
+                      onClick={() => { setCaseTicket(tk); setShowCaseModal(true); }}
+                      style={{ padding:'0.4rem 0.8rem', background:'#1e40af', color:'white', border:'none', borderRadius:'8px', cursor:'pointer', fontSize:'0.82rem', fontWeight:700 }}
+                    >
+                      🗂️ {t('case_management')||'Case'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
