@@ -258,10 +258,10 @@ async function syncInboundFromCloud() {
   for (const t of (transactions || [])) {
     await sqliteRun(`
       INSERT OR REPLACE INTO inbound_transactions
-        (id, supplier_id, supplier_type, casual_supplier_name, transaction_date, notes, user_id)
-      VALUES (?,?,?,?,?,?,?)`,
+        (id, supplier_id, supplier_type, casual_supplier_name, transaction_date, notes, user_id, username)
+      VALUES (?,?,?,?,?,?,?,?)`,
       [t.id, t.supplier_id||null, t.supplier_type||'registered',
-       t.casual_supplier_name||null, t.transaction_date, t.notes||null, t.user_id||null]
+       t.casual_supplier_name||null, t.transaction_date, t.notes||null, t.user_id||null, t.username||null]
     );
     count++;
   }
@@ -288,11 +288,11 @@ async function syncOutboundFromCloud() {
   for (const t of (transactions || [])) {
     await sqliteRun(`
       INSERT OR REPLACE INTO outbound_transactions
-        (id, customer_id, customer_type, casual_customer_name, transaction_date, status, notes, user_id, delivery_note_sent)
-      VALUES (?,?,?,?,?,?,?,?,?)`,
+        (id, customer_id, customer_type, casual_customer_name, transaction_date, status, notes, user_id, delivery_note_sent, username)
+      VALUES (?,?,?,?,?,?,?,?,?,?)`,
       [t.id, t.customer_id||null, t.customer_type||'registered',
        t.casual_customer_name||null, t.transaction_date, t.status||'pending',
-       t.notes||null, t.user_id||null, t.delivery_note_sent ? 1 : 0]
+       t.notes||null, t.user_id||null, t.delivery_note_sent ? 1 : 0, t.username||null]
     );
     count++;
   }
