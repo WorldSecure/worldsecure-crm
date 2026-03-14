@@ -1980,8 +1980,12 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
 // ── Pull: Inbound ─────────────────────────────────────────────────────────────
 app.get('/api/sync/pull/inbound', authenticateToken, async (req, res) => {
   try {
-    const transactions = await query('SELECT * FROM inbound_transactions ORDER BY id');
-    const items        = await query('SELECT * FROM inbound_items ORDER BY id');
+    const transactions = await query(`
+      SELECT it.*, COALESCE(it.username, u.username) as username
+      FROM inbound_transactions it
+      LEFT JOIN users u ON it.user_id = u.id
+      ORDER BY it.id`);
+    const items = await query('SELECT * FROM inbound_items ORDER BY id');
     res.json({ transactions: transactions.rows, items: items.rows });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -1989,8 +1993,12 @@ app.get('/api/sync/pull/inbound', authenticateToken, async (req, res) => {
 // ── Pull: Outbound ────────────────────────────────────────────────────────────
 app.get('/api/sync/pull/outbound', authenticateToken, async (req, res) => {
   try {
-    const transactions = await query('SELECT * FROM outbound_transactions ORDER BY id');
-    const items        = await query('SELECT * FROM outbound_items ORDER BY id');
+    const transactions = await query(`
+      SELECT ot.*, COALESCE(ot.username, u.username) as username
+      FROM outbound_transactions ot
+      LEFT JOIN users u ON ot.user_id = u.id
+      ORDER BY ot.id`);
+    const items = await query('SELECT * FROM outbound_items ORDER BY id');
     res.json({ transactions: transactions.rows, items: items.rows });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
