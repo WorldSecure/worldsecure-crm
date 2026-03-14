@@ -334,6 +334,16 @@ app.get('/api/company', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── POST: Upload Company Logo as Base64 (persistent across deploys) ───────────
+app.post('/api/company/logo-base64', authenticateToken, async (req, res) => {
+  const { logo_base64 } = req.body;
+  if (!logo_base64) return res.status(400).json({ error: 'No logo data' });
+  try {
+    await query('UPDATE company_settings SET logo_base64=$1, logo_path=NULL WHERE id=1', [logo_base64]);
+    res.json({ message: 'Logo saved successfully' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── PUT: Company Settings ─────────────────────────────────────────────────────
 app.put('/api/company', authenticateToken, async (req, res) => {
   const { company_name, address, phone, phone2, phone3, email, tax_id, website,
@@ -741,7 +751,9 @@ app.get('/api/outbound/:id/delivery-note', authenticateToken, async (req, res) =
     const company = compRes.rows[0] || {};
 
     const baseUrl = 'https://worldsecure-backend.onrender.com';
-    const logoHtml = company.logo_path
+    const logoHtml = company.logo_base64
+      ? `<div style="text-align:left;margin-bottom:20px;position:relative;z-index:1;"><img src="${company.logo_base64}" alt="Company Logo" style="max-height:120px;max-width:300px;object-fit:contain;"></div>`
+      : company.logo_path
       ? `<div style="text-align:left;margin-bottom:20px;position:relative;z-index:1;"><img src="${baseUrl}${company.logo_path}" alt="Company Logo" style="max-height:120px;max-width:300px;object-fit:contain;"></div>`
       : '';
 
@@ -1031,7 +1043,9 @@ app.get('/api/inbound/:id/receipt-note', authenticateToken, async (req, res) => 
     const company = compRes.rows[0] || {};
 
     const baseUrl = 'https://worldsecure-backend.onrender.com';
-    const logoHtml = company.logo_path
+    const logoHtml = company.logo_base64
+      ? `<img src="${company.logo_base64}" alt="Logo" style="max-height:120px;max-width:300px;object-fit:contain;">`
+      : company.logo_path
       ? `<img src="${baseUrl}${company.logo_path}" alt="Logo" style="max-height:120px;max-width:300px;object-fit:contain;">`
       : '';
 
@@ -2326,6 +2340,7 @@ app.post('/api/run-migrations', authenticateToken, async (req, res) => {
     `ALTER TABLE support_ticket_history ADD COLUMN IF NOT EXISTS awaiting_channel TEXT`,
     `ALTER TABLE support_ticket_history ADD COLUMN IF NOT EXISTS awaiting_note TEXT`,
     `ALTER TABLE support_ticket_history ADD COLUMN IF NOT EXISTS awaiting_deadline TEXT`,
+    `ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS logo_base64 TEXT`,
   ];
   const results = [];
   for (const sql of migrations) {
@@ -2358,6 +2373,7 @@ async function runMigrations() {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_sales BOOLEAN DEFAULT FALSE`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_service BOOLEAN DEFAULT TRUE`,
     `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS owner_updated_at TIMESTAMPTZ`,
+    `ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS logo_base64 TEXT`,
     `CREATE TABLE IF NOT EXISTS stock_alerts (
       id SERIAL PRIMARY KEY,
       quote_id INTEGER,

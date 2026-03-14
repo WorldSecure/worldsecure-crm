@@ -49,7 +49,9 @@ function Settings() {
   phone3_primary: response.data.phone3_primary || false
 });
 
-      if (response.data.logo_path) {
+      if (response.data.logo_base64) {
+        setLogoPreview(response.data.logo_base64);
+      } else if (response.data.logo_path) {
         setLogoPreview(`${axios.defaults.baseURL}${response.data.logo_path}`);
       }
       setLoading(false);
@@ -88,18 +90,21 @@ function Settings() {
       return;
     }
 
-    const formData = new FormData();
-    formData.append('logo', logoFile);
-
     try {
-      await axios.post('/api/company/logo', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
+      // המר לוגו ל-Base64 ושמור ישירות ב-DB
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64 = reader.result; // data:image/png;base64,...
+        try {
+          await axios.post('/api/company/logo-base64', { logo_base64: base64 });
+          alert(t('success'));
+          setLogoFile(null);
+          setLogoPreview(base64);
+        } catch (error) {
+          alert(t('error') + ': ' + (error.response?.data?.error || error.message));
         }
-      });
-      alert(t('success'));
-      setLogoFile(null);
-      fetchCompanyData();
+      };
+      reader.readAsDataURL(logoFile);
     } catch (error) {
       alert(t('error') + ': ' + (error.response?.data?.error || error.message));
     }
