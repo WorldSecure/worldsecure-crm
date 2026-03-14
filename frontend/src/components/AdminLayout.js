@@ -9,6 +9,7 @@ function AdminLayout() {
   const location = useLocation();
 
   const isActive = (path) => location.pathname === path ? 'active' : '';
+  const isCloud = window.location.hostname === 'app.world-secure.com';
 
   return (
     <div>
@@ -35,14 +36,18 @@ function AdminLayout() {
               <span className="sidebar-icon">👤</span>
               {t('users')}
             </Link>
-            <Link to="/admin/reports" className={isActive('/admin/reports')}>
-              <span className="sidebar-icon">📊</span>
-              {t('Warehouse Reports')}
-            </Link>
-            <Link to="/admin/sales-reports" className={isActive('/admin/sales-reports')}>
-              <span className="sidebar-icon">💹</span>
-              {t('sales_reports') || 'Sales Reports'}
-            </Link>
+            {!isCloud && (
+              <Link to="/admin/reports" className={isActive('/admin/reports')}>
+                <span className="sidebar-icon">📊</span>
+                {t('Warehouse Reports')}
+              </Link>
+            )}
+            {!isCloud && (
+              <Link to="/admin/sales-reports" className={isActive('/admin/sales-reports')}>
+                <span className="sidebar-icon">💹</span>
+                {t('sales_reports') || 'Sales Reports'}
+              </Link>
+            )}
             <Link to="/admin/activity-log" className={isActive('/admin/activity-log')}>
               <span className="sidebar-icon">📝</span>
               {t('activity_log')}
