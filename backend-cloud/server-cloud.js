@@ -367,7 +367,7 @@ app.put('/api/settings/smtp', authenticateToken, async (req, res) => {
       UPDATE company_settings SET
         smtp_host=$1, smtp_port=$2, smtp_user=$3, smtp_pass=$4, smtp_from=$5
       WHERE id=1`,
-      [smtp_host, smtp_port||587, smtp_user, smtp_pass, smtp_from]
+      [smtp_host, 465, smtp_user, smtp_pass, smtp_from]
     );
     res.json({ message: 'SMTP settings saved' });
   } catch (err) { res.status(500).json({ error: err.message }); }

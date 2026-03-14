@@ -579,7 +579,7 @@ async function syncSettingsFromCloud() {
     VALUES (1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [s.company_name||null, s.address||null, s.phone||null, s.phone2||null, s.phone3||null,
      s.email||null, s.tax_id||null, s.website||null,
-     s.smtp_host||null, s.smtp_port||null, s.smtp_user||null, s.smtp_pass||null, s.smtp_from||null,
+     s.smtp_host||null, 587, s.smtp_user||null, s.smtp_pass||null, s.smtp_from||null,
      localLogoPath||null,
      s.phone1_primary ? 1 : 0, s.phone2_primary ? 1 : 0, s.phone3_primary ? 1 : 0]
   ).catch(() => {});
