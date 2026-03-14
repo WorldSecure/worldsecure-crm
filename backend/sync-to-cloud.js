@@ -510,10 +510,11 @@ async function pullDeletionsFromCloud() {
 
 async function syncUsersToCloud() {
   const rows = await sqliteAll('SELECT id, username, email, role FROM users ORDER BY id');
-  // הוסף password placeholder למניעת null constraint בענן
-  const rowsWithPass = rows.map(r => ({ ...r, password: r.password || 'SYNC_PLACEHOLDER' }));
+  // סנן משתמש sync — הוא משתמש מערכת ולא צריך להגיע לענן
+  const filtered = rows.filter(r => r.email !== 'sync@worldsecure.com' && r.username !== 'sync');
+  const rowsWithPass = filtered.map(r => ({ ...r, password: r.password || 'SYNC_PLACEHOLDER' }));
   const result = await apiRequest('POST', '/api/sync/users', { rows: rowsWithPass });
-  if (result.status === 200) log('  ↳ users to cloud: ' + rows.length + ' synced');
+  if (result.status === 200) log('  ↳ users to cloud: ' + filtered.length + ' synced');
   else log('  ⚠ users to cloud: ' + JSON.stringify(result.body));
 }
 
@@ -523,6 +524,8 @@ async function syncUsersFromCloud() {
   const users = result.body;
   let count = 0;
   for (const u of (users || [])) {
+    // דלג על משתמש sync
+    if (u.email === 'sync@worldsecure.com' || u.username === 'sync') continue;
     // בדוק אם המשתמש קיים מקומית לפי EMAIL (לא לפי ID — IDs שונים בין ענן למקומי)
     const existing = await sqliteGet('SELECT id FROM users WHERE email=?', [u.email]).catch(() => null);
     if (existing) {
