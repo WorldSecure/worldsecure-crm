@@ -628,10 +628,10 @@ function Settings() {
           </div>
         </div>
 
-        <div style={{display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(200px, 1fr))', gap: isMobile ? '0.5rem' : '1rem', marginBottom: '1.5rem'}}>
+        <div style={{display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(200px, 1fr))', gap: isMobile ? '0.5rem' : '1rem', marginBottom: '1.5rem', width: '100%', boxSizing: 'border-box'}}>
           {qrGallery.map((qr, index) => (
-            <div key={qr.id} style={{border: '1px solid #ddd', borderRadius: '8px', padding: '1rem', textAlign: 'center', background: 'white'}}>
-              <img src={qr.image} alt="QR Code" style={{width: '150px', height: '150px', marginBottom: '0.5rem'}} />
+            <div key={qr.id} style={{border: '1px solid #ddd', borderRadius: '8px', padding: isMobile ? '0.5rem' : '1rem', textAlign: 'center', background: 'white', overflow: 'hidden', boxSizing: 'border-box', minWidth: 0}}>
+              <img src={qr.image} alt="QR Code" style={{width: isMobile ? '100%' : '150px', height: isMobile ? 'auto' : '150px', maxWidth: '150px', marginBottom: '0.5rem'}} />
               <div style={{fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.25rem'}}>{qr.type.toUpperCase()}</div>
               
               {/* שם QR - ניתן לעריכה */}
