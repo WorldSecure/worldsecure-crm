@@ -344,6 +344,23 @@ app.post('/api/company/logo-base64', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── GET/PUT: Email Signature ──────────────────────────────────────────────────
+app.get('/api/company/email-signature', authenticateToken, async (req, res) => {
+  try {
+    const r = await query('SELECT email_signature FROM company_settings WHERE id=1');
+    res.json({ email_signature: r.rows[0]?.email_signature || null });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/company/email-signature', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  const { email_signature } = req.body;
+  try {
+    await query('UPDATE company_settings SET email_signature=$1 WHERE id=1', [email_signature || null]);
+    res.json({ message: 'Email signature saved' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── PUT: Company Settings ─────────────────────────────────────────────────────
 app.put('/api/company', authenticateToken, async (req, res) => {
   const { company_name, address, phone, phone2, phone3, email, tax_id, website,
@@ -2275,11 +2292,23 @@ ${tx?.notes?`<p><strong>${lang==='he'?'הערות':'Notes'}:</strong> ${tx.notes
       }
     }
 
-    // לוגו לחתימה
-    const baseUrl = 'https://worldsecure-backend.onrender.com';
-    const logoHtmlSignature = company.logo_path
-      ? `<tr><td colspan="2" style="padding-top:8px;text-align:left;"><img src="${baseUrl}${company.logo_path}" alt="${company.company_name||''}" style="max-height:60px;max-width:200px;object-fit:contain;"></td></tr>`
-      : '';
+    // טען חתימה מה-DB או בנה ברירת מחדל
+    let signatureHtml = '';
+    const sigR = await query('SELECT email_signature FROM company_settings WHERE id=1');
+    if (sigR.rows[0]?.email_signature) {
+      signatureHtml = sigR.rows[0].email_signature;
+    } else {
+      const baseUrl = 'https://worldsecure-backend.onrender.com';
+      const logoSrc = company.logo_base64 ? company.logo_base64 : (company.logo_path ? `${baseUrl}${company.logo_path}` : null);
+      const logoHtmlSignature = logoSrc ? `<tr><td colspan="2" style="padding-top:8px;text-align:left;"><img src="${logoSrc}" alt="${company.company_name||''}" style="max-height:60px;max-width:200px;object-fit:contain;"></td></tr>` : '';
+      signatureHtml = `<table style="font-size:13px;color:#333;line-height:1.6;">
+        <tr><td colspan="2" style="font-weight:700;font-size:16px;padding-bottom:12px;color:#1a1a1a;">${company.company_name || 'WorldSecure'}</td></tr>
+        ${company.phone ? `<tr><td style="padding-right:8px;color:#666;">📞</td><td>${company.phone}</td></tr>` : ''}
+        ${company.email ? `<tr><td style="padding-right:8px;color:#666;">✉️</td><td>${company.email}</td></tr>` : ''}
+        ${company.website ? `<tr><td colspan="2"><a href="${company.website}" target="_blank" style="color:#1a73e8;text-decoration:none;font-weight:600;">${company.website}</a></td></tr>` : ''}
+        ${logoHtmlSignature}
+      </table>`;
+    }
 
     // Build email payload for Brevo API
     const emailPayload = {
@@ -2289,21 +2318,7 @@ ${tx?.notes?`<p><strong>${lang==='he'?'הערות':'Notes'}:</strong> ${tx.notes
       htmlContent: `<div style="font-family:Arial,sans-serif;padding:20px;max-width:600px;">
         <p style="margin-bottom:20px;">${body || 'Please find the attached document.'}</p>
         <hr style="border:none;border-top:1px solid #e0e0e0;margin:24px 0">
-        <table style="font-size:13px;color:#333;line-height:1.6;">
-          <tr>
-            <td colspan="2" style="font-weight:700;font-size:16px;padding-bottom:12px;color:#1a1a1a;">
-              WorldSecure Professional Services Team
-            </td>
-          </tr>
-          <tr>
-            <td colspan="2" style="text-align:left;padding-bottom:20px;font-size:16px;">
-              <a href="https://www.world-secure.com" target="_blank" style="color:#1a73e8;text-decoration:none;font-weight:600;">
-                www.world-secure.com
-              </a>
-            </td>
-          </tr>
-          ${logoHtmlSignature}
-        </table>
+        ${signatureHtml}
       </div>`
     };
 
@@ -2350,6 +2365,7 @@ app.post('/api/run-migrations', authenticateToken, async (req, res) => {
     `ALTER TABLE support_ticket_history ADD COLUMN IF NOT EXISTS awaiting_note TEXT`,
     `ALTER TABLE support_ticket_history ADD COLUMN IF NOT EXISTS awaiting_deadline TEXT`,
     `ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS logo_base64 TEXT`,
+    `ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS email_signature TEXT`,
   ];
   const results = [];
   for (const sql of migrations) {
@@ -2383,6 +2399,7 @@ async function runMigrations() {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_service BOOLEAN DEFAULT TRUE`,
     `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS owner_updated_at TIMESTAMPTZ`,
     `ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS logo_base64 TEXT`,
+    `ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS email_signature TEXT`,
     `CREATE TABLE IF NOT EXISTS stock_alerts (
       id SERIAL PRIMARY KEY,
       quote_id INTEGER,

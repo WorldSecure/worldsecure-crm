@@ -33,11 +33,14 @@ function Settings() {
   // QR Code States
   const [qrGallery, setQrGallery] = useState([]);
   const [newQr, setNewQr] = useState({ type: 'website', data: {} });
+  const [emailSignature, setEmailSignature] = useState('');
+  const [signaturePreview, setSignaturePreview] = useState(false);
   const [editingQrTitle, setEditingQrTitle] = useState(null); // { id, title }
 
   useEffect(() => {
     fetchCompanyData();
     loadQrGallery();
+    fetchEmailSignature();
   }, []);
 
   const fetchCompanyData = async () => {
@@ -111,6 +114,22 @@ function Settings() {
     }
   };
 
+
+  const fetchEmailSignature = async () => {
+    try {
+      const res = await axios.get('/api/company/email-signature');
+      setEmailSignature(res.data.email_signature || '');
+    } catch (e) { console.error('Error fetching signature:', e); }
+  };
+
+  const saveEmailSignature = async () => {
+    try {
+      await axios.put('/api/company/email-signature', { email_signature: emailSignature });
+      alert(t('success'));
+    } catch (e) {
+      alert(t('error') + ': ' + (e.response?.data?.error || e.message));
+    }
+  };
 
   const loadQrGallery = async () => {
     try {
@@ -338,6 +357,7 @@ function Settings() {
           { key: 'backup',  icon: '🗄️', label: t('backup_restore') || 'גיבוי ושחזור' },
           { key: 'smtp',    icon: '✉️', label: t('smtp_settings') || 'הגדרות SMTP' },
           { key: 'qr',      icon: '📱', label: t('qr_code') || 'QR CODE' },
+          { key: 'signature', icon: '✍️', label: t('email_signature') || 'חתימת מייל' },
         ].map(s => (
           <button
             key={s.key}
@@ -727,6 +747,125 @@ function Settings() {
           </div>
         </div>
       )}
+
+      {/* ===== EMAIL SIGNATURE SECTION ===== */}
+      {activeSection === 'signature' && (
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">✍️ {t('email_signature') || 'חתימת מייל'}</h3>
+          </div>
+          <div style={{ padding: '1rem' }}>
+            <p style={{ marginBottom: '1.5rem', color: '#555', fontSize: '0.9rem' }}>
+              {t('signature_description') || 'עצב את החתימה שתופיע בתחתית כל מייל שיוצא מהמערכת.'}
+            </p>
+
+            {/* סרגל עיצוב */}
+            <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', padding: '0.5rem', background: '#f8f9fa', border: '1px solid #dee2e6', borderBottom: 'none', borderRadius: '6px 6px 0 0' }}>
+              <button type="button" title="Bold" onMouseDown={(e) => { e.preventDefault(); document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('bold'); }}
+                style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem' }}>B</button>
+              <button type="button" title="Italic" onMouseDown={(e) => { e.preventDefault(); document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('italic'); }}
+                style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', fontStyle: 'italic', cursor: 'pointer', fontSize: '0.9rem' }}>I</button>
+              <button type="button" title="Underline" onMouseDown={(e) => { e.preventDefault(); document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('underline'); }}
+                style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.9rem' }}>U</button>
+              <div style={{ width: '1px', background: '#ccc', margin: '0 0.2rem' }} />
+              <select onMouseDown={(e) => e.preventDefault()} onChange={(e) => { document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('fontSize', false, e.target.value); e.target.value = ''; }}
+                style={{ padding: '0.3rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer' }}>
+                <option value="">גודל</option>
+                <option value="1">10px</option>
+                <option value="2">13px</option>
+                <option value="3">16px</option>
+                <option value="4">18px</option>
+                <option value="5">24px</option>
+                <option value="6">32px</option>
+              </select>
+              <label title="צבע טקסט" style={{ padding: '0.3rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                A <input type="color" defaultValue="#000000" style={{ width: '20px', height: '18px', border: 'none', padding: 0, cursor: 'pointer' }}
+                  onChange={(e) => document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('foreColor', false, e.target.value)} />
+              </label>
+              <div style={{ width: '1px', background: '#ccc', margin: '0 0.2rem' }} />
+              <button type="button" title="יישור שמאל" onMouseDown={(e) => { e.preventDefault(); document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('justifyLeft'); }}
+                style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer' }}>⬅</button>
+              <button type="button" title="יישור מרכז" onMouseDown={(e) => { e.preventDefault(); document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('justifyCenter'); }}
+                style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer' }}>☰</button>
+              <button type="button" title="יישור ימין" onMouseDown={(e) => { e.preventDefault(); document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('justifyRight'); }}
+                style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer' }}>➡</button>
+              <div style={{ width: '1px', background: '#ccc', margin: '0 0.2rem' }} />
+              <button type="button" title="הוסף קישור" onMouseDown={(e) => {
+                e.preventDefault();
+                const url = prompt('הכנס כתובת URL:');
+                if (url) document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('createLink', false, url);
+              }} style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>🔗</button>
+              {(companyData.logo_path || companyData.logo_base64) && (
+                <button type="button" title="הוסף לוגו" onMouseDown={(e) => {
+                  e.preventDefault();
+                  const src = companyData.logo_base64 || `${axios.defaults.baseURL}${companyData.logo_path}`;
+                  document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('insertHTML', false, `<img src="${src}" style="max-height:60px;max-width:200px;object-fit:contain;" />`);
+                }} style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>🖼️ לוגו</button>
+              )}
+              <button type="button" title="קו מפריד" onMouseDown={(e) => { e.preventDefault(); document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('insertHorizontalRule'); }}
+                style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>─</button>
+            </div>
+
+            {/* אזור עריכה ויזואלי — iframe מבודד מה-RTL של הדף */}
+            <iframe
+              id="signature-editor-frame"
+              title="signature editor"
+              style={{
+                width: '100%', minHeight: '200px', height: '220px',
+                border: '1px solid #dee2e6', borderRadius: '0 0 6px 6px',
+                background: 'white', display: 'block'
+              }}
+              ref={(iframe) => {
+                if (!iframe) return;
+                const doc = iframe.contentDocument || iframe.contentWindow?.document;
+                if (!doc || doc.body?.getAttribute('data-init')) return;
+                doc.open();
+                doc.write(`<!DOCTYPE html><html dir="ltr"><head><style>
+                  body { margin:0; padding:12px; font-family:Arial,sans-serif; font-size:14px;
+                    line-height:1.6; direction:ltr; text-align:left; outline:none; min-height:180px; }
+                </style></head><body contenteditable="true" data-init="1">${emailSignature}</body></html>`);
+                doc.close();
+                doc.body.addEventListener('input', () => setEmailSignature(doc.body.innerHTML));
+              }}
+            />
+
+            {/* כפתורי פעולה */}
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button className="btn btn-primary" onClick={saveEmailSignature}>
+                💾 {t('save') || 'שמור חתימה'}
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => setSignaturePreview(!signaturePreview)}>
+                {signaturePreview ? '🙈 ' + (t('hide_preview') || 'הסתר') : '👁️ ' + (t('preview') || 'תצוגה מקדימה')}
+              </button>
+              {emailSignature && (
+                <button type="button" className="btn btn-danger" onClick={() => {
+                  if (window.confirm(t('confirm_delete') || 'למחוק את החתימה?')) {
+                    setEmailSignature('');
+                    const iframe = document.getElementById('signature-editor-frame');
+                    if (iframe?.contentDocument?.body) iframe.contentDocument.body.innerHTML = '';
+                    axios.put('/api/company/email-signature', { email_signature: '' });
+                  }
+                }}>
+                  🗑️ {t('delete') || 'מחק'}
+                </button>
+              )}
+            </div>
+
+            {/* תצוגה מקדימה */}
+            {signaturePreview && (
+              <div style={{ marginTop: '1.5rem', padding: '1rem', border: '1px solid #dee2e6', borderRadius: '6px', background: '#f8f9fa' }}>
+                <div style={{ fontSize: '0.8rem', color: '#888', marginBottom: '0.5rem' }}>📧 כפי שיראה במייל:</div>
+                <div style={{ background: 'white', padding: '1.5rem', borderRadius: '4px', border: '1px solid #e0e0e0', maxWidth: '600px' }}>
+                  <p style={{ color: '#555', marginBottom: '1rem', fontSize: '0.9rem' }}>מצורף מסמך לעיונך.</p>
+                  <hr style={{ border: 'none', borderTop: '1px solid #e0e0e0', margin: '1rem 0' }} />
+                  <div dangerouslySetInnerHTML={{ __html: emailSignature }} />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
