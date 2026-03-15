@@ -815,18 +815,22 @@ function Settings() {
                 border: '1px solid #dee2e6', borderRadius: '0 0 6px 6px',
                 background: 'white', display: 'block'
               }}
-              ref={(iframe) => {
-                if (!iframe) return;
+              onLoad={(e) => {
+                const iframe = e.target;
                 const doc = iframe.contentDocument || iframe.contentWindow?.document;
-                if (!doc || doc.body?.getAttribute('data-init')) return;
+                if (!doc) return;
                 doc.open();
                 doc.write(`<!DOCTYPE html><html dir="ltr"><head><style>
                   body { margin:0; padding:12px; font-family:Arial,sans-serif; font-size:14px;
                     line-height:1.6; direction:ltr; text-align:left; outline:none; min-height:180px; }
-                </style></head><body contenteditable="true" data-init="1">${emailSignature}</body></html>`);
+                </style></head><body contenteditable="true">${emailSignature}</body></html>`);
                 doc.close();
                 doc.body.addEventListener('input', () => setEmailSignature(doc.body.innerHTML));
               }}
+              srcDoc={`<!DOCTYPE html><html dir="ltr"><head><style>
+                body { margin:0; padding:12px; font-family:Arial,sans-serif; font-size:14px;
+                  line-height:1.6; direction:ltr; text-align:left; outline:none; min-height:180px; }
+              </style></head><body contenteditable="true">${emailSignature}</body></html>`}
             />
 
             {/* כפתורי פעולה */}
