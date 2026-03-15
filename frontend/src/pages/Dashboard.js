@@ -16,7 +16,8 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [warehouseAlerts, setWarehouseAlerts] = useState([]);
   const [completingAlert, setCompletingAlert] = useState(null);
-  const [dispatchModal, setDispatchModal] = useState(null); // { alert }
+  const [dispatchModal, setDispatchModal] = useState(null);
+  const [confirmModal, setConfirmModal] = useState(null); // alert pending confirm
   const [outboundList, setOutboundList] = useState([]);
   const [selectedOutbound, setSelectedOutbound] = useState(null);
   const [loadingOutbound, setLoadingOutbound] = useState(false);
@@ -64,17 +65,17 @@ function Dashboard() {
     }
   };
 
-  const handleDispatchClick = async (alert) => {
-    // שלב 1: שאל אם יצר תעודת משלוח
-    const confirmed = window.confirm(
-      `האם ייצרת תעודת משלוח בהתאם לבקשת מערכת התמיכה?\n\nלקוח: ${alert.customer_name}\nמוצר: ${alert.product_name} x${alert.quantity}`
-    );
-    if (!confirmed) return;
+  const handleDispatchClick = (alert) => {
+    setConfirmModal(alert);
+  };
 
-    // שלב 2: טען עסקאות Outbound של הלקוח
+  const handleConfirmYes = async () => {
+    const alert = confirmModal;
+    setConfirmModal(null);
     setLoadingOutbound(true);
     setSelectedOutbound(null);
     try {
+      // חיפוש לפי שם לקוח (customer_id אם קיים, + שם)
       const res = await axios.get(`/api/outbound/by-customer/${alert.customer_id || 0}?name=${encodeURIComponent(alert.customer_name || '')}`);
       setOutboundList(res.data);
     } catch(e) {
@@ -365,28 +366,57 @@ function Dashboard() {
       )}
 
 
+      {/* Confirm Modal — האם ייצרת תעודת משלוח? */}
+      {confirmModal && (
+        <div className="modal-overlay" onClick={() => setConfirmModal(null)}>
+          <div className="modal" style={{ maxWidth: '420px' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">📋 {t('confirm_dispatch_title') || 'אישור משלוח'}</h3>
+              <button className="modal-close" onClick={() => setConfirmModal(null)}>×</button>
+            </div>
+            <div style={{ padding: '1.5rem', textAlign: 'center' }}>
+              <p style={{ fontSize: '1rem', marginBottom: '1rem', fontWeight: 500 }}>
+                {t('confirm_dispatch_question') || 'האם ייצרת תעודת משלוח בהתאם לבקשת מערכת התמיכה?'}
+              </p>
+              <div style={{ background: '#fff3e0', borderRadius: '8px', padding: '0.75rem', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+                <div><strong>{t('customer')}:</strong> {confirmModal.customer_name}</div>
+                <div><strong>{t('product')}:</strong> {confirmModal.product_name} x{confirmModal.quantity}</div>
+              </div>
+              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+                <button className="btn btn-danger" style={{ minWidth: '80px' }} onClick={() => setConfirmModal(null)}>
+                  {t('no') || 'לא'}
+                </button>
+                <button className="btn btn-success" style={{ minWidth: '80px' }} onClick={handleConfirmYes}>
+                  {t('yes') || 'כן'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Dispatch Modal — בחירת תעודת משלוח */}
       {dispatchModal && (
         <div className="modal-overlay" onClick={() => setDispatchModal(null)}>
           <div className="modal" style={{ maxWidth: '600px' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title">📦 בחר תעודת משלוח</h3>
+              <h3 className="modal-title">📦 {t('select_delivery_note') || 'בחר תעודת משלוח'}</h3>
               <button className="modal-close" onClick={() => setDispatchModal(null)}>×</button>
             </div>
             <div style={{ padding: '1rem' }}>
               <div style={{ background: '#fff3e0', border: '1px solid #e67e22', borderRadius: '8px', padding: '0.75rem', marginBottom: '1rem', fontSize: '0.9rem' }}>
-                <strong>לקוח:</strong> {dispatchModal.customer_name} &nbsp;|&nbsp;
-                <strong>מוצר:</strong> {dispatchModal.product_name} x{dispatchModal.quantity}
+                <strong>{t('customer')}:</strong> {dispatchModal.customer_name} &nbsp;|&nbsp;
+                <strong>{t('product')}:</strong> {dispatchModal.product_name} x{dispatchModal.quantity}
               </div>
 
-              <p style={{ marginBottom: '0.75rem', fontWeight: 600 }}>בחר את תעודת המשלוח שיצרת:</p>
+              <p style={{ marginBottom: '0.75rem', fontWeight: 600 }}>{t('select_delivery_note_you_created') || 'בחר את תעודת המשלוח שיצרת:'}</p>
 
               {loadingOutbound ? (
                 <div style={{ textAlign: 'center', padding: '2rem' }}><div className="spinner"></div></div>
               ) : outboundList.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '1.5rem', color: '#888', background: '#f8f9fa', borderRadius: '8px' }}>
-                  ⚠️ לא נמצאו תעודות משלוח עבור לקוח זה.<br/>
-                  <small>צור תעודת משלוח בדף Outbound ואז חזור לכאן.</small>
+                  ⚠️ {t('no_delivery_notes_found') || 'לא נמצאו תעודות משלוח עבור לקוח זה.'}<br/>
+                  <small>{t('create_delivery_note_first') || 'צור תעודת משלוח בדף Outbound ואז חזור לכאן.'}</small>
                 </div>
               ) : (
                 <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
@@ -401,7 +431,7 @@ function Dashboard() {
                       }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                          <strong>תעודה #{ob.id}</strong>
+                          <strong>{t('delivery_note')} #{ob.id}</strong>
                           <span style={{ marginLeft: '0.75rem', fontSize: '0.85rem', color: '#555' }}>
                             {new Date(ob.transaction_date).toLocaleString('he-IL')}
                           </span>
@@ -425,7 +455,7 @@ function Dashboard() {
                 onClick={handleCompleteAlert}
                 disabled={!selectedOutbound || completingAlert === dispatchModal.id}
               >
-                {completingAlert === dispatchModal.id ? t('loading') : `✅ ${t('dispatched')}`}
+                {completingAlert === dispatchModal.id ? t('loading') : `✅ ${t('dispatched') || 'אישור משלוח'}`}
               </button>
             </div>
           </div>
