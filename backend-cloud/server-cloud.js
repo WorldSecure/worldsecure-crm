@@ -1524,15 +1524,17 @@ app.get('/api/outbound/by-customer/:customerId', authenticateToken, async (req, 
     const { customerId } = req.params;
     const name = req.query.name || '';
     const r = await query(`
-      SELECT ot.id, ot.transaction_date, ot.status, ot.customer_name, ot.casual_customer_name, ot.customer_type,
+      SELECT ot.id, ot.transaction_date, ot.status, ot.customer_type,
+        CASE WHEN ot.customer_type='casual' THEN ot.casual_customer_name ELSE c.name END as customer_name,
         STRING_AGG(p.name || ' x' || oi.quantity::text, ', ') as items_summary
       FROM outbound_transactions ot
       LEFT JOIN outbound_items oi ON oi.transaction_id = ot.id
       LEFT JOIN products p ON p.id = oi.product_id
+      LEFT JOIN customers c ON c.id = ot.customer_id
       WHERE ot.customer_id = $1
-         OR ot.customer_name ILIKE $2
+         OR c.name ILIKE $2
          OR ot.casual_customer_name ILIKE $2
-      GROUP BY ot.id
+      GROUP BY ot.id, c.name
       ORDER BY ot.transaction_date DESC LIMIT 20`,
       [customerId, '%' + name + '%']
     );
