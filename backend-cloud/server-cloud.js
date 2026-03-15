@@ -344,7 +344,50 @@ app.post('/api/company/logo-base64', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── GET/PUT: Email Signature ──────────────────────────────────────────────────
+// ── Email Signatures (multi-signature system) ─────────────────────────────────
+app.get('/api/email-signatures', authenticateToken, async (req, res) => {
+  try {
+    const r = await query('SELECT * FROM email_signatures ORDER BY created_at DESC');
+    res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/email-signatures', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  const { name, content, is_active } = req.body;
+  if (!name || !content) return res.status(400).json({ error: 'Name and content required' });
+  try {
+    if (is_active) await query('UPDATE email_signatures SET is_active=FALSE');
+    const r = await query(
+      'INSERT INTO email_signatures (name, content, is_active) VALUES ($1,$2,$3) RETURNING *',
+      [name, content, is_active ? true : false]
+    );
+    res.json(r.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/email-signatures/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  const { name, content, is_active } = req.body;
+  try {
+    if (is_active) await query('UPDATE email_signatures SET is_active=FALSE');
+    await query(
+      'UPDATE email_signatures SET name=$1, content=$2, is_active=$3 WHERE id=$4',
+      [name, content, is_active ? true : false, req.params.id]
+    );
+    res.json({ message: 'Updated' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/email-signatures/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  try {
+    await query('DELETE FROM email_signatures WHERE id=$1', [req.params.id]);
+    res.json({ message: 'Deleted' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── GET/PUT: Email Signature (legacy) ────────────────────────────────────────
 app.get('/api/company/email-signature', authenticateToken, async (req, res) => {
   try {
     const r = await query('SELECT email_signature FROM company_settings WHERE id=1');
@@ -2294,9 +2337,9 @@ ${tx?.notes?`<p><strong>${lang==='he'?'הערות':'Notes'}:</strong> ${tx.notes
 
     // טען חתימה מה-DB או בנה ברירת מחדל
     let signatureHtml = '';
-    const sigR = await query('SELECT email_signature FROM company_settings WHERE id=1');
-    if (sigR.rows[0]?.email_signature) {
-      signatureHtml = sigR.rows[0].email_signature;
+    const sigR = await query('SELECT content FROM email_signatures WHERE is_active=TRUE LIMIT 1');
+    if (sigR.rows[0]?.content) {
+      signatureHtml = sigR.rows[0].content;
     } else {
       const baseUrl = 'https://worldsecure-backend.onrender.com';
       const logoSrc = company.logo_base64 ? company.logo_base64 : (company.logo_path ? `${baseUrl}${company.logo_path}` : null);
@@ -2366,6 +2409,7 @@ app.post('/api/run-migrations', authenticateToken, async (req, res) => {
     `ALTER TABLE support_ticket_history ADD COLUMN IF NOT EXISTS awaiting_deadline TEXT`,
     `ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS logo_base64 TEXT`,
     `ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS email_signature TEXT`,
+    `CREATE TABLE IF NOT EXISTS email_signatures (id SERIAL PRIMARY KEY, name TEXT NOT NULL, content TEXT NOT NULL, is_active BOOLEAN DEFAULT FALSE, created_at TIMESTAMPTZ DEFAULT NOW())`,
   ];
   const results = [];
   for (const sql of migrations) {
@@ -2400,6 +2444,7 @@ async function runMigrations() {
     `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS owner_updated_at TIMESTAMPTZ`,
     `ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS logo_base64 TEXT`,
     `ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS email_signature TEXT`,
+    `CREATE TABLE IF NOT EXISTS email_signatures (id SERIAL PRIMARY KEY, name TEXT NOT NULL, content TEXT NOT NULL, is_active BOOLEAN DEFAULT FALSE, created_at TIMESTAMPTZ DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS stock_alerts (
       id SERIAL PRIMARY KEY,
       quote_id INTEGER,

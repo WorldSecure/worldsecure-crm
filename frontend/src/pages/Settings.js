@@ -33,14 +33,18 @@ function Settings() {
   // QR Code States
   const [qrGallery, setQrGallery] = useState([]);
   const [newQr, setNewQr] = useState({ type: 'website', data: {} });
-  const [emailSignature, setEmailSignature] = useState('');
+  const [signatures, setSignatures] = useState([]);
+  const [editingSig, setEditingSig] = useState(null); // { id, name, content } or null=new
+  const [sigContent, setSigContent] = useState('');
+  const [sigName, setSigName] = useState('');
   const [signaturePreview, setSignaturePreview] = useState(false);
+  const [showSigEditor, setShowSigEditor] = useState(false);
   const [editingQrTitle, setEditingQrTitle] = useState(null); // { id, title }
 
   useEffect(() => {
     fetchCompanyData();
     loadQrGallery();
-    fetchEmailSignature();
+    fetchSignatures();
   }, []);
 
   const fetchCompanyData = async () => {
@@ -115,20 +119,47 @@ function Settings() {
   };
 
 
-  const fetchEmailSignature = async () => {
+  const fetchSignatures = async () => {
     try {
-      const res = await axios.get('/api/company/email-signature');
-      setEmailSignature(res.data.email_signature || '');
-    } catch (e) { console.error('Error fetching signature:', e); }
+      const res = await axios.get('/api/email-signatures');
+      setSignatures(res.data);
+    } catch (e) { console.error('Error fetching signatures:', e); }
   };
 
-  const saveEmailSignature = async () => {
+  const saveSignature = async () => {
+    if (!sigName.trim()) { alert('חובה להזין שם לחתימה'); return; }
+    if (!sigContent.trim()) { alert('החתימה לא יכולה להיות ריקה'); return; }
     try {
-      await axios.put('/api/company/email-signature', { email_signature: emailSignature });
+      if (editingSig?.id) {
+        await axios.put(`/api/email-signatures/${editingSig.id}`, { name: sigName, content: sigContent, is_active: editingSig.is_active });
+      } else {
+        await axios.post('/api/email-signatures', { name: sigName, content: sigContent, is_active: false });
+      }
       alert(t('success'));
+      setShowSigEditor(false);
+      setEditingSig(null);
+      setSigName('');
+      setSigContent('');
+      fetchSignatures();
     } catch (e) {
       alert(t('error') + ': ' + (e.response?.data?.error || e.message));
     }
+  };
+
+  const setActiveSignature = async (id) => {
+    try {
+      const sig = signatures.find(s => s.id === id);
+      await axios.put(`/api/email-signatures/${id}`, { name: sig.name, content: sig.content, is_active: true });
+      fetchSignatures();
+    } catch (e) { alert(t('error') + ': ' + (e.response?.data?.error || e.message)); }
+  };
+
+  const deleteSignature = async (id) => {
+    if (!window.confirm(t('confirm_delete') || 'למחוק?')) return;
+    try {
+      await axios.delete(`/api/email-signatures/${id}`);
+      fetchSignatures();
+    } catch (e) { alert(t('error') + ': ' + (e.response?.data?.error || e.message)); }
   };
 
   const loadQrGallery = async () => {
@@ -751,135 +782,151 @@ function Settings() {
       {/* ===== EMAIL SIGNATURE SECTION ===== */}
       {activeSection === 'signature' && (
         <div className="card">
-          <div className="card-header">
-            <h3 className="card-title">✍️ {t('email_signature') || 'חתימת מייל'}</h3>
+          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 className="card-title">✍️ {t('email_signature') || 'חתימות מייל'}</h3>
+            <button className="btn btn-primary" onClick={() => {
+              setEditingSig(null); setSigName(''); setSigContent(''); setShowSigEditor(true);
+            }}>+ {t('add_signature') || 'חתימה חדשה'}</button>
           </div>
           <div style={{ padding: '1rem' }}>
-            <p style={{ marginBottom: '1.5rem', color: '#555', fontSize: '0.9rem' }}>
-              {t('signature_description') || 'עצב את החתימה שתופיע בתחתית כל מייל שיוצא מהמערכת.'}
-            </p>
 
-            {/* סרגל עיצוב */}
-            <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', padding: '0.5rem', background: '#f8f9fa', border: '1px solid #dee2e6', borderBottom: 'none', borderRadius: '6px 6px 0 0' }}>
-              <button type="button" title="Bold" onMouseDown={(e) => { e.preventDefault(); document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('bold'); }}
-                style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem' }}>B</button>
-              <button type="button" title="Italic" onMouseDown={(e) => { e.preventDefault(); document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('italic'); }}
-                style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', fontStyle: 'italic', cursor: 'pointer', fontSize: '0.9rem' }}>I</button>
-              <button type="button" title="Underline" onMouseDown={(e) => { e.preventDefault(); document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('underline'); }}
-                style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.9rem' }}>U</button>
-              <div style={{ width: '1px', background: '#ccc', margin: '0 0.2rem' }} />
-              <select onMouseDown={(e) => e.preventDefault()} onChange={(e) => { document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('fontSize', false, e.target.value); e.target.value = ''; }}
-                style={{ padding: '0.3rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer' }}>
-                <option value="">גודל</option>
-                <option value="1">10px</option>
-                <option value="2">13px</option>
-                <option value="3">16px</option>
-                <option value="4">18px</option>
-                <option value="5">24px</option>
-                <option value="6">32px</option>
-              </select>
-              <label title="צבע טקסט" style={{ padding: '0.3rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                A <input type="color" defaultValue="#000000" style={{ width: '20px', height: '18px', border: 'none', padding: 0, cursor: 'pointer' }}
-                  onChange={(e) => document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('foreColor', false, e.target.value)} />
-              </label>
-              <div style={{ width: '1px', background: '#ccc', margin: '0 0.2rem' }} />
-              <button type="button" title="יישור שמאל" onMouseDown={(e) => { e.preventDefault(); document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('justifyLeft'); }}
-                style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer' }}>⬅</button>
-              <button type="button" title="יישור מרכז" onMouseDown={(e) => { e.preventDefault(); document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('justifyCenter'); }}
-                style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer' }}>☰</button>
-              <button type="button" title="יישור ימין" onMouseDown={(e) => { e.preventDefault(); document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('justifyRight'); }}
-                style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer' }}>➡</button>
-              <div style={{ width: '1px', background: '#ccc', margin: '0 0.2rem' }} />
-              <button type="button" title="הוסף קישור" onMouseDown={(e) => {
-                e.preventDefault();
-                const url = prompt('הכנס כתובת URL:');
-                if (url) document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('createLink', false, url);
-              }} style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>🔗</button>
-              {/* כפתור הוספת תמונה — פותח file explorer */}
-              <label title="הוסף תמונה" style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
-                🖼️ תמונה
-                <input type="file" accept="image/*" style={{ display: 'none' }}
-                  onChange={(e) => {
-                    const file = e.target.files[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                      const base64 = reader.result;
-                      document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('insertHTML', false, `<img src="${base64}" style="max-height:80px;max-width:200px;object-fit:contain;" />`);
-                    };
-                    reader.readAsDataURL(file);
-                    e.target.value = '';
-                  }}
-                />
-              </label>
-              <button type="button" title="קו מפריד" onMouseDown={(e) => { e.preventDefault(); document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('insertHorizontalRule'); }}
-                style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>─</button>
-            </div>
+            {/* רשימת חתימות */}
+            {signatures.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
+                {t('no_signatures') || 'אין חתימות עדיין. צור חתימה חדשה!'}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                {signatures.map(sig => (
+                  <div key={sig.id} style={{
+                    border: `2px solid ${sig.is_active ? '#28a745' : '#dee2e6'}`,
+                    borderRadius: '8px', padding: '1rem', background: sig.is_active ? '#f0fff4' : 'white'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <strong>{sig.name}</strong>
+                        {sig.is_active && <span className="badge badge-success">✓ {t('active') || 'פעילה'}</span>}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        {!sig.is_active && (
+                          <button className="btn btn-success" onClick={() => setActiveSignature(sig.id)}
+                            style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem' }}>
+                            ☑️ {t('set_active') || 'הגדר כפעילה'}
+                          </button>
+                        )}
+                        <button className="btn btn-secondary" onClick={() => {
+                          setEditingSig(sig); setSigName(sig.name); setSigContent(sig.content); setShowSigEditor(true);
+                        }} style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem' }}>✏️</button>
+                        <button className="btn btn-danger" onClick={() => deleteSignature(sig.id)}
+                          style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem' }}>🗑️</button>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#666', maxHeight: '60px', overflow: 'hidden' }}
+                      dangerouslySetInnerHTML={{ __html: sig.content }} />
+                  </div>
+                ))}
+              </div>
+            )}
 
-            {/* אזור עריכה ויזואלי — iframe מבודד מה-RTL של הדף */}
-            <iframe
-              id="signature-editor-frame"
-              title="signature editor"
-              style={{
-                width: '100%', minHeight: '200px', height: '220px',
-                border: '1px solid #dee2e6', borderRadius: '0 0 6px 6px',
-                background: 'white', display: 'block'
-              }}
-              onLoad={(e) => {
-                const iframe = e.target;
-                const doc = iframe.contentDocument || iframe.contentWindow?.document;
-                if (!doc) return;
-                doc.open();
-                doc.write(`<!DOCTYPE html><html dir="ltr"><head><style>
-                  body { margin:0; padding:12px; font-family:Arial,sans-serif; font-size:14px;
-                    line-height:1.6; direction:ltr; text-align:left; outline:none; min-height:180px; }
-                </style></head><body contenteditable="true">${emailSignature}</body></html>`);
-                doc.close();
-                doc.body.addEventListener('input', () => setEmailSignature(doc.body.innerHTML));
-              }}
-              srcDoc={`<!DOCTYPE html><html dir="ltr"><head><style>
-                body { margin:0; padding:12px; font-family:Arial,sans-serif; font-size:14px;
-                  line-height:1.6; direction:ltr; text-align:left; outline:none; min-height:180px; }
-              </style></head><body contenteditable="true">${emailSignature}</body></html>`}
-            />
+            {/* עורך חתימה */}
+            {showSigEditor && (
+              <div style={{ border: '2px solid #007bff', borderRadius: '8px', padding: '1rem', background: '#f8f9ff' }}>
+                <h4 style={{ marginBottom: '1rem' }}>
+                  {editingSig ? (t('edit_signature') || 'עריכת חתימה') : (t('new_signature') || 'חתימה חדשה')}
+                </h4>
 
-            {/* כפתורי פעולה */}
-            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              <button className="btn btn-primary" onClick={saveEmailSignature}>
-                💾 {t('save') || 'שמור חתימה'}
-              </button>
-              <button type="button" className="btn btn-secondary" onClick={() => setSignaturePreview(!signaturePreview)}>
-                {signaturePreview ? '🙈 ' + (t('hide_preview') || 'הסתר') : '👁️ ' + (t('preview') || 'תצוגה מקדימה')}
-              </button>
-              {emailSignature && (
-                <button type="button" className="btn btn-danger" onClick={() => {
-                  if (window.confirm(t('confirm_delete') || 'למחוק את החתימה?')) {
-                    setEmailSignature('');
-                    const iframe = document.getElementById('signature-editor-frame');
-                    if (iframe?.contentDocument?.body) iframe.contentDocument.body.innerHTML = '';
-                    axios.put('/api/company/email-signature', { email_signature: '' });
-                  }
-                }}>
-                  🗑️ {t('delete') || 'מחק'}
-                </button>
-              )}
-            </div>
-
-            {/* תצוגה מקדימה */}
-            {signaturePreview && (
-              <div style={{ marginTop: '1.5rem', padding: '1rem', border: '1px solid #dee2e6', borderRadius: '6px', background: '#f8f9fa' }}>
-                <div style={{ fontSize: '0.8rem', color: '#888', marginBottom: '0.5rem' }}>📧 כפי שיראה במייל:</div>
-                <div style={{ background: 'white', padding: '1.5rem', borderRadius: '4px', border: '1px solid #e0e0e0', maxWidth: '600px' }}>
-                  <p style={{ color: '#555', marginBottom: '1rem', fontSize: '0.9rem' }}>מצורף מסמך לעיונך.</p>
-                  <hr style={{ border: 'none', borderTop: '1px solid #e0e0e0', margin: '1rem 0' }} />
-                  <div dangerouslySetInnerHTML={{ __html: emailSignature }} />
+                {/* שם החתימה */}
+                <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                  <label className="form-label">{t('signature_name') || 'שם החתימה'} *</label>
+                  <input type="text" className="form-input" value={sigName}
+                    onChange={(e) => setSigName(e.target.value)}
+                    placeholder={t('signature_name_placeholder') || 'לדוגמה: חתימה ראשית, חתימה רשמית...'} />
                 </div>
+
+                {/* סרגל עיצוב */}
+                <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', padding: '0.5rem', background: '#f8f9fa', border: '1px solid #dee2e6', borderBottom: 'none', borderRadius: '6px 6px 0 0' }}>
+                  <button type="button" title="Bold" onMouseDown={(e) => { e.preventDefault(); document.getElementById('sig-frame')?.contentDocument?.execCommand('bold'); }}
+                    style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', fontWeight: 'bold', cursor: 'pointer' }}>B</button>
+                  <button type="button" title="Italic" onMouseDown={(e) => { e.preventDefault(); document.getElementById('sig-frame')?.contentDocument?.execCommand('italic'); }}
+                    style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', fontStyle: 'italic', cursor: 'pointer' }}>I</button>
+                  <button type="button" title="Underline" onMouseDown={(e) => { e.preventDefault(); document.getElementById('sig-frame')?.contentDocument?.execCommand('underline'); }}
+                    style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', textDecoration: 'underline', cursor: 'pointer' }}>U</button>
+                  <div style={{ width: '1px', background: '#ccc', margin: '0 0.2rem' }} />
+                  <select onMouseDown={(e) => e.preventDefault()} onChange={(e) => { document.getElementById('sig-frame')?.contentDocument?.execCommand('fontSize', false, e.target.value); e.target.value = ''; }}
+                    style={{ padding: '0.3rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.8rem' }}>
+                    <option value="">גודל</option>
+                    <option value="1">10px</option><option value="2">13px</option><option value="3">16px</option>
+                    <option value="4">18px</option><option value="5">24px</option><option value="6">32px</option>
+                  </select>
+                  <label style={{ padding: '0.3rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                    A <input type="color" defaultValue="#000000" style={{ width: '20px', height: '18px', border: 'none', padding: 0 }}
+                      onChange={(e) => document.getElementById('sig-frame')?.contentDocument?.execCommand('foreColor', false, e.target.value)} />
+                  </label>
+                  <div style={{ width: '1px', background: '#ccc', margin: '0 0.2rem' }} />
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.getElementById('sig-frame')?.contentDocument?.execCommand('justifyLeft'); }}
+                    style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer' }}>⬅</button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.getElementById('sig-frame')?.contentDocument?.execCommand('justifyCenter'); }}
+                    style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer' }}>☰</button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.getElementById('sig-frame')?.contentDocument?.execCommand('justifyRight'); }}
+                    style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer' }}>➡</button>
+                  <div style={{ width: '1px', background: '#ccc', margin: '0 0.2rem' }} />
+                  <button type="button" onMouseDown={(e) => {
+                    e.preventDefault();
+                    const url = prompt('הכנס כתובת URL:');
+                    if (url) document.getElementById('sig-frame')?.contentDocument?.execCommand('createLink', false, url);
+                  }} style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>🔗</button>
+                  <label style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                    🖼️ תמונה
+                    <input type="file" accept="image/*" style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files[0]; if (!file) return;
+                        const reader = new FileReader();
+                        reader.onloadend = () => document.getElementById('sig-frame')?.contentDocument?.execCommand('insertHTML', false, `<img src="${reader.result}" style="max-height:80px;max-width:200px;object-fit:contain;" />`);
+                        reader.readAsDataURL(file); e.target.value = '';
+                      }} />
+                  </label>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.getElementById('sig-frame')?.contentDocument?.execCommand('insertHorizontalRule'); }}
+                    style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>─</button>
+                </div>
+
+                {/* iframe עורך */}
+                <iframe id="sig-frame" title="sig editor"
+                  style={{ width: '100%', height: '200px', border: '1px solid #dee2e6', borderRadius: '0 0 6px 6px', background: 'white', display: 'block' }}
+                  onLoad={(e) => {
+                    const doc = e.target.contentDocument;
+                    if (!doc) return;
+                    doc.open();
+                    doc.write(`<!DOCTYPE html><html dir="ltr"><head><style>body{margin:0;padding:12px;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;direction:ltr;text-align:left;outline:none;min-height:160px;}</style></head><body contenteditable="true">${sigContent}</body></html>`);
+                    doc.close();
+                    doc.body.addEventListener('input', () => setSigContent(doc.body.innerHTML));
+                  }}
+                  srcDoc={`<!DOCTYPE html><html dir="ltr"><head><style>body{margin:0;padding:12px;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;direction:ltr;text-align:left;outline:none;min-height:160px;}</style></head><body contenteditable="true">${sigContent}</body></html>`}
+                />
+
+                {/* כפתורי שמירה */}
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+                  <button className="btn btn-primary" onClick={saveSignature}>💾 {t('save') || 'שמור'}</button>
+                  <button className="btn btn-secondary" onClick={() => { setShowSigEditor(false); setEditingSig(null); setSigName(''); setSigContent(''); }}>
+                    {t('cancel') || 'ביטול'}
+                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={() => setSignaturePreview(!signaturePreview)}>
+                    {signaturePreview ? '🙈' : '👁️'} {t('preview') || 'תצוגה מקדימה'}
+                  </button>
+                </div>
+
+                {/* תצוגה מקדימה */}
+                {signaturePreview && sigContent && (
+                  <div style={{ marginTop: '1rem', padding: '1rem', border: '1px solid #dee2e6', borderRadius: '6px', background: 'white', maxWidth: '600px' }}>
+                    <p style={{ color: '#555', marginBottom: '1rem', fontSize: '0.9rem' }}>מצורף מסמך לעיונך.</p>
+                    <hr style={{ border: 'none', borderTop: '1px solid #e0e0e0', margin: '1rem 0' }} />
+                    <div dangerouslySetInnerHTML={{ __html: sigContent }} />
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
       )}
-
     </div>
   );
 }
