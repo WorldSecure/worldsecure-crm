@@ -1518,19 +1518,42 @@ app.get('/api/warehouse-alerts', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.get('/api/outbound/by-customer/:customerId', authenticateToken, async (req, res) => {
+  try {
+    const { customerId } = req.params;
+    const name = req.query.name || '';
+    const r = await query(`
+      SELECT ot.id, ot.transaction_date, ot.status, ot.customer_name, ot.casual_customer_name, ot.customer_type,
+        STRING_AGG(p.name || ' x' || oi.quantity::text, ', ') as items_summary
+      FROM outbound_transactions ot
+      LEFT JOIN outbound_items oi ON oi.transaction_id = ot.id
+      LEFT JOIN products p ON p.id = oi.product_id
+      WHERE ot.customer_id = $1 OR ot.casual_customer_name ILIKE $2
+      GROUP BY ot.id
+      ORDER BY ot.transaction_date DESC LIMIT 20`,
+      [customerId, '%' + name + '%']
+    );
+    res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.put('/api/warehouse-alerts/:id/complete', authenticateToken, async (req, res) => {
   try {
+    const { outbound_id, outbound_ref } = req.body;
     const alertRes = await query('SELECT * FROM warehouse_alerts WHERE id=$1', [req.params.id]);
     const alert = alertRes.rows[0];
     if (!alert) return res.status(404).json({ error: 'Not found' });
-    await query(`UPDATE warehouse_alerts SET status='completed', completed_at=NOW() WHERE id=$1`, [req.params.id]);
+    await query('ALTER TABLE warehouse_alerts ADD COLUMN IF NOT EXISTS outbound_id INTEGER').catch(() => {});
+    await query('ALTER TABLE warehouse_alerts ADD COLUMN IF NOT EXISTS outbound_ref TEXT').catch(() => {});
+    await query(`UPDATE warehouse_alerts SET status='completed', completed_at=NOW(), outbound_id=$2, outbound_ref=$3 WHERE id=$1`,
+      [req.params.id, outbound_id || null, outbound_ref || null]);
     await logTicketHistory(alert.ticket_id, req.user.id, req.user.username||req.user.email, 'product_dispatched',
-      { awaiting_note: `${alert.product_name} x${alert.quantity}` });
+      { awaiting_note: alert.product_name + ' x' + alert.quantity + (outbound_ref ? ' | תעודה: ' + outbound_ref : '') });
     await query(`INSERT INTO notifications (user_id, type, title, message, data, needs_ack, created_at)
       VALUES ($1,'warehouse_dispatched','warehouse_dispatched',$2,$3,1,NOW())`,
       [alert.requested_by,
-       JSON.stringify({ product_name: alert.product_name, quantity: alert.quantity, ticket_number: alert.ticket_number }),
-       JSON.stringify({ ticket_id: alert.ticket_id, alert_id: req.params.id, product_name: alert.product_name, quantity: alert.quantity, ticket_number: alert.ticket_number })]
+       JSON.stringify({ product_name: alert.product_name, quantity: alert.quantity, ticket_number: alert.ticket_number, outbound_ref: outbound_ref || null }),
+       JSON.stringify({ ticket_id: alert.ticket_id, alert_id: req.params.id, product_name: alert.product_name, quantity: alert.quantity, ticket_number: alert.ticket_number, outbound_ref: outbound_ref || null })]
     );
     res.json({ message: 'Completed' });
   } catch (err) { res.status(500).json({ error: err.message }); }

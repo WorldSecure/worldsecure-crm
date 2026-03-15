@@ -69,6 +69,11 @@ function SupportDashboard() {
                     <div style={{ fontSize:'0.85rem', color:'#666' }}>
                       {t('ticket_number') || '#'}: <strong>{d.ticket_number}</strong>
                     </div>
+                    {d.outbound_ref && (
+                      <div style={{ fontSize:'0.82rem', color:'#27ae60', marginTop:'0.2rem', fontWeight:600 }}>
+                        📄 תעודת משלוח: {d.outbound_ref}
+                      </div>
+                    )}
                     <div style={{ fontSize:'0.78rem', color:'#aaa', marginTop:'0.2rem' }}>
                       {n.created_at ? new Date(n.created_at).toLocaleString() : ''}
                     </div>
@@ -106,7 +111,7 @@ function SupportDashboard() {
       {isAdmin && stats.agents && stats.agents.length > 0 && (
         <div className="card">
           <div className="card-header">
-            <h3 className="card-title">👥 {t('agents') }</h3>
+            <h2 className="card-title">👥 {t('agents') }</h2>
           </div>
           <div className="table-container">
             <table className="table">

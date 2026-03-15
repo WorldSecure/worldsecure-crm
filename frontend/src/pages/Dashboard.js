@@ -16,6 +16,10 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [warehouseAlerts, setWarehouseAlerts] = useState([]);
   const [completingAlert, setCompletingAlert] = useState(null);
+  const [dispatchModal, setDispatchModal] = useState(null); // { alert }
+  const [outboundList, setOutboundList] = useState([]);
+  const [selectedOutbound, setSelectedOutbound] = useState(null);
+  const [loadingOutbound, setLoadingOutbound] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -60,11 +64,42 @@ function Dashboard() {
     }
   };
 
-  const handleCompleteAlert = async (alertId) => {
+  const handleDispatchClick = async (alert) => {
+    // שלב 1: שאל אם יצר תעודת משלוח
+    const confirmed = window.confirm(
+      `האם ייצרת תעודת משלוח בהתאם לבקשת מערכת התמיכה?\n\nלקוח: ${alert.customer_name}\nמוצר: ${alert.product_name} x${alert.quantity}`
+    );
+    if (!confirmed) return;
+
+    // שלב 2: טען עסקאות Outbound של הלקוח
+    setLoadingOutbound(true);
+    setSelectedOutbound(null);
     try {
-      setCompletingAlert(alertId);
-      await axios.put(`/api/warehouse-alerts/${alertId}/complete`);
-      setWarehouseAlerts(prev => prev.filter(a => a.id !== alertId));
+      const res = await axios.get(`/api/outbound/by-customer/${alert.customer_id || 0}?name=${encodeURIComponent(alert.customer_name || '')}`);
+      setOutboundList(res.data);
+    } catch(e) {
+      setOutboundList([]);
+    }
+    setLoadingOutbound(false);
+    setDispatchModal(alert);
+  };
+
+  const handleCompleteAlert = async () => {
+    if (!dispatchModal) return;
+    if (!selectedOutbound) {
+      alert('יש לבחור תעודת משלוח מהרשימה');
+      return;
+    }
+    try {
+      setCompletingAlert(dispatchModal.id);
+      const outbound = outboundList.find(o => o.id === selectedOutbound);
+      await axios.put(`/api/warehouse-alerts/${dispatchModal.id}/complete`, {
+        outbound_id: selectedOutbound,
+        outbound_ref: `#${selectedOutbound} — ${new Date(outbound?.transaction_date).toLocaleDateString('he-IL')}`
+      });
+      setWarehouseAlerts(prev => prev.filter(a => a.id !== dispatchModal.id));
+      setDispatchModal(null);
+      setSelectedOutbound(null);
     } catch(e) { console.error(e); }
     finally { setCompletingAlert(null); }
   };
@@ -239,7 +274,7 @@ function Dashboard() {
                   <div style={{ fontSize: '0.85rem', marginBottom: '0.25rem' }}>📦 {alert.product_name}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
                     <span style={{ background:'#e67e22', color:'white', padding:'0.2rem 0.6rem', borderRadius:'8px', fontWeight:700 }}>{alert.quantity}</span>
-                    <button onClick={() => handleCompleteAlert(alert.id)} disabled={completingAlert === alert.id}
+                    <button onClick={() => handleDispatchClick(alert)} disabled={completingAlert === alert.id}
                       style={{ background:'#27ae60', color:'white', border:'none', borderRadius:'8px', padding:'0.4rem 0.9rem', fontWeight:700, cursor:'pointer', fontSize:'0.85rem' }}>
                       {completingAlert === alert.id ? t('loading') : `✅ ${t('dispatched')}`}
                     </button>
@@ -271,7 +306,7 @@ function Dashboard() {
                       <td>{alert.requested_by_name}</td>
                       <td>{alert.created_at ? new Date(alert.created_at).toLocaleDateString() : '-'}</td>
                       <td>
-                        <button onClick={() => handleCompleteAlert(alert.id)} disabled={completingAlert === alert.id}
+                        <button onClick={() => handleDispatchClick(alert)} disabled={completingAlert === alert.id}
                           style={{ background:'#27ae60', color:'white', border:'none', borderRadius:'8px', padding:'0.4rem 0.9rem', fontWeight:700, cursor:'pointer', fontSize:'0.85rem' }}>
                           {completingAlert === alert.id ? t('loading') : `✅ ${t('dispatched')}`}
                         </button>
@@ -329,6 +364,73 @@ function Dashboard() {
         </div>
       )}
 
+
+      {/* Dispatch Modal — בחירת תעודת משלוח */}
+      {dispatchModal && (
+        <div className="modal-overlay" onClick={() => setDispatchModal(null)}>
+          <div className="modal" style={{ maxWidth: '600px' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">📦 בחר תעודת משלוח</h3>
+              <button className="modal-close" onClick={() => setDispatchModal(null)}>×</button>
+            </div>
+            <div style={{ padding: '1rem' }}>
+              <div style={{ background: '#fff3e0', border: '1px solid #e67e22', borderRadius: '8px', padding: '0.75rem', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                <strong>לקוח:</strong> {dispatchModal.customer_name} &nbsp;|&nbsp;
+                <strong>מוצר:</strong> {dispatchModal.product_name} x{dispatchModal.quantity}
+              </div>
+
+              <p style={{ marginBottom: '0.75rem', fontWeight: 600 }}>בחר את תעודת המשלוח שיצרת:</p>
+
+              {loadingOutbound ? (
+                <div style={{ textAlign: 'center', padding: '2rem' }}><div className="spinner"></div></div>
+              ) : outboundList.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '1.5rem', color: '#888', background: '#f8f9fa', borderRadius: '8px' }}>
+                  ⚠️ לא נמצאו תעודות משלוח עבור לקוח זה.<br/>
+                  <small>צור תעודת משלוח בדף Outbound ואז חזור לכאן.</small>
+                </div>
+              ) : (
+                <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                  {outboundList.map(ob => (
+                    <div key={ob.id}
+                      onClick={() => setSelectedOutbound(ob.id)}
+                      style={{
+                        border: `2px solid ${selectedOutbound === ob.id ? '#28a745' : '#dee2e6'}`,
+                        background: selectedOutbound === ob.id ? '#f0fff4' : 'white',
+                        borderRadius: '8px', padding: '0.75rem', marginBottom: '0.5rem',
+                        cursor: 'pointer', transition: 'all 0.15s'
+                      }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <strong>תעודה #{ob.id}</strong>
+                          <span style={{ marginLeft: '0.75rem', fontSize: '0.85rem', color: '#555' }}>
+                            {new Date(ob.transaction_date).toLocaleString('he-IL')}
+                          </span>
+                        </div>
+                        <span className={`badge ${ob.status === 'delivered' ? 'badge-success' : ob.status === 'shipped' ? 'badge-info' : 'badge-warning'}`}>
+                          {ob.status}
+                        </span>
+                      </div>
+                      {ob.items_summary && (
+                        <div style={{ fontSize: '0.82rem', color: '#666', marginTop: '0.25rem' }}>📦 {ob.items_summary}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setDispatchModal(null)}>{t('cancel')}</button>
+              <button
+                className="btn btn-success"
+                onClick={handleCompleteAlert}
+                disabled={!selectedOutbound || completingAlert === dispatchModal.id}
+              >
+                {completingAlert === dispatchModal.id ? t('loading') : `✅ ${t('dispatched')}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
