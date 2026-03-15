@@ -2002,6 +2002,29 @@ app.post('/api/sync/support', authenticateToken, async (req, res) => {
 });
 
 // ── SYNC ENDPOINT (מקבל נתונים מהמחשב המקומי) ────────────────────────────────
+app.post('/api/sync/email-signatures', authenticateToken, async (req, res) => {
+  const { rows } = req.body;
+  if (!rows || !Array.isArray(rows)) return res.status(400).json({ error: 'rows required' });
+  try {
+    for (const r of rows) {
+      await query(`
+        INSERT INTO email_signatures (id, name, content, is_active, created_at)
+        VALUES ($1,$2,$3,$4,$5)
+        ON CONFLICT (id) DO UPDATE SET name=$2, content=$3, is_active=$4`,
+        [r.id, r.name, r.content, r.is_active ? true : false, r.created_at || new Date().toISOString()]
+      );
+    }
+    // מחק חתימות שנמחקו מקומית
+    if (rows.length > 0) {
+      const ids = rows.map(r => r.id);
+      await query(`DELETE FROM email_signatures WHERE id NOT IN (${ids.map((_,i)=>`$${i+1}`).join(',')})`, ids);
+    } else {
+      await query('DELETE FROM email_signatures');
+    }
+    res.json({ message: 'email-signatures synced', count: rows.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
   const { entity } = req.params;
   const { rows } = req.body;
