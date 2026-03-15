@@ -2420,6 +2420,32 @@ ${tx?.notes?`<p><strong>${lang==='he'?'הערות':'Notes'}:</strong> ${tx.notes
 });
 
 // ── Run Migrations ────────────────────────────────────────────────────────────
+app.get('/api/run-migrations', async (req, res) => {
+  // GET version for easy browser access
+  try {
+    const migrations = [
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_warehouse BOOLEAN DEFAULT TRUE`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_sales BOOLEAN DEFAULT FALSE`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_service BOOLEAN DEFAULT TRUE`,
+      `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS owner_updated_at TIMESTAMPTZ`,
+      `ALTER TABLE inbound_transactions ADD COLUMN IF NOT EXISTS username TEXT`,
+      `ALTER TABLE outbound_transactions ADD COLUMN IF NOT EXISTS username TEXT`,
+      `ALTER TABLE support_ticket_history ADD COLUMN IF NOT EXISTS awaiting_channel TEXT`,
+      `ALTER TABLE support_ticket_history ADD COLUMN IF NOT EXISTS awaiting_note TEXT`,
+      `ALTER TABLE support_ticket_history ADD COLUMN IF NOT EXISTS awaiting_deadline TEXT`,
+      `ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS logo_base64 TEXT`,
+      `ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS email_signature TEXT`,
+      `CREATE TABLE IF NOT EXISTS email_signatures (id SERIAL PRIMARY KEY, name TEXT NOT NULL, content TEXT NOT NULL, is_active BOOLEAN DEFAULT FALSE, created_at TIMESTAMPTZ DEFAULT NOW())`,
+    ];
+    const results = [];
+    for (const sql of migrations) {
+      try { await query(sql); results.push({ sql: sql.substring(0,60), ok: true }); }
+      catch(e) { results.push({ sql: sql.substring(0,60), error: e.message }); }
+    }
+    res.json({ done: true, results });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.post('/api/run-migrations', authenticateToken, async (req, res) => {
   const migrations = [
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_warehouse BOOLEAN DEFAULT TRUE`,
