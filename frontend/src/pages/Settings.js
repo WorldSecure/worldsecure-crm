@@ -795,13 +795,23 @@ function Settings() {
                 const url = prompt('הכנס כתובת URL:');
                 if (url) document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('createLink', false, url);
               }} style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>🔗</button>
-              {(companyData.logo_path || companyData.logo_base64) && (
-                <button type="button" title="הוסף לוגו" onMouseDown={(e) => {
-                  e.preventDefault();
-                  const src = companyData.logo_base64 || `${axios.defaults.baseURL}${companyData.logo_path}`;
-                  document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('insertHTML', false, `<img src="${src}" style="max-height:60px;max-width:200px;object-fit:contain;" />`);
-                }} style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>🖼️ לוגו</button>
-              )}
+              {/* כפתור הוספת תמונה — פותח file explorer */}
+              <label title="הוסף תמונה" style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                🖼️ תמונה
+                <input type="file" accept="image/*" style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      const base64 = reader.result;
+                      document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('insertHTML', false, `<img src="${base64}" style="max-height:80px;max-width:200px;object-fit:contain;" />`);
+                    };
+                    reader.readAsDataURL(file);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
               <button type="button" title="קו מפריד" onMouseDown={(e) => { e.preventDefault(); document.getElementById('signature-editor-frame')?.contentDocument?.execCommand('insertHorizontalRule'); }}
                 style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>─</button>
             </div>
