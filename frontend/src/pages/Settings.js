@@ -6,6 +6,12 @@ function Settings() {
   const { t } = useLanguage();
   const [activeSection, setActiveSection] = useState('logo');
   const [loading, setLoading] = useState(true);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   const [companyData, setCompanyData] = useState({
     company_name: '',
     address: '',
@@ -381,7 +387,12 @@ function Settings() {
       </div>
 
       {/* ניווט כפתורים */}
-      <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(auto-fill, minmax(150px, 1fr))',
+        gap: isMobile ? '0.5rem' : '0.75rem',
+        marginBottom: '1.5rem'
+      }}>
         {[
           { key: 'logo',    icon: '🖼️', label: t('company_logo') || 'Company Logo' },
           { key: 'company', icon: '🏢', label: t('company_settings') || 'Company Settings' },
@@ -394,18 +405,26 @@ function Settings() {
             key={s.key}
             onClick={() => setActiveSection(s.key)}
             style={{
-              padding: '0.6rem 1.4rem',
+              padding: isMobile ? '0.5rem 0.3rem' : '0.6rem 1.4rem',
               borderRadius: '8px',
               border: activeSection === s.key ? '2px solid #007bff' : '2px solid #dee2e6',
               background: activeSection === s.key ? '#007bff' : 'white',
               color: activeSection === s.key ? 'white' : '#333',
               fontWeight: activeSection === s.key ? 700 : 400,
-              fontSize: '0.95rem',
+              fontSize: isMobile ? '0.78rem' : '0.95rem',
               cursor: 'pointer',
               transition: 'all 0.15s',
+              display: 'flex',
+              flexDirection: isMobile ? 'column' : 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.2rem',
+              textAlign: 'center',
+              lineHeight: 1.3
             }}
           >
-            {s.icon} {s.label}
+            <span>{s.icon}</span>
+            <span>{s.label}</span>
           </button>
         ))}
       </div>
@@ -609,7 +628,7 @@ function Settings() {
           </div>
         </div>
 
-        <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem'}}>
+        <div style={{display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(200px, 1fr))', gap: isMobile ? '0.5rem' : '1rem', marginBottom: '1.5rem'}}>
           {qrGallery.map((qr, index) => (
             <div key={qr.id} style={{border: '1px solid #ddd', borderRadius: '8px', padding: '1rem', textAlign: 'center', background: 'white'}}>
               <img src={qr.image} alt="QR Code" style={{width: '150px', height: '150px', marginBottom: '0.5rem'}} />
@@ -689,7 +708,7 @@ function Settings() {
             <h3 className="card-title">✉️ {t('smtp_settings') || 'הגדרות SMTP'}</h3>
           </div>
           <div style={{ padding: '1.5rem' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '1rem' }}>
               <div className="form-group">
                 <label className="form-label">SMTP Host</label>
                 <input type="text" className="form-input" value={companyData.smtp_host || ''}
