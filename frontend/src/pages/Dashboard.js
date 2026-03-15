@@ -16,6 +16,12 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [warehouseAlerts, setWarehouseAlerts] = useState([]);
   const [completingAlert, setCompletingAlert] = useState(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Check if we're in Sales Portal
   const isSalesPortal = location.pathname.startsWith('/sales-portal');
@@ -156,16 +162,20 @@ function Dashboard() {
         <p>{t('welcome')}</p>
       </div>
 
-      <div className="stats-grid">
+      <div className="stats-grid" style={{ gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(200px, 1fr))' }}>
         <div className="stat-card normal">
           <div className="stat-value">{stats?.totalProducts || 0}</div>
           <div className="stat-label">{t('total_products')}</div>
         </div>
 
+        <div className="stat-card normal">
+          <div className="stat-value">{stats?.totalInbound || 0}</div>
+          <div className="stat-label">{t('total_inbound') || 'Total Inbound'}</div>
+        </div>
 
         <div className="stat-card normal">
-          <div className="stat-value">{stats?.todayTransactions || 0}</div>
-          <div className="stat-label">{t('today_transactions')}</div>
+          <div className="stat-value">{stats?.totalOutbound || 0}</div>
+          <div className="stat-label">{t('total_outbound') || 'Total Outbound'}</div>
         </div>
       </div>
 
@@ -174,32 +184,42 @@ function Dashboard() {
           <div className="card-header">
             <h3 className="card-title">{t('low_stock')} ⚠️</h3>
           </div>
-          <div className="table-container">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>{t('sku')}</th>
-                  <th>{t('name')}</th>
-                  <th>{t('quantity')}</th>
-                  <th>{t('min_quantity')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lowStockProducts.map(product => (
-                  <tr key={product.id}>
-                    <td>{product.sku}</td>
-                    <td>{product.name}</td>
-                    <td>
-                      <span className="badge badge-danger">
-                        {product.quantity}
-                      </span>
-                    </td>
-                    <td>{product.min_quantity}</td>
+          {isMobile ? (
+            <div style={{ padding: '0.5rem' }}>
+              {lowStockProducts.map(product => (
+                <div key={product.id} style={{ background: '#fff5f5', border: '1px solid #f5c6cb', borderRadius: '8px', padding: '0.75rem', marginBottom: '0.5rem' }}>
+                  <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>🔖 {product.sku} — {product.name}</div>
+                  <div style={{ fontSize: '0.85rem' }}>
+                    <span className="badge badge-danger">{product.quantity}</span>
+                    <span style={{ marginLeft: '0.5rem', color: '#666' }}>min: {product.min_quantity}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="table-container">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>{t('sku')}</th>
+                    <th>{t('name')}</th>
+                    <th>{t('quantity')}</th>
+                    <th>{t('min_quantity')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {lowStockProducts.map(product => (
+                    <tr key={product.id}>
+                      <td>{product.sku}</td>
+                      <td>{product.name}</td>
+                      <td><span className="badge badge-danger">{product.quantity}</span></td>
+                      <td>{product.min_quantity}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
       {/* Warehouse Alerts from Support */}
@@ -210,42 +230,58 @@ function Dashboard() {
               {t('urgent_dispatches')} 🚨 ({warehouseAlerts.length})
             </h3>
           </div>
-          <div className="table-container" style={{ overflowX:'visible' }}>
-            <table className="table" style={{ tableLayout:'fixed', width:'100%' }}>
-              <thead>
-                <tr>
-                  <th>{t('ticket_number')}</th>
-                  <th>{t('customer')}</th>
-                  <th>{t('product')}</th>
-                  <th>{t('quantity')}</th>
-                  <th>{t('requested_by')}</th>
-                  <th>{t('date')}</th>
-                  <th>{t('actions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {warehouseAlerts.map(alert => (
-                  <tr key={alert.id} style={{ background:'#fff3e0' }}>
-                    <td style={{ fontWeight:700 }}>{alert.ticket_number}</td>
-                    <td style={{ wordBreak:'break-word' }}>{alert.customer_name}</td>
-                    <td style={{ wordBreak:'break-word' }}>{alert.product_name}</td>
-                    <td><span style={{ background:'#e67e22', color:'white', padding:'0.2rem 0.6rem', borderRadius:'8px', fontWeight:700 }}>{alert.quantity}</span></td>
-                    <td>{alert.requested_by_name}</td>
-                    <td>{alert.created_at ? new Date(alert.created_at).toLocaleDateString() : '-'}</td>
-                    <td>
-                      <button
-                        onClick={() => handleCompleteAlert(alert.id)}
-                        disabled={completingAlert === alert.id}
-                        style={{ background:'#27ae60', color:'white', border:'none', borderRadius:'8px', padding:'0.4rem 0.9rem', fontWeight:700, cursor:'pointer', fontSize:'0.85rem' }}
-                      >
-                        {completingAlert === alert.id ? t('loading') : `✅ ${t('dispatched')}`}
-                      </button>
-                    </td>
+          {isMobile ? (
+            <div style={{ padding: '0.5rem' }}>
+              {warehouseAlerts.map(alert => (
+                <div key={alert.id} style={{ background: '#fff3e0', border: '1px solid #e67e22', borderRadius: '8px', padding: '0.75rem', marginBottom: '0.5rem' }}>
+                  <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>🎫 {alert.ticket_number}</div>
+                  <div style={{ fontSize: '0.85rem', marginBottom: '0.25rem' }}>👥 {alert.customer_name}</div>
+                  <div style={{ fontSize: '0.85rem', marginBottom: '0.25rem' }}>📦 {alert.product_name}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
+                    <span style={{ background:'#e67e22', color:'white', padding:'0.2rem 0.6rem', borderRadius:'8px', fontWeight:700 }}>{alert.quantity}</span>
+                    <button onClick={() => handleCompleteAlert(alert.id)} disabled={completingAlert === alert.id}
+                      style={{ background:'#27ae60', color:'white', border:'none', borderRadius:'8px', padding:'0.4rem 0.9rem', fontWeight:700, cursor:'pointer', fontSize:'0.85rem' }}>
+                      {completingAlert === alert.id ? t('loading') : `✅ ${t('dispatched')}`}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="table-container" style={{ overflowX:'visible' }}>
+              <table className="table" style={{ tableLayout:'fixed', width:'100%' }}>
+                <thead>
+                  <tr>
+                    <th>{t('ticket_number')}</th>
+                    <th>{t('customer')}</th>
+                    <th>{t('product')}</th>
+                    <th>{t('quantity')}</th>
+                    <th>{t('requested_by')}</th>
+                    <th>{t('date')}</th>
+                    <th>{t('actions')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {warehouseAlerts.map(alert => (
+                    <tr key={alert.id} style={{ background:'#fff3e0' }}>
+                      <td style={{ fontWeight:700 }}>{alert.ticket_number}</td>
+                      <td style={{ wordBreak:'break-word' }}>{alert.customer_name}</td>
+                      <td style={{ wordBreak:'break-word' }}>{alert.product_name}</td>
+                      <td><span style={{ background:'#e67e22', color:'white', padding:'0.2rem 0.6rem', borderRadius:'8px', fontWeight:700 }}>{alert.quantity}</span></td>
+                      <td>{alert.requested_by_name}</td>
+                      <td>{alert.created_at ? new Date(alert.created_at).toLocaleDateString() : '-'}</td>
+                      <td>
+                        <button onClick={() => handleCompleteAlert(alert.id)} disabled={completingAlert === alert.id}
+                          style={{ background:'#27ae60', color:'white', border:'none', borderRadius:'8px', padding:'0.4rem 0.9rem', fontWeight:700, cursor:'pointer', fontSize:'0.85rem' }}>
+                          {completingAlert === alert.id ? t('loading') : `✅ ${t('dispatched')}`}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

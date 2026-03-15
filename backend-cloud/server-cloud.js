@@ -1624,19 +1624,21 @@ app.put('/api/notifications/:id/acknowledge', authenticateToken, async (req, res
 
 app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
   try {
-    const [prod, lowStock, cust, supp, todayTx] = await Promise.all([
+    const [prod, lowStock, cust, supp, inbound, outbound] = await Promise.all([
       query('SELECT COUNT(*) as count FROM products'),
       query('SELECT COUNT(*) as count FROM products WHERE quantity <= min_quantity'),
       query('SELECT COUNT(*) as count FROM customers'),
       query('SELECT COUNT(*) as count FROM suppliers'),
-      query(`SELECT COUNT(*) as count FROM outbound_transactions WHERE transaction_date::date = CURRENT_DATE`)
+      query('SELECT COUNT(*) as count FROM inbound_transactions'),
+      query('SELECT COUNT(*) as count FROM outbound_transactions')
     ]);
     res.json({
       totalProducts: parseInt(prod.rows[0].count),
       lowStockProducts: parseInt(lowStock.rows[0].count),
       totalCustomers: parseInt(cust.rows[0].count),
       totalSuppliers: parseInt(supp.rows[0].count),
-      todayTransactions: parseInt(todayTx.rows[0].count)
+      totalInbound: parseInt(inbound.rows[0].count),
+      totalOutbound: parseInt(outbound.rows[0].count)
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
