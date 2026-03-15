@@ -1499,13 +1499,14 @@ app.post('/api/warehouse-alerts', authenticateToken, async (req, res) => {
   const { ticket_id, product_id, product_name, quantity } = req.body;
   if (!ticket_id || !product_id) return res.status(400).json({ error: 'ticket_id and product_id required' });
   try {
-    const tkRes = await query('SELECT ticket_number, customer_name FROM support_tickets WHERE id=$1', [ticket_id]);
+    const tkRes = await query('SELECT ticket_number, customer_name, customer_id FROM support_tickets WHERE id=$1', [ticket_id]);
     const ticket = tkRes.rows[0];
     if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+    await query('ALTER TABLE warehouse_alerts ADD COLUMN IF NOT EXISTS customer_id INTEGER').catch(() => {});
     const r = await query(`
-      INSERT INTO warehouse_alerts (ticket_id, ticket_number, customer_name, product_id, product_name, quantity, requested_by, requested_by_name, created_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW()) RETURNING id`,
-      [ticket_id, ticket.ticket_number, ticket.customer_name, product_id, product_name, quantity||1, req.user.id, req.user.username||req.user.email]
+      INSERT INTO warehouse_alerts (ticket_id, ticket_number, customer_name, customer_id, product_id, product_name, quantity, requested_by, requested_by_name, created_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW()) RETURNING id`,
+      [ticket_id, ticket.ticket_number, ticket.customer_name, ticket.customer_id||null, product_id, product_name, quantity||1, req.user.id, req.user.username||req.user.email]
     );
     res.json({ id: r.rows[0].id });
   } catch (err) { res.status(500).json({ error: err.message }); }
