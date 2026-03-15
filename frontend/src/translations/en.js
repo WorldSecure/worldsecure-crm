@@ -441,6 +441,17 @@ export const en = {
   
   // QR Code
   qr_code: 'QR CODE',
+  email_signature: 'Email Signature',
+  add_signature: 'New Signature',
+  edit_signature: 'Edit Signature',
+  new_signature: 'New Signature',
+  no_signatures: 'No signatures yet. Create one!',
+  set_active: 'Set as Active',
+  active: 'Active',
+  signature_name: 'Signature Name',
+  signature_name_placeholder: 'e.g. Main Signature, Official...',
+  preview: 'Preview',
+  hide_preview: 'Hide Preview',
   qr_gallery: 'QR Gallery',
   qr_codes: 'QR Codes',
   add_new_qr: 'Add New QR',
