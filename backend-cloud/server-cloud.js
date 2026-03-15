@@ -1528,7 +1528,9 @@ app.get('/api/outbound/by-customer/:customerId', authenticateToken, async (req, 
       FROM outbound_transactions ot
       LEFT JOIN outbound_items oi ON oi.transaction_id = ot.id
       LEFT JOIN products p ON p.id = oi.product_id
-      WHERE ot.customer_id = $1 OR ot.casual_customer_name ILIKE $2
+      WHERE ot.customer_id = $1
+         OR ot.customer_name ILIKE $2
+         OR ot.casual_customer_name ILIKE $2
       GROUP BY ot.id
       ORDER BY ot.transaction_date DESC LIMIT 20`,
       [customerId, '%' + name + '%']
@@ -2203,6 +2205,14 @@ app.get('/api/sync/pull/support', authenticateToken, async (req, res) => {
 });
 
 // ── Sync: Support (push from local) ──────────────────────────────────────────
+
+// ── Sync: Pull warehouse_alerts from cloud ────────────────────────────────────
+app.get('/api/sync/pull/warehouse-alerts', authenticateToken, async (req, res) => {
+  try {
+    const r = await query(`SELECT * FROM warehouse_alerts WHERE status='pending' ORDER BY created_at DESC`);
+    res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 
 // ── Backup endpoints (cloud stubs) ───────────────────────────────────────────
