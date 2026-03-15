@@ -33,6 +33,7 @@ function Settings() {
   // QR Code States
   const [qrGallery, setQrGallery] = useState([]);
   const [newQr, setNewQr] = useState({ type: 'website', data: {} });
+  const [editingQrTitle, setEditingQrTitle] = useState(null); // { id, title }
 
   useEffect(() => {
     fetchCompanyData();
@@ -286,6 +287,18 @@ function Settings() {
         await deleteQrFromDb(qr.id);
       }
       saveQrGallery([]);
+    }
+  };
+
+  const renameQr = async (id, newTitle) => {
+    try {
+      await axios.put(`/api/qr-codes/${id}`, { title: newTitle });
+      const updated = qrGallery.map(qr => qr.id === id ? { ...qr, title: newTitle } : qr);
+      setQrGallery(updated);
+      localStorage.setItem('qrGallery', JSON.stringify(updated));
+      setEditingQrTitle(null);
+    } catch (error) {
+      alert(t('error') + ': ' + (error.response?.data?.error || error.message));
     }
   };
 
@@ -549,7 +562,29 @@ function Settings() {
           {qrGallery.map((qr, index) => (
             <div key={qr.id} style={{border: '1px solid #ddd', borderRadius: '8px', padding: '1rem', textAlign: 'center', background: 'white'}}>
               <img src={qr.image} alt="QR Code" style={{width: '150px', height: '150px', marginBottom: '0.5rem'}} />
-              <div style={{fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem'}}>{qr.type.toUpperCase()}</div>
+              <div style={{fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.25rem'}}>{qr.type.toUpperCase()}</div>
+              
+              {/* שם QR - ניתן לעריכה */}
+              {editingQrTitle?.id === qr.id ? (
+                <div style={{display: 'flex', gap: '0.25rem', marginBottom: '0.5rem', alignItems: 'center'}}>
+                  <input
+                    type="text"
+                    value={editingQrTitle.title}
+                    onChange={(e) => setEditingQrTitle({...editingQrTitle, title: e.target.value})}
+                    onKeyDown={(e) => { if (e.key === 'Enter') renameQr(qr.id, editingQrTitle.title); if (e.key === 'Escape') setEditingQrTitle(null); }}
+                    autoFocus
+                    style={{flex: 1, padding: '0.25rem 0.4rem', fontSize: '0.8rem', borderRadius: '4px', border: '1px solid #007bff'}}
+                  />
+                  <button onClick={() => renameQr(qr.id, editingQrTitle.title)} style={{padding: '0.25rem 0.4rem', fontSize: '0.75rem', borderRadius: '4px', border: 'none', background: '#28a745', color: 'white', cursor: 'pointer'}}>✓</button>
+                  <button onClick={() => setEditingQrTitle(null)} style={{padding: '0.25rem 0.4rem', fontSize: '0.75rem', borderRadius: '4px', border: 'none', background: '#6c757d', color: 'white', cursor: 'pointer'}}>✕</button>
+                </div>
+              ) : (
+                <div style={{fontSize: '0.8rem', color: '#444', marginBottom: '0.25rem', fontStyle: 'italic', cursor: 'pointer'}}
+                  onClick={() => setEditingQrTitle({ id: qr.id, title: qr.title || qr.type })}>
+                  {qr.title || qr.type} ✏️
+                </div>
+              )}
+
               <div style={{fontSize: '0.75rem', color: '#666', marginBottom: '0.75rem', wordBreak: 'break-all'}}>{qr.qrData.substring(0, 30)}...</div>
               <div style={{display: 'flex', gap: '0.25rem', justifyContent: 'center', flexWrap: 'wrap'}}>
                 <button onClick={() => moveQr(index, 'up')} disabled={index === 0} style={{padding: '0.25rem 0.5rem', fontSize: '0.75rem', borderRadius: '4px', border: '1px solid #ddd', background: 'white', cursor: index === 0 ? 'not-allowed' : 'pointer', opacity: index === 0 ? 0.5 : 1}}>⬆️</button>

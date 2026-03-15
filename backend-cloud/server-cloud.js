@@ -420,6 +420,15 @@ app.delete('/api/qr-codes/:id', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.put('/api/qr-codes/:id', authenticateToken, async (req, res) => {
+  const { title } = req.body;
+  if (!title) return res.status(400).json({ error: 'Title required' });
+  try {
+    await query('UPDATE qr_codes SET title=$1 WHERE id=$2', [title, req.params.id]);
+    res.json({ message: 'QR title updated' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── GET: Backups list (cloud has no local backups - return empty) ──────────────
 app.get('/api/backups', authenticateToken, async (req, res) => {
   res.json([]);
