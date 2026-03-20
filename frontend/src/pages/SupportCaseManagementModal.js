@@ -365,7 +365,7 @@ function SupportCaseManagementModal({ ticket, customers, products, users, onClos
               ) : historyData.length === 0 ? (
                 <div style={{ textAlign:'center', padding:'1rem', color:'#888' }}>{t('no_history')}</div>
               ) : (
-                <div style={{ position:'relative', paddingRight:'1.5rem', maxHeight:'340px', overflowY:'auto' }}>
+                <div style={{ position:'relative', paddingRight:'1.5rem' }}>
                   {/* Timeline line */}
                   <div style={{ position:'absolute', right:'7px', top:0, bottom:0, width:'2px', background:'#e0e0e0' }} />
 
@@ -395,9 +395,9 @@ function SupportCaseManagementModal({ ticket, customers, products, users, onClos
                           {isStatus && (
                             <div style={{ fontSize:'0.82rem', color:'#555' }}>
                               {t('status_changed')}:{' '}
-                              <span style={{ background:statusColors[h.old_status]||'#eee', color:'white', padding:'0.1rem 0.4rem', borderRadius:'8px', fontSize:'0.75rem' }}>{h.old_status ? t(`status_${h.old_status}`)||h.old_status : '-'}</span>
+                              <span style={{ background:statusColors[h.old_status]||'#eee', color:'white', padding:'0.1rem 0.4rem', borderRadius:'8px', fontSize:'0.75rem', whiteSpace:'nowrap' }}>{h.old_status ? t(`status_${h.old_status}`)||h.old_status : '-'}</span>
                               {' → '}
-                              <span style={{ background:statusColors[h.new_status]||'#eee', color:'white', padding:'0.1rem 0.4rem', borderRadius:'8px', fontSize:'0.75rem' }}>{h.new_status ? t(`status_${h.new_status}`)||h.new_status : '-'}</span>
+                              <span style={{ background:statusColors[h.new_status]||'#eee', color:'white', padding:'0.1rem 0.4rem', borderRadius:'8px', fontSize:'0.75rem', whiteSpace:'nowrap' }}>{h.new_status ? t(`status_${h.new_status}`)||h.new_status : '-'}</span>
                               {isAwaiting && h.awaiting_channel && (
                                 <div style={{ marginTop:'0.2rem' }}>
                                   {h.awaiting_channel === 'phone' ? '☎️' : h.awaiting_channel === 'email' ? '📧' : '📱'} {h.awaiting_channel}
