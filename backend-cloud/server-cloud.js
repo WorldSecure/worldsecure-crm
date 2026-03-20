@@ -2293,6 +2293,50 @@ app.get('/api/sync/pull/support', authenticateToken, async (req, res) => {
 
 // ── Sync: Support (push from local) ──────────────────────────────────────────
 
+// ── Sync: Pull notifications from cloud → local ───────────────────────────────
+app.get('/api/sync/pull/notifications', authenticateToken, async (req, res) => {
+  try {
+    // החזר notifications מסוג warehouse_dispatched שעדיין צריכים ack
+    // רק מ-24 שעות אחרונות כדי לא להציף
+    const r = await query(`
+      SELECT n.*, u.email as user_email
+      FROM notifications n
+      LEFT JOIN users u ON u.id = n.user_id
+      WHERE n.type = 'warehouse_dispatched'
+        AND n.needs_ack = 1
+        AND n.is_read = 0
+        AND n.created_at > NOW() - INTERVAL '7 days'
+      ORDER BY n.created_at DESC
+    `);
+    res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Sync: Push notification acks from local → cloud ──────────────────────────
+app.post('/api/sync/notifications/ack', authenticateToken, async (req, res) => {
+  try {
+    const { acked_ids } = req.body; // מערך של cloud notification IDs שאושרו מקומית
+    if (!Array.isArray(acked_ids) || !acked_ids.length) return res.json({ ok: true });
+
+    for (const id of acked_ids) {
+      const nRes = await query('SELECT * FROM notifications WHERE id=$1', [id]);
+      const n = nRes.rows[0];
+      if (!n) continue;
+      await query('UPDATE notifications SET is_read=1, needs_ack=0, acked_at=NOW() WHERE id=$1', [id]);
+      // כתוב היסטוריה לקריאה
+      try {
+        const data = JSON.parse(n.data || '{}');
+        if (data.ticket_id) {
+          await logTicketHistory(data.ticket_id, n.user_id, null, 'dispatch_acknowledged',
+            { awaiting_note: `${data.product_name} x${data.quantity}` }
+          );
+        }
+      } catch(e) {}
+    }
+    res.json({ ok: true, count: acked_ids.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Sync: Pull warehouse_alerts from cloud ────────────────────────────────────
 app.get('/api/sync/pull/warehouse-alerts', authenticateToken, async (req, res) => {
   try {

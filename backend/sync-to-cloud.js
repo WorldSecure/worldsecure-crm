@@ -132,6 +132,7 @@ async function syncLocalToCloud() {
     await syncOutboundToCloud();
     await syncSupportToCloud();
     await syncWarehouseAlertsToCloud();
+    await syncNotificationAcksToCloud();
     log('✅ LOCAL → CLOUD complete');
   } catch (err) {
     log(`❌ LOCAL → CLOUD error: ${err.message}`);
@@ -243,6 +244,7 @@ async function syncCloudToLocal() {
     await syncOutboundFromCloud();
     await syncSupportFromCloud();
     await syncWarehouseAlertsFromCloud();
+    await syncNotificationsFromCloud();
     await syncDocumentsFromCloud();
     log('✅ CLOUD → LOCAL complete');
   } catch (err) {
@@ -803,6 +805,94 @@ async function syncWarehouseAlertsFromCloud() {
   }
   if (count > 0) log(`  ↳ warehouse-alerts from cloud: ${count} synced`);
 }
+// ── Notifications דו-כיווני ────────────────────────────────────────────────────
+
+async function ensureNotificationsTable() {
+  await sqliteRun(`CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY,
+    cloud_id INTEGER,
+    user_id INTEGER,
+    user_email TEXT,
+    type TEXT,
+    title TEXT,
+    message TEXT,
+    data TEXT,
+    is_read INTEGER DEFAULT 0,
+    needs_ack INTEGER DEFAULT 0,
+    acked_at TEXT,
+    created_at TEXT
+  )`).catch(() => {});
+  await sqliteRun('ALTER TABLE notifications ADD COLUMN cloud_id INTEGER').catch(() => {});
+  await sqliteRun('ALTER TABLE notifications ADD COLUMN user_email TEXT').catch(() => {});
+  await sqliteRun('ALTER TABLE notifications ADD COLUMN needs_ack INTEGER DEFAULT 0').catch(() => {});
+  await sqliteRun('ALTER TABLE notifications ADD COLUMN acked_at TEXT').catch(() => {});
+}
+
+// CLOUD → LOCAL: משוך notifications מהענן למקומי
+async function syncNotificationsFromCloud() {
+  await ensureNotificationsTable();
+
+  const result = await apiRequest('GET', '/api/sync/pull/notifications');
+  if (result.status !== 200) { log('  ⚠ pull notifications: ' + JSON.stringify(result.body)); return; }
+  const notifications = result.body || [];
+
+  let count = 0;
+  for (const n of notifications) {
+    // מצא user_id מקומי לפי email
+    let localUserId = null;
+    if (n.user_email) {
+      const userRow = await sqliteGet('SELECT id FROM users WHERE email=?', [n.user_email]).catch(() => null);
+      localUserId = userRow?.id || null;
+    }
+    if (!localUserId) continue; // אם המשתמש לא קיים מקומית — דלג
+
+    // בדוק אם כבר קיים לפי cloud_id
+    const existing = await sqliteGet('SELECT id, is_read, needs_ack FROM notifications WHERE cloud_id=?', [n.id]).catch(() => null);
+
+    if (existing) {
+      // עדכן סטאטוס אם שונה בענן
+      if (n.is_read !== existing.is_read || n.needs_ack !== existing.needs_ack) {
+        await sqliteRun(
+          'UPDATE notifications SET is_read=?, needs_ack=?, acked_at=? WHERE cloud_id=?',
+          [n.is_read ? 1 : 0, n.needs_ack ? 1 : 0, n.acked_at||null, n.id]
+        ).catch(() => {});
+      }
+      continue;
+    }
+
+    // notification חדש — הוסף
+    await sqliteRun(`
+      INSERT INTO notifications (cloud_id, user_id, user_email, type, title, message, data, is_read, needs_ack, created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [n.id, localUserId, n.user_email||null, n.type, n.title||null, n.message||null,
+       n.data||null, n.is_read ? 1 : 0, n.needs_ack ? 1 : 0, n.created_at]
+    ).catch(() => {});
+    count++;
+  }
+  if (count > 0) log('  ↳ notifications from cloud: ' + count + ' synced');
+}
+
+// LOCAL → CLOUD: שלח acks שנעשו מקומית חזרה לענן
+async function syncNotificationAcksToCloud() {
+  await ensureNotificationsTable();
+
+  // מצא notifications שאושרו מקומית (needs_ack=0, is_read=1, acked_at קיים) אבל עוד לא נדווח לענן
+  const ackedLocally = await sqliteAll(
+    `SELECT cloud_id FROM notifications WHERE cloud_id IS NOT NULL AND is_read=1 AND needs_ack=0 AND acked_at IS NOT NULL`
+  ).catch(() => []);
+
+  if (!ackedLocally.length) return;
+
+  const acked_ids = ackedLocally.map(r => r.cloud_id).filter(Boolean);
+  const result = await apiRequest('POST', '/api/sync/notifications/ack', { acked_ids });
+  if (result.status === 200) {
+    log('  ↳ notification acks to cloud: ' + acked_ids.length + ' synced');
+  } else {
+    log('  ⚠ notification acks to cloud: ' + JSON.stringify(result.body));
+  }
+}
+
+
 async function syncAll() {
   await pullDeletionsFromCloud();
   await syncLocalToCloud();

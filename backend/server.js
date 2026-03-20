@@ -17,7 +17,8 @@ const JWT_SECRET = 'your-secret-key-change-in-production';
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Create uploads directory
@@ -213,6 +214,31 @@ app.delete('/api/users/:id', authenticateToken, (req, res) => {
   });
 });
 
+// Change user password (admin only)
+app.put('/api/users/:id/password', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { password } = req.body;
+
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  if (!password || password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  }
+
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    db.run('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, id], (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      logActivity(req.user.id, 'UPDATE_USER_PASSWORD', 'user', id, {});
+      res.json({ message: 'Password updated successfully' });
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ============ COMPANY SETTINGS ROUTES ============
 
 app.get('/api/company', authenticateToken, (req, res) => {
@@ -388,56 +414,42 @@ app.post('/api/send-email', authenticateToken, async (req, res) => {
       }
     }
 
-    // המר לוגו ל-base64 להטמעה במייל
-    let logoHtmlSignature = '';
-    if (company.logo_path) {
-      try {
-        const path = require('path');
-        const fs = require('fs');
-        const logoFullPath = path.join(__dirname, company.logo_path.replace('/uploads/', 'uploads/'));
-        if (fs.existsSync(logoFullPath)) {
-          const logoData = fs.readFileSync(logoFullPath);
-          const ext = path.extname(logoFullPath).toLowerCase().replace('.', '');
-          const mime = ext === 'png' ? 'image/png' : ext === 'svg' ? 'image/svg+xml' : 'image/jpeg';
-          const b64 = logoData.toString('base64');
-          logoHtmlSignature = `<tr><td colspan="2" style="padding-top: 8px; text-align: left;"><img src="data:${mime};base64,${b64}" alt="${company.company_name || ''}" style="max-height: 60px; max-width: 200px; object-fit: contain;"></td></tr>`;
-
-        }
-      } catch (logoErr) {
-        console.error('Logo embed error:', logoErr.message);
+    // טען חתימה מה-DB או בנה ברירת מחדל
+    let signatureHtml = '';
+    const signatureRow = await new Promise((res, rej) => db.get('SELECT content FROM email_signatures WHERE is_active=1 LIMIT 1', [], (err, row) => err ? rej(err) : res(row)));
+    if (signatureRow?.content) {
+      signatureHtml = signatureRow.content;
+    } else {
+      let logoHtmlSignature = '';
+      if (company.logo_path) {
+        try {
+          const logoFullPath = path.join(__dirname, company.logo_path.replace('/uploads/', 'uploads/'));
+          if (fs.existsSync(logoFullPath)) {
+            const logoData = fs.readFileSync(logoFullPath);
+            const ext = path.extname(logoFullPath).toLowerCase().replace('.', '');
+            const mime = ext === 'png' ? 'image/png' : ext === 'svg' ? 'image/svg+xml' : 'image/jpeg';
+            const b64 = logoData.toString('base64');
+            logoHtmlSignature = `<tr><td colspan="2" style="padding-top:8px;text-align:left;"><img src="data:${mime};base64,${b64}" alt="${company.company_name||''}" style="max-height:60px;max-width:200px;object-fit:contain;"></td></tr>`;
+          }
+        } catch (logoErr) { console.error('Logo embed error:', logoErr.message); }
       }
+      signatureHtml = `<table style="font-size:13px;color:#333;line-height:1.6;">
+        <tr><td colspan="2" style="font-weight:700;font-size:16px;padding-bottom:12px;color:#1a1a1a;">${company.company_name || 'WorldSecure'}</td></tr>
+        ${company.phone ? `<tr><td style="padding-right:8px;color:#666;">📞</td><td>${company.phone}</td></tr>` : ''}
+        ${company.email ? `<tr><td style="padding-right:8px;color:#666;">✉️</td><td>${company.email}</td></tr>` : ''}
+        ${company.website ? `<tr><td colspan="2"><a href="${company.website}" target="_blank" style="color:#1a73e8;text-decoration:none;font-weight:600;">${company.website}</a></td></tr>` : ''}
+        ${logoHtmlSignature}
+      </table>`;
     }
 
-    const info = await transporter.sendMail({
-      from: company.smtp_from || company.smtp_user,
+    const info = await transporter.sendMail({      from: company.smtp_from || company.smtp_user,
       to,
       subject: subject || `מסמך מ-${company.company_name || 'המערכת'}`,
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px;">
           <p style="margin-bottom: 20px;">${body || 'מצורף מסמך לעיונך.'}</p>
           <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 24px 0;">
-          <table style="font-size: 13px; color: #333; line-height: 1.6;">
-  <tr>
-    <td colspan="2" style="font-weight: 700; font-size: 16px; padding-bottom: 12px; color: #1a1a1a;">
-      WorldSecure Professional Services Team
-    </td>
-  </tr>
-  <tr>
-   
-
-   <td colspan="2" style="text-align: left; padding-bottom: 20px; font-size: 16px;">
-  <a href="https://www.world-secure.com" 
-     target="_blank" 
-     style="color: #1a73e8; text-decoration: none; font-weight: 600;">
-    www.world-secure.com
-  </a>
-</td>
-
-    </tr>
-  ${logoHtmlSignature}
-</table>
-
-
+          ${signatureHtml}
         </div>
       `,
       attachments
@@ -479,6 +491,77 @@ app.post('/api/company/logo', authenticateToken, upload.single('logo'), (req, re
       res.json({ message: 'Logo uploaded', path: logoPath });
     }
   );
+});
+
+// ============ EMAIL SIGNATURES ROUTES ============
+
+app.get('/api/email-signatures', authenticateToken, (req, res) => {
+  db.all('SELECT * FROM email_signatures ORDER BY created_at DESC', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.post('/api/email-signatures', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  const { name, content, is_active } = req.body;
+  if (!name || !content) return res.status(400).json({ error: 'Name and content required' });
+  // אם זו חתימה פעילה — בטל את כל השאר
+  const activate = is_active ? 1 : 0;
+  const run = () => db.run(
+    'INSERT INTO email_signatures (name, content, is_active) VALUES (?,?,?)',
+    [name, content, activate],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ id: this.lastID, name, content, is_active: activate });
+    }
+  );
+  if (activate) {
+    db.run('UPDATE email_signatures SET is_active=0', [], run);
+  } else { run(); }
+});
+
+app.put('/api/email-signatures/:id', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  const { name, content, is_active } = req.body;
+  const activate = is_active ? 1 : 0;
+  const run = () => db.run(
+    'UPDATE email_signatures SET name=?, content=?, is_active=? WHERE id=?',
+    [name, content, activate, req.params.id],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Updated' });
+    }
+  );
+  if (activate) {
+    db.run('UPDATE email_signatures SET is_active=0', [], run);
+  } else { run(); }
+});
+
+app.delete('/api/email-signatures/:id', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  db.run('DELETE FROM email_signatures WHERE id=?', [req.params.id], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'Deleted' });
+  });
+});
+
+// ============ EMAIL SIGNATURE ROUTES (legacy) ============
+
+app.get('/api/company/email-signature', authenticateToken, (req, res) => {
+  db.get('SELECT email_signature FROM company_settings WHERE id=1', [], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ email_signature: row?.email_signature || null });
+  });
+});
+
+app.put('/api/company/email-signature', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  const { email_signature } = req.body;
+  db.run('UPDATE company_settings SET email_signature=? WHERE id=1', [email_signature || null], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'Email signature saved' });
+  });
 });
 
 // ============ CATEGORIES ROUTES ============
@@ -846,7 +929,7 @@ app.delete('/api/customers/:id', authenticateToken, (req, res) => {
 
 app.get('/api/inbound', authenticateToken, (req, res) => {
   const query = `
-    SELECT it.*, s.name as supplier_name, u.username
+    SELECT it.*, s.name as supplier_name, COALESCE(it.username, u.username) as username
     FROM inbound_transactions it
     LEFT JOIN suppliers s ON it.supplier_id = s.id
     LEFT JOIN users u ON it.user_id = u.id
@@ -864,10 +947,9 @@ app.get('/api/inbound', authenticateToken, (req, res) => {
 app.post('/api/inbound', authenticateToken, (req, res) => {
   const { supplier_id, supplier_type, casual_supplier_name, items, notes } = req.body;
   
-  const inboundDate = req.body.transaction_date || new Date().toISOString();
   db.run(
-    'INSERT INTO inbound_transactions (supplier_id, supplier_type, casual_supplier_name, notes, user_id, qr_code_id, transaction_date) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [supplier_id, supplier_type, casual_supplier_name, notes, req.user.id, req.body.qr_code_id || null, inboundDate],
+    'INSERT INTO inbound_transactions (supplier_id, supplier_type, casual_supplier_name, notes, user_id, qr_code_id) VALUES (?, ?, ?, ?, ?, ?)',
+    [supplier_id, supplier_type, casual_supplier_name, notes, req.user.id, req.body.qr_code_id || null],
     function(err) {
       if (err) {
         return res.status(500).json({ error: err.message });
@@ -1043,7 +1125,7 @@ app.get('/api/outbound', authenticateToken, (req, res) => {
   const isAdmin = req.user.role === 'admin';
   const sensitiveFilter = isAdmin ? '' : 'AND (c.is_sensitive IS NULL OR c.is_sensitive = 0)';
   const sql = `
-    SELECT ot.*, c.name as customer_name, u.username
+    SELECT ot.*, c.name as customer_name, COALESCE(ot.username, u.username) as username
     FROM outbound_transactions ot
     LEFT JOIN customers c ON ot.customer_id = c.id
     LEFT JOIN users u ON ot.user_id = u.id
@@ -1078,8 +1160,8 @@ app.post('/api/outbound', authenticateToken, (req, res) => {
   Promise.all(checkPromises)
     .then(() => {
       db.run(
-        'INSERT INTO outbound_transactions (customer_id, customer_type, casual_customer_name, notes, status, user_id, qr_code_id, transaction_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [customer_id, customer_type, casual_customer_name, notes, status || 'pending', req.user.id, req.body.qr_code_id || null, req.body.transaction_date || new Date().toISOString()],
+        'INSERT INTO outbound_transactions (customer_id, customer_type, casual_customer_name, notes, status, user_id, qr_code_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [customer_id, customer_type, casual_customer_name, notes, status || 'pending', req.user.id, req.body.qr_code_id || null],
         function(err) {
           if (err) {
             return res.status(500).json({ error: err.message });
@@ -1352,9 +1434,6 @@ app.delete('/api/inbound/:id', authenticateToken, (req, res) => {
             db.run('DELETE FROM inbound_transactions WHERE id = ?', [id], (err) => {
               if (err) return res.status(500).json({ error: err.message });
               
-              // רשום מחיקה לסינק עם הענן
-              db.run(`CREATE TABLE IF NOT EXISTS deleted_inbound (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
-              db.run(`INSERT OR IGNORE INTO deleted_inbound (id) VALUES (?)`, [id]);
               logActivity(req.user.id, 'DELETE_INBOUND', 'inbound', id, {});
               res.json({ message: 'Inbound transaction deleted' });
             });
@@ -1401,9 +1480,6 @@ app.delete('/api/outbound/:id', authenticateToken, (req, res) => {
             db.run('DELETE FROM outbound_transactions WHERE id = ?', [id], (err) => {
               if (err) return res.status(500).json({ error: err.message });
               
-              // רשום מחיקה לסינק עם הענן
-              db.run(`CREATE TABLE IF NOT EXISTS deleted_outbound (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
-              db.run(`INSERT OR IGNORE INTO deleted_outbound (id) VALUES (?)`, [id]);
               logActivity(req.user.id, 'DELETE_OUTBOUND', 'outbound', id, {});
               res.json({ message: 'Outbound transaction deleted' });
             });
@@ -2163,11 +2239,13 @@ app.get('/api/dashboard/stats', authenticateToken, (req, res) => {
         db.get('SELECT COUNT(*) as count FROM suppliers', [], (err, row) => {
           stats.totalSuppliers = row ? row.count : 0;
           
-          // Recent transactions
-          db.get('SELECT COUNT(*) as count FROM outbound_transactions WHERE DATE(transaction_date) = DATE("now")', [], (err, row) => {
-            stats.todayTransactions = row ? row.count : 0;
-            
-            res.json(stats);
+          // Total Inbound & Outbound
+          db.get('SELECT COUNT(*) as count FROM inbound_transactions', [], (err, row) => {
+            stats.totalInbound = row ? row.count : 0;
+            db.get('SELECT COUNT(*) as count FROM outbound_transactions', [], (err, row) => {
+              stats.totalOutbound = row ? row.count : 0;
+              res.json(stats);
+            });
           });
         });
       });
@@ -3536,7 +3614,7 @@ async function saveDocument(type, referenceId, htmlContent, language, userId, en
   const safeName = entityName ? '_' + entityName.replace(/[^a-zA-Z0-9֐-׿\s]/g, '').trim().replace(/\s+/g, '_').slice(0, 30) : '';
   const dateStr = new Date().toISOString().slice(0, 10);
   const langLabel = language === 'he' ? 'HE_VERSION' : language === 'pt' ? 'PT_VERSION' : 'EN_VERSION';
-  const filename = `${type}${safeName}_${dateStr}_${langLabel}.pdf`;
+  const filename = `${type}${safeName}_ID${referenceId}_${dateStr}_${langLabel}.pdf`;
   const filepath = path.join(docsDir, filename);
   
   try {
@@ -5021,9 +5099,26 @@ app.delete('/api/qr-codes/:id', authenticateToken, (req, res) => {
   });
 });
 
+app.put('/api/qr-codes/:id', authenticateToken, (req, res) => {
+  const { title } = req.body;
+  if (!title) return res.status(400).json({ error: 'Title required' });
+  db.run('UPDATE qr_codes SET title=? WHERE id=?', [title, req.params.id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'QR title updated' });
+  });
+});
+
 
 // ===== SUPPORT TICKETS - MIGRATIONS =====
 db.run(`ALTER TABLE support_tickets ADD COLUMN owner_id INTEGER`, () => {});
+db.run(`ALTER TABLE company_settings ADD COLUMN email_signature TEXT`, () => {});
+db.run(`CREATE TABLE IF NOT EXISTS email_signatures (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  content TEXT NOT NULL,
+  is_active INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`, () => {});
 db.run(`ALTER TABLE support_tickets ADD COLUMN owner_updated_at DATETIME`, () => {});
 db.run(`ALTER TABLE support_tickets ADD COLUMN owner_name TEXT`, () => {});
 db.run(`ALTER TABLE support_tickets ADD COLUMN cancelled_at TEXT`, () => {});
@@ -5044,22 +5139,30 @@ db.run(`ALTER TABLE support_tickets ADD COLUMN closed_at TEXT`, () => {});
 db.run(`ALTER TABLE support_ticket_history ADD COLUMN comment TEXT`, () => {});
 db.run(`ALTER TABLE notifications ADD COLUMN needs_ack INTEGER DEFAULT 0`, () => {});
 db.run(`ALTER TABLE notifications ADD COLUMN acked_at TEXT`, () => {});
+db.run(`ALTER TABLE notifications ADD COLUMN cloud_id INTEGER`, () => {});
+db.run(`ALTER TABLE notifications ADD COLUMN user_email TEXT`, () => {});
 
 db.run(`CREATE TABLE IF NOT EXISTS warehouse_alerts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ticket_id INTEGER NOT NULL,
   ticket_number TEXT,
   customer_name TEXT,
+  customer_id INTEGER,
   product_id INTEGER,
   product_name TEXT,
   quantity INTEGER DEFAULT 1,
   requested_by INTEGER,
   requested_by_name TEXT,
   status TEXT DEFAULT 'pending',
+  outbound_id INTEGER,
+  outbound_ref TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   completed_at TEXT,
   FOREIGN KEY (ticket_id) REFERENCES support_tickets(id) ON DELETE CASCADE
 )`, () => {});
+db.run(`ALTER TABLE warehouse_alerts ADD COLUMN outbound_id INTEGER`, () => {});
+db.run(`ALTER TABLE warehouse_alerts ADD COLUMN outbound_ref TEXT`, () => {});
+db.run(`ALTER TABLE warehouse_alerts ADD COLUMN customer_id INTEGER`, () => {});
 
 db.run(`CREATE TABLE IF NOT EXISTS notifications (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -5301,11 +5404,11 @@ app.delete('/api/support-tickets/:id', authenticateToken, (req, res) => {
 app.post('/api/warehouse-alerts', authenticateToken, (req, res) => {
   const { ticket_id, product_id, product_name, quantity } = req.body;
   if (!ticket_id || !product_id) return res.status(400).json({ error: 'ticket_id and product_id required' });
-  db.get('SELECT ticket_number, customer_name FROM support_tickets WHERE id = ?', [ticket_id], (err, ticket) => {
+  db.get('SELECT ticket_number, customer_name, customer_id FROM support_tickets WHERE id = ?', [ticket_id], (err, ticket) => {
     if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
-    db.run(`INSERT INTO warehouse_alerts (ticket_id, ticket_number, customer_name, product_id, product_name, quantity, requested_by, requested_by_name, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-      [ticket_id, ticket.ticket_number, ticket.customer_name, product_id, product_name, quantity||1, req.user.id, req.user.username||req.user.email],
+    db.run(`INSERT INTO warehouse_alerts (ticket_id, ticket_number, customer_name, customer_id, product_id, product_name, quantity, requested_by, requested_by_name, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+      [ticket_id, ticket.ticket_number, ticket.customer_name, ticket.customer_id||null, product_id, product_name, quantity||1, req.user.id, req.user.username||req.user.email],
       function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ id: this.lastID });
@@ -5323,23 +5426,49 @@ app.get('/api/warehouse-alerts', authenticateToken, (req, res) => {
 });
 
 // PUT - complete warehouse alert (mark as done)
+// GET outbound transactions by customer for dispatch linking
+app.get('/api/outbound/by-customer/:customerId', authenticateToken, (req, res) => {
+  const { customerId } = req.params;
+  const name = req.query.name || '';
+  db.all(`SELECT ot.id, ot.transaction_date, ot.status, ot.customer_type,
+    CASE WHEN ot.customer_type='casual' THEN ot.casual_customer_name ELSE c.name END as customer_name,
+    GROUP_CONCAT(p.name || ' x' || oi.quantity, ', ') as items_summary
+    FROM outbound_transactions ot
+    LEFT JOIN outbound_items oi ON oi.transaction_id = ot.id
+    LEFT JOIN products p ON p.id = oi.product_id
+    LEFT JOIN customers c ON c.id = ot.customer_id
+    WHERE ot.customer_id = ?
+       OR c.name LIKE ?
+       OR ot.casual_customer_name LIKE ?
+    GROUP BY ot.id
+    ORDER BY ot.transaction_date DESC LIMIT 20`,
+    [customerId, `%${name}%`, `%${name}%`],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows || []);
+    }
+  );
+});
+
 app.put('/api/warehouse-alerts/:id/complete', authenticateToken, (req, res) => {
   const { id } = req.params;
+  const { outbound_id, outbound_ref } = req.body;
   db.get('SELECT * FROM warehouse_alerts WHERE id = ?', [id], (err, alert) => {
     if (!alert) return res.status(404).json({ error: 'Alert not found' });
-    db.run(`UPDATE warehouse_alerts SET status='completed', completed_at=datetime('now') WHERE id=?`, [id], (err2) => {
+    db.run(`UPDATE warehouse_alerts SET status='completed', completed_at=datetime('now'), outbound_id=?, outbound_ref=? WHERE id=?`,
+      [outbound_id || null, outbound_ref || null, id], (err2) => {
       if (err2) return res.status(500).json({ error: err2.message });
       // Log to ticket history
       logTicketHistory(alert.ticket_id, req.user.id, req.user.username||req.user.email, 'product_dispatched', {
         new_status: null,
-        awaiting_note: `${alert.product_name} x${alert.quantity}`
+        awaiting_note: `${alert.product_name} x${alert.quantity}${outbound_ref ? ` | תעודה: ${outbound_ref}` : ''}`
       });
       // Send needs_ack notification to support user
       db.run(`INSERT INTO notifications (user_id, type, title, message, data, needs_ack, created_at)
         VALUES (?, 'warehouse_dispatched', 'warehouse_dispatched', ?, ?, 1, datetime('now'))`,
         [alert.requested_by,
-         JSON.stringify({ product_name: alert.product_name, quantity: alert.quantity, ticket_number: alert.ticket_number }),
-         JSON.stringify({ ticket_id: alert.ticket_id, alert_id: id, product_name: alert.product_name, quantity: alert.quantity, ticket_number: alert.ticket_number })],
+         JSON.stringify({ product_name: alert.product_name, quantity: alert.quantity, ticket_number: alert.ticket_number, outbound_ref: outbound_ref || null }),
+         JSON.stringify({ ticket_id: alert.ticket_id, alert_id: id, product_name: alert.product_name, quantity: alert.quantity, ticket_number: alert.ticket_number, outbound_ref: outbound_ref || null })],
         () => {}
       );
       res.json({ message: 'Alert completed' });
