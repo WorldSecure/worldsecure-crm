@@ -1560,7 +1560,7 @@ app.put('/api/warehouse-alerts/:id/complete', authenticateToken, async (req, res
     // כשהסינק קורא — השתמש ב-sync_username (המחסנאי האמיתי), לא במשתמש הסינק
     const actorUsername = (_from_sync && sync_username) ? sync_username : (req.user.username || req.user.email);
     await logTicketHistory(alert.ticket_id, req.user.id, actorUsername, 'product_dispatched',
-      { awaiting_note: alert.product_name + ' x' + alert.quantity + (outbound_ref ? ' | תעודה: ' + outbound_ref : '') });
+      { awaiting_note: alert.product_name + ' x' + alert.quantity + (outbound_ref ? ' | Ref: ' + outbound_ref : '') });
 
     await query(`INSERT INTO notifications (user_id, type, title, message, data, needs_ack, created_at)
       VALUES ($1,'warehouse_dispatched','warehouse_dispatched',$2,$3,1,NOW())`,
@@ -2103,7 +2103,7 @@ app.post('/api/sync/warehouse-alerts', authenticateToken, async (req, res) => {
             const alert = alertRow.rows[0];
             if (alert) {
               await logTicketHistory(alert.ticket_id, null, a.sync_username || a.requested_by_name || 'warehouse', 'product_dispatched',
-                { awaiting_note: alert.product_name + ' x' + alert.quantity + (a.outbound_ref ? ' | \u05ea\u05e2\u05d5\u05d3\u05d4: ' + a.outbound_ref : '') }
+                { awaiting_note: alert.product_name + ' x' + alert.quantity + (a.outbound_ref ? ' | Ref: ' + a.outbound_ref : '') }
               ).catch(() => {});
               await query(`INSERT INTO notifications (user_id, type, title, message, data, needs_ack, created_at)
                 VALUES ($1,'warehouse_dispatched','warehouse_dispatched',$2,$3,1,NOW())`,

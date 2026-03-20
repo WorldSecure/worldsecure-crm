@@ -5461,7 +5461,7 @@ app.put('/api/warehouse-alerts/:id/complete', authenticateToken, (req, res) => {
       // Log to ticket history
       logTicketHistory(alert.ticket_id, req.user.id, req.user.username||req.user.email, 'product_dispatched', {
         new_status: null,
-        awaiting_note: `${alert.product_name} x${alert.quantity}${outbound_ref ? ` | תעודה: ${outbound_ref}` : ''}`
+        awaiting_note: `${alert.product_name} x${alert.quantity}${outbound_ref ? ` | Ref: ${outbound_ref}` : ''}`
       });
       // Send needs_ack notification to support user
       db.run(`INSERT INTO notifications (user_id, type, title, message, data, needs_ack, created_at)
