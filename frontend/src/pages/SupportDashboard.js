@@ -71,7 +71,7 @@ function SupportDashboard() {
                     </div>
                     {d.outbound_ref && (
                       <div style={{ fontSize:'0.82rem', color:'#27ae60', marginTop:'0.2rem', fontWeight:600 }}>
-                        📄 תעודת משלוח: {d.outbound_ref}
+                        📄 {t('delivery_note_label') || 'Delivery Note'}: {d.outbound_ref}
                       </div>
                     )}
                     <div style={{ fontSize:'0.78rem', color:'#aaa', marginTop:'0.2rem' }}>

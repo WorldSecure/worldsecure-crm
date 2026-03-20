@@ -146,11 +146,11 @@ function SupportCaseManagementModal({ ticket, customers, products, users, onClos
         quantity: sendProductForm.quantity
       }, auth());
       await axios.post(`/api/support-tickets/${ticket.id}/comments`, {
-        comment: `📦 ${t('product_send_requested')||'בקשת שליחת מוצר'}: ${sendProductForm.product_name} x${sendProductForm.quantity}`
+        comment: `📦 ${t('product_send_requested')||'Product dispatch requested'}: ${sendProductForm.product_name} x${sendProductForm.quantity}`
       }, auth());
       setShowSendProduct(false);
       setSendProductForm({ product_id:'', product_name:'', quantity:1 });
-      showToast(t('product_sent_to_warehouse') || '✅ בקשת שליחת מוצר נשלחה למחסן');
+      showToast(t('product_sent_to_warehouse') || '✅ Product dispatch request sent to warehouse');
       await loadHistory();
     } catch(e) { alert(e.response?.data?.error || e.message); }
     finally { setSendingProduct(false); }
@@ -484,13 +484,13 @@ function SupportCaseManagementModal({ ticket, customers, products, users, onClos
                 style={{ maxWidth:'120px' }} />
             </div>
             <div style={{ background:'#fff3cd', border:'1px solid #ffc107', borderRadius:'8px', padding:'0.7rem 1rem', fontSize:'0.85rem', color:'#856404', marginBottom:'1rem' }}>
-              ⚠️ בקשה זו תופיע כ-Alert דחוף בדשבורד המחסן
+              ⚠️ {t('warehouse_alert_note') || 'This request will appear as an urgent alert in the warehouse dashboard'}
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowSendProduct(false)}>{t('cancel')}</button>
               <button disabled={sendingProduct || !sendProductForm.product_id} onClick={handleSendProduct}
                 style={{ padding:'0.5rem 1.2rem', background: sendProductForm.product_id ? '#e67e22' : '#ccc', color:'white', border:'none', borderRadius:'8px', fontWeight:700, cursor: sendProductForm.product_id ? 'pointer' : 'default' }}>
-                {sendingProduct ? '...' : `📦 ${t('send_to_warehouse')||'שלח למחסן'}`}
+                {sendingProduct ? '...' : `📦 ${t('send_to_warehouse')||'Send to Warehouse'}`}
               </button>
             </div>
           </div>

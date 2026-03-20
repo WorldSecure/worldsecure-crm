@@ -88,7 +88,7 @@ function Dashboard() {
   const handleCompleteAlert = async () => {
     if (!dispatchModal) return;
     if (!selectedOutbound) {
-      alert('יש לבחור תעודת משלוח מהרשימה');
+      alert(t('delivery_note_required') || 'Please select a delivery note');
       return;
     }
     try {

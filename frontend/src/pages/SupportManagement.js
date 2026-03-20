@@ -142,7 +142,7 @@ function SupportManagement() {
 
   const handleSendProduct = async () => {
     if (!sendProductForm.product_id) { alert('יש לבחור מוצר'); return; }
-    if (!editingId) { alert('יש לשמור את הקריאה תחילה'); return; }
+    if (!editingId) { alert(t('save_ticket_first') || 'Please save the ticket first'); return; }
     try {
       setSendingProduct(true);
       await axios.post('/api/warehouse-alerts', {
@@ -153,11 +153,11 @@ function SupportManagement() {
       }, auth());
       // Log to ticket history
       await axios.post(`/api/support-tickets/${editingId}/comments`, {
-        comment: `📦 ${t('product_send_requested')||'בקשת שליחת מוצר'}: ${sendProductForm.product_name} x${sendProductForm.quantity}`
+        comment: `📦 ${t('product_send_requested')||'Product dispatch requested'}: ${sendProductForm.product_name} x${sendProductForm.quantity}`
       }, auth());
       setShowSendProduct(false);
       setSendProductForm({ product_id:'', product_name:'', quantity:1 });
-      showToast(t('product_sent_to_warehouse')||'✅ בקשת שליחת מוצר נשלחה למחסן');
+      showToast(t('product_sent_to_warehouse')||'✅ Product dispatch request sent to warehouse');
     } catch(e) { alert(e.response?.data?.error || e.message); }
     finally { setSendingProduct(false); }
   };
@@ -627,7 +627,7 @@ function SupportManagement() {
             </div>
 
             <div style={{ background:'#fff3cd', border:'1px solid #ffc107', borderRadius:'8px', padding:'0.7rem 1rem', fontSize:'0.85rem', color:'#856404', marginBottom:'1rem' }}>
-              ⚠️ בקשה זו תופיע כ-Alert דחוף בדשבורד המחסן
+              ⚠️ {t('warehouse_alert_note') || 'This request will appear as an urgent alert in the warehouse dashboard'}
             </div>
 
             <div className="modal-footer">
@@ -637,7 +637,7 @@ function SupportManagement() {
                 onClick={handleSendProduct}
                 style={{ padding:'0.5rem 1.2rem', background: sendProductForm.product_id ? '#e67e22' : '#ccc', color:'white', border:'none', borderRadius:'8px', fontWeight:700, cursor: sendProductForm.product_id ? 'pointer' : 'default' }}
               >
-                {sendingProduct ? '...' : '📦 שלח למחסן'}
+                {sendingProduct ? '...' : `📦 ${t('send_to_warehouse')||'Send to Warehouse'}`}
               </button>
             </div>
           </div>
