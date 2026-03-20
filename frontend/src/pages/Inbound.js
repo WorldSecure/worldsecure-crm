@@ -330,6 +330,7 @@ function Inbound() {
             <table className="table">
               <thead>
                 <tr>
+                  <th>#</th>
                   <th>{t('transaction_date')}</th>
                   <th>{t('supplier')}</th>
                   <th>{t('supplier_type')}</th>
@@ -340,9 +341,10 @@ function Inbound() {
               </thead>
               <tbody>
                 {transactions.length === 0 ? (
-                  <tr><td colSpan="6" className="text-center">{t('no_data')}</td></tr>
+                  <tr><td colSpan="7" className="text-center">{t('no_data')}</td></tr>
                 ) : transactions.map(trans => (
                   <tr key={trans.id}>
+                    <td style={{ color: '#888', fontSize: '0.85rem' }}>#{trans.id}</td>
                     <td>{new Date(trans.transaction_date).toLocaleString('he-IL')}</td>
                     <td>{trans.supplier_type === 'casual' ? trans.casual_supplier_name : trans.supplier_name || '-'}</td>
                     <td>

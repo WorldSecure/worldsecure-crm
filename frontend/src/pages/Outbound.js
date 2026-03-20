@@ -528,6 +528,7 @@ function Outbound() {
           <table className="table">
             <thead>
               <tr>
+                <th>#</th>
                 <th>{t('transaction_date')}</th>
                 <th>{t('customer')}</th>
                 <th>{t('customer_type')}</th>
@@ -540,11 +541,12 @@ function Outbound() {
             <tbody>
               {transactions.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="text-center">{t('no_data')}</td>
+                  <td colSpan="8" className="text-center">{t('no_data')}</td>
                 </tr>
               ) : (
                 transactions.map(trans => (
                   <tr key={trans.id}>
+                    <td style={{ color: '#888', fontSize: '0.85rem' }}>#{trans.id}</td>
                     <td>{new Date(trans.transaction_date).toLocaleString('he-IL')}</td>
                     <td>
                       {trans.customer_type === 'casual' 
