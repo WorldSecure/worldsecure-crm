@@ -127,9 +127,11 @@ async function syncLocalToCloud() {
     await syncEntityToCloud('customers',  'SELECT * FROM customers');
     await syncEntityToCloud('products',   'SELECT * FROM products');
     await syncEntityToCloud('suppliers',  'SELECT * FROM suppliers');
+    await syncEmailSignaturesToCloud();
     await syncInboundToCloud();
     await syncOutboundToCloud();
     await syncSupportToCloud();
+    await syncWarehouseAlertsToCloud();
     log('✅ LOCAL → CLOUD complete');
   } catch (err) {
     log(`❌ LOCAL → CLOUD error: ${err.message}`);
@@ -240,6 +242,7 @@ async function syncCloudToLocal() {
     await syncInboundFromCloud();
     await syncOutboundFromCloud();
     await syncSupportFromCloud();
+    await syncWarehouseAlertsFromCloud();
     await syncDocumentsFromCloud();
     log('✅ CLOUD → LOCAL complete');
   } catch (err) {
@@ -640,6 +643,118 @@ async function syncQrFromCloud() {
     count++;
   }
   if (count > 0) log('  ↳ qr-codes from cloud: ' + count + ' synced');
+}
+
+// ── Email Signatures סינק ─────────────────────────────────────────────────────
+async function syncEmailSignaturesToCloud() {
+  const rows = await sqliteAll('SELECT * FROM email_signatures ORDER BY id').catch(() => []);
+  if (!rows.length) return;
+  const result = await apiRequest('POST', '/api/sync/email-signatures', { rows });
+  if (result.status === 200) log('  ↳ email-signatures to cloud: ' + rows.length + ' synced');
+  else log('  ⚠ email-signatures to cloud: ' + JSON.stringify(result.body));
+}
+
+// ── Warehouse Alerts — דו-כיווני ─────────────────────────────────────────────
+
+async function ensureWarehouseAlertsTable() {
+  await sqliteRun(`CREATE TABLE IF NOT EXISTS warehouse_alerts (
+    id INTEGER PRIMARY KEY,
+    ticket_id INTEGER,
+    ticket_number TEXT,
+    customer_name TEXT,
+    customer_id INTEGER,
+    product_id INTEGER,
+    product_name TEXT,
+    quantity INTEGER DEFAULT 1,
+    requested_by INTEGER,
+    requested_by_name TEXT,
+    status TEXT DEFAULT 'pending',
+    outbound_id INTEGER,
+    outbound_ref TEXT,
+    created_at TEXT,
+    completed_at TEXT,
+    synced_from TEXT
+  )`).catch(() => {});
+  // migration — הוסף עמודות חסרות בטבלאות ישנות
+  for (const col of [
+    'ALTER TABLE warehouse_alerts ADD COLUMN outbound_id INTEGER',
+    'ALTER TABLE warehouse_alerts ADD COLUMN outbound_ref TEXT',
+    'ALTER TABLE warehouse_alerts ADD COLUMN customer_id INTEGER',
+    'ALTER TABLE warehouse_alerts ADD COLUMN completed_at TEXT',
+    'ALTER TABLE warehouse_alerts ADD COLUMN synced_from TEXT',
+  ]) { await sqliteRun(col).catch(() => {}); }
+}
+
+// LOCAL → CLOUD: שלח alerts שנוצרו מקומית לענן
+async function syncWarehouseAlertsToCloud() {
+  await ensureWarehouseAlertsTable();
+
+  // שלח רק alerts שלא הגיעו מהענן (synced_from IS NULL = נוצרו מקומית)
+  const localAlerts = await sqliteAll(
+    `SELECT * FROM warehouse_alerts WHERE synced_from IS NULL ORDER BY created_at`
+  ).catch(() => []);
+
+  if (!localAlerts.length) return;
+
+  const result = await apiRequest('POST', '/api/sync/warehouse-alerts', { alerts: localAlerts });
+  if (result.status === 200) {
+    const { upserted = [] } = result.body;
+    // עדכן מקומית את ה-IDs שהוחזרו מהענן (במקרה שהענן שינה ID)
+    for (const u of upserted) {
+      if (u.local_id && u.cloud_id && u.local_id !== u.cloud_id) {
+        // עדכן: סמן כ-synced ושמור cloud_id
+        await sqliteRun(
+          `UPDATE warehouse_alerts SET synced_from='cloud', id=? WHERE id=? AND synced_from IS NULL`,
+          [u.cloud_id, u.local_id]
+        ).catch(() => {});
+      } else {
+        // אותו ID — פשוט סמן כ-synced
+        await sqliteRun(
+          `UPDATE warehouse_alerts SET synced_from='cloud' WHERE id=? AND synced_from IS NULL`,
+          [u.local_id]
+        ).catch(() => {});
+      }
+    }
+    log(`  ↳ warehouse-alerts to cloud: ${localAlerts.length} sent, ${upserted.length} confirmed`);
+  } else {
+    log(`  ⚠ warehouse-alerts to cloud: ${JSON.stringify(result.body)}`);
+  }
+}
+
+// CLOUD → LOCAL: משוך alerts מהענן (כולל completed)
+async function syncWarehouseAlertsFromCloud() {
+  await ensureWarehouseAlertsTable();
+
+  const result = await apiRequest('GET', '/api/sync/pull/warehouse-alerts');
+  if (result.status !== 200) { log(`  ⚠ pull warehouse-alerts: ${JSON.stringify(result.body)}`); return; }
+  const alerts = result.body || [];
+
+  let count = 0;
+  for (const a of alerts) {
+    // אל תדרוס alert שנוצר מקומית ועוד לא נשלח לענן (synced_from IS NULL)
+    const existing = await sqliteGet(
+      'SELECT id, synced_from FROM warehouse_alerts WHERE id=?', [a.id]
+    ).catch(() => null);
+
+    if (existing && existing.synced_from === null) {
+      // נוצר מקומית — דלג, הוא יעלה ב-LOCAL→CLOUD
+      continue;
+    }
+
+    await sqliteRun(`
+      INSERT OR REPLACE INTO warehouse_alerts
+        (id, ticket_id, ticket_number, customer_name, customer_id,
+         product_id, product_name, quantity, requested_by, requested_by_name,
+         status, outbound_id, outbound_ref, created_at, completed_at, synced_from)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [a.id, a.ticket_id, a.ticket_number, a.customer_name, a.customer_id||null,
+       a.product_id, a.product_name, a.quantity||1, a.requested_by, a.requested_by_name,
+       a.status||'pending', a.outbound_id||null, a.outbound_ref||null,
+       a.created_at, a.completed_at||null, 'cloud']
+    ).catch(() => {});
+    count++;
+  }
+  if (count > 0) log(`  ↳ warehouse-alerts from cloud: ${count} synced`);
 }
 
 async function syncAll() {
