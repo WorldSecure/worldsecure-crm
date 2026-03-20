@@ -2086,6 +2086,10 @@ app.post('/api/sync/warehouse-alerts', authenticateToken, async (req, res) => {
           ).catch(() => {});
         }
       } else {
+        // אם ticket_id לא קיים בענן עדיין — דלג (יסונכרן בסינק הבא)
+        const ticketExists = await query('SELECT id FROM support_tickets WHERE id=$1', [a.ticket_id]);
+        if (!ticketExists.rows.length) continue;
+
         const r = await query(
           `INSERT INTO warehouse_alerts
             (ticket_id, ticket_number, customer_name, customer_id, product_id, product_name,
