@@ -456,11 +456,12 @@ function Outbound() {
                   marginBottom: '0.75rem',
                   boxShadow: '0 1px 4px rgba(0,0,0,0.07)'
                 }}>
-                  {/* Row 1: Date + Status */}
+                  {/* Row 1: Date + ID + Status */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                     <span style={{ fontSize: '0.82rem', color: '#555' }}>
                       📅 {new Date(trans.transaction_date).toLocaleString('he-IL')}
                     </span>
+                    <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>#{trans.id}</span>
                     <span className={`badge ${
                       trans.status === 'delivered' ? 'badge-success' :
                       trans.status === 'shipped' ? 'badge-info' :

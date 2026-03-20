@@ -382,6 +382,7 @@ function Inbound() {
             <div key={trans.id} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                 <span style={{ fontSize: '0.82rem', color: '#64748b' }}>{new Date(trans.transaction_date).toLocaleString('he-IL')}</span>
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>#{trans.id}</span>
                 <span className={`badge ${trans.supplier_type === 'casual' ? 'badge-warning' : 'badge-success'}`} style={{ fontSize: '0.75rem' }}>
                   {trans.supplier_type === 'casual' ? t('casual') : t('registered')}
                 </span>
