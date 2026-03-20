@@ -436,24 +436,38 @@ function SupportCaseManagementModal({ ticket, customers, products, users, onClos
           </div>
 
           {/* Sticky footer */}
-          <div className="modal-footer" style={{ flexShrink:0, background:'white', borderTop:'1px solid #eee', zIndex:10, display:'flex', justifyContent:'space-between', alignItems:'center', gap:'0.6rem', flexWrap:'wrap' }}>
-            <div style={{ display:'flex', gap:'0.6rem', flexWrap:'wrap' }}>
-              <button onClick={handleSave} disabled={saving}
-                style={{ padding:'0.5rem 1.2rem', background:'#2196F3', color:'white', border:'none', borderRadius:'8px', fontWeight:700, cursor:'pointer', fontSize:'0.88rem' }}>
-                {saving ? '...' : `🎯 ${t('save')}`}
-              </button>
-              <button onClick={() => setShowSendProduct(true)}
-                style={{ padding:'0.5rem 1.2rem', background:'#ea580c', color:'white', border:'none', borderRadius:'8px', fontWeight:700, cursor:'pointer', fontSize:'0.88rem' }}>
-                📦 {t('send_product')||'Send Product'}
-              </button>
-              {isAdmin && (
-                <button onClick={handleDelete}
-                  style={{ padding:'0.5rem 1.2rem', background:'#fee2e2', color:'#dc2626', border:'1px solid #fca5a5', borderRadius:'8px', fontWeight:600, cursor:'pointer', fontSize:'0.88rem' }}>
-                  🗑️ {t('delete')||'Delete'}
+          <div className="modal-footer" style={{ flexShrink:0, background:'white', borderTop:'1px solid #eee', zIndex:10, padding:'0.75rem 1rem' }}>
+            <style>{`
+              .case-modal-footer-row { display:flex; gap:0.5rem; margin-bottom:0.4rem; }
+              .case-modal-footer-row:last-child { margin-bottom:0; }
+              .case-modal-footer-row button { flex:1; }
+              @media (min-width:540px) {
+                .case-modal-footer-inner { display:flex; justify-content:space-between; align-items:center; gap:0.6rem; }
+                .case-modal-footer-row { margin-bottom:0; }
+                .case-modal-footer-row button { flex:none; }
+              }
+            `}</style>
+            <div className="case-modal-footer-inner">
+              <div className="case-modal-footer-row">
+                <button onClick={handleSave} disabled={saving}
+                  style={{ padding:'0.5rem 1.2rem', background:'#2196F3', color:'white', border:'none', borderRadius:'8px', fontWeight:700, cursor:'pointer', fontSize:'0.88rem' }}>
+                  {saving ? '...' : `🎯 ${t('save')}`}
                 </button>
-              )}
+                <button onClick={() => setShowSendProduct(true)}
+                  style={{ padding:'0.5rem 1.2rem', background:'#ea580c', color:'white', border:'none', borderRadius:'8px', fontWeight:700, cursor:'pointer', fontSize:'0.88rem' }}>
+                  📦 {t('send_product')||'Send Product'}
+                </button>
+              </div>
+              <div className="case-modal-footer-row">
+                {isAdmin && (
+                  <button onClick={handleDelete}
+                    style={{ padding:'0.5rem 1.2rem', background:'#fee2e2', color:'#dc2626', border:'1px solid #fca5a5', borderRadius:'8px', fontWeight:600, cursor:'pointer', fontSize:'0.88rem' }}>
+                    🗑️ {t('delete')||'Delete'}
+                  </button>
+                )}
+                <button className="btn btn-secondary" onClick={onClose}>{t('close')}</button>
+              </div>
             </div>
-            <button className="btn btn-secondary" onClick={onClose}>{t('close')}</button>
           </div>
         </div>
       </div>
