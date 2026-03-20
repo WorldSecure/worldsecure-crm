@@ -682,6 +682,7 @@ async function ensureWarehouseAlertsTable() {
     'ALTER TABLE warehouse_alerts ADD COLUMN customer_id INTEGER',
     'ALTER TABLE warehouse_alerts ADD COLUMN completed_at TEXT',
     'ALTER TABLE warehouse_alerts ADD COLUMN synced_from TEXT',
+    'ALTER TABLE warehouse_alerts ADD COLUMN completion_synced INTEGER DEFAULT 0',
   ]) { await sqliteRun(col).catch(() => {}); }
 }
 
@@ -689,35 +690,64 @@ async function ensureWarehouseAlertsTable() {
 async function syncWarehouseAlertsToCloud() {
   await ensureWarehouseAlertsTable();
 
-  // שלח רק alerts שלא הגיעו מהענן (synced_from IS NULL = נוצרו מקומית)
+  // 1. שלח alerts חדשים שנוצרו מקומית (synced_from IS NULL)
   const localAlerts = await sqliteAll(
     `SELECT * FROM warehouse_alerts WHERE synced_from IS NULL ORDER BY created_at`
   ).catch(() => []);
 
-  if (!localAlerts.length) return;
-
-  const result = await apiRequest('POST', '/api/sync/warehouse-alerts', { alerts: localAlerts });
-  if (result.status === 200) {
-    const { upserted = [] } = result.body;
-    // עדכן מקומית את ה-IDs שהוחזרו מהענן (במקרה שהענן שינה ID)
-    for (const u of upserted) {
-      if (u.local_id && u.cloud_id && u.local_id !== u.cloud_id) {
-        // עדכן: סמן כ-synced ושמור cloud_id
-        await sqliteRun(
-          `UPDATE warehouse_alerts SET synced_from='cloud', id=? WHERE id=? AND synced_from IS NULL`,
-          [u.cloud_id, u.local_id]
-        ).catch(() => {});
-      } else {
-        // אותו ID — פשוט סמן כ-synced
-        await sqliteRun(
-          `UPDATE warehouse_alerts SET synced_from='cloud' WHERE id=? AND synced_from IS NULL`,
-          [u.local_id]
-        ).catch(() => {});
+  if (localAlerts.length) {
+    const result = await apiRequest('POST', '/api/sync/warehouse-alerts', { alerts: localAlerts });
+    if (result.status === 200) {
+      const { upserted = [] } = result.body;
+      for (const u of upserted) {
+        if (u.local_id && u.cloud_id && u.local_id !== u.cloud_id) {
+          await sqliteRun(
+            `UPDATE warehouse_alerts SET synced_from='cloud', id=? WHERE id=? AND synced_from IS NULL`,
+            [u.cloud_id, u.local_id]
+          ).catch(() => {});
+        } else {
+          await sqliteRun(
+            `UPDATE warehouse_alerts SET synced_from='cloud' WHERE id=? AND synced_from IS NULL`,
+            [u.local_id]
+          ).catch(() => {});
+        }
       }
+      log(`  ↳ warehouse-alerts to cloud: ${localAlerts.length} sent, ${upserted.length} confirmed`);
+    } else {
+      log(`  ⚠ warehouse-alerts to cloud: ${JSON.stringify(result.body)}`);
     }
-    log(`  ↳ warehouse-alerts to cloud: ${localAlerts.length} sent, ${upserted.length} confirmed`);
-  } else {
-    log(`  ⚠ warehouse-alerts to cloud: ${JSON.stringify(result.body)}`);
+  }
+
+  // 2. דווח לענן על alerts שהושלמו מקומית (synced_from='cloud' + status='completed')
+  const completedAlerts = await sqliteAll(
+    `SELECT * FROM warehouse_alerts WHERE synced_from='cloud' AND status='completed' AND completion_synced IS NULL ORDER BY completed_at`
+  ).catch(() => []);
+
+  // הוסף עמודת completion_synced אם לא קיימת
+  await sqliteRun('ALTER TABLE warehouse_alerts ADD COLUMN completion_synced INTEGER DEFAULT 0').catch(() => {});
+
+  for (const a of completedAlerts) {
+    // מצא את שם המחסנאי שעשה complete מתוך היסטוריית הקריאה
+    const historyRow = await sqliteGet(
+      `SELECT username FROM support_ticket_history WHERE ticket_id=? AND action='product_dispatched' ORDER BY created_at DESC LIMIT 1`,
+      [a.ticket_id]
+    ).catch(() => null);
+
+    const result = await apiRequest('PUT', `/api/warehouse-alerts/${a.id}/complete`, {
+      outbound_id:   a.outbound_id  || null,
+      outbound_ref:  a.outbound_ref || null,
+      _from_sync:    true,
+      sync_username: historyRow?.username || null
+    });
+    if (result.status === 200 || result.status === 404) {
+      // 404 = כבר הושלם בענן — סמן בכל מקרה
+      await sqliteRun(
+        `UPDATE warehouse_alerts SET completion_synced=1 WHERE id=?`, [a.id]
+      ).catch(() => {});
+      log(`  ↳ warehouse-alert #${a.id} completion synced to cloud`);
+    } else {
+      log(`  ⚠ warehouse-alert #${a.id} completion failed: ${JSON.stringify(result.body)}`);
+    }
   }
 }
 

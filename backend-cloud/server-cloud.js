@@ -1544,16 +1544,24 @@ app.get('/api/outbound/by-customer/:customerId', authenticateToken, async (req, 
 
 app.put('/api/warehouse-alerts/:id/complete', authenticateToken, async (req, res) => {
   try {
-    const { outbound_id, outbound_ref } = req.body;
+    const { outbound_id, outbound_ref, _from_sync, sync_username } = req.body;
     const alertRes = await query('SELECT * FROM warehouse_alerts WHERE id=$1', [req.params.id]);
     const alert = alertRes.rows[0];
     if (!alert) return res.status(404).json({ error: 'Not found' });
+
+    // אם כבר הושלם — החזר 200 בלי לעשות כלום (idempotent)
+    if (alert.status === 'completed' && _from_sync) return res.json({ message: 'Already completed' });
+
     await query('ALTER TABLE warehouse_alerts ADD COLUMN IF NOT EXISTS outbound_id INTEGER').catch(() => {});
     await query('ALTER TABLE warehouse_alerts ADD COLUMN IF NOT EXISTS outbound_ref TEXT').catch(() => {});
     await query(`UPDATE warehouse_alerts SET status='completed', completed_at=NOW(), outbound_id=$2, outbound_ref=$3 WHERE id=$1`,
       [req.params.id, outbound_id || null, outbound_ref || null]);
-    await logTicketHistory(alert.ticket_id, req.user.id, req.user.username||req.user.email, 'product_dispatched',
+
+    // כשהסינק קורא — השתמש ב-sync_username (המחסנאי האמיתי), לא במשתמש הסינק
+    const actorUsername = (_from_sync && sync_username) ? sync_username : (req.user.username || req.user.email);
+    await logTicketHistory(alert.ticket_id, req.user.id, actorUsername, 'product_dispatched',
       { awaiting_note: alert.product_name + ' x' + alert.quantity + (outbound_ref ? ' | תעודה: ' + outbound_ref : '') });
+
     await query(`INSERT INTO notifications (user_id, type, title, message, data, needs_ack, created_at)
       VALUES ($1,'warehouse_dispatched','warehouse_dispatched',$2,$3,1,NOW())`,
       [alert.requested_by,
