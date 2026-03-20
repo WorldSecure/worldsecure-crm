@@ -368,7 +368,7 @@ function Dashboard() {
 
       {/* Confirm Modal — האם ייצרת תעודת משלוח? */}
       {confirmModal && (
-        <div className="modal-overlay" onClick={() => setConfirmModal(null)}>
+        <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: '420px' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="modal-title">📋 {t('confirm_dispatch_title') || 'אישור משלוח'}</h3>
@@ -397,7 +397,7 @@ function Dashboard() {
 
       {/* Dispatch Modal — בחירת תעודת משלוח */}
       {dispatchModal && (
-        <div className="modal-overlay" onClick={() => setDispatchModal(null)}>
+        <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: '600px' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="modal-title">📦 {t('select_delivery_note') || 'בחר תעודת משלוח'}</h3>

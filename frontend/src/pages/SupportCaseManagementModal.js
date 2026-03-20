@@ -189,7 +189,7 @@ function SupportCaseManagementModal({ ticket, customers, products, users, onClos
   return (
     <>
       {/* Main Case Management Modal */}
-      <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-overlay">
         <div className="modal" style={{ maxWidth:'780px', width:'96%', maxHeight:'92vh', overflowY:'hidden', display:'flex', flexDirection:'column' }} onClick={e => e.stopPropagation()}>
 
           {/* Header */}
@@ -460,7 +460,7 @@ function SupportCaseManagementModal({ ticket, customers, products, users, onClos
 
       {/* ── Send Product Popup ── */}
       {showSendProduct && (
-        <div className="modal-overlay" style={{ zIndex:10010 }} onClick={() => setShowSendProduct(false)}>
+        <div className="modal-overlay" style={{ zIndex:10010 }}>
           <div className="modal" style={{ maxWidth:'440px', width:'95%' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="modal-title">📦 {t('send_product')||'שלח מוצר למחסן'}</h3>
@@ -499,7 +499,7 @@ function SupportCaseManagementModal({ ticket, customers, products, users, onClos
 
       {/* ── Awaiting Customer Popup ── */}
       {showAwaitingPopup && (
-        <div className="modal-overlay" style={{ zIndex:10010 }} onClick={() => setShowAwaitingPopup(false)}>
+        <div className="modal-overlay" style={{ zIndex:10010 }}>
           <div className="modal" style={{ maxWidth:'420px', width:'95%' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="modal-title">🟢 {t('status_awaiting_customer')}</h3>

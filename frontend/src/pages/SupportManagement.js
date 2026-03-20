@@ -336,8 +336,8 @@ function SupportManagement() {
 
       {/* Modal */}
       {showModal && (
-        <div className="modal-overlay" onClick={closeModal}>
-          <div className="modal" style={{ maxWidth:'600px', width:'95%' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth:'600px', width:'95%' }}>
             <div className="modal-header">
               <h3 className="modal-title">{editingId ? (t('edit_ticket')) : (t('open_new_ticket'))}</h3>
               <button className="modal-close" onClick={closeModal}>✕</button>
@@ -464,8 +464,8 @@ function SupportManagement() {
       )}
       {/* History Modal */}
       {showHistory && (
-        <div className="modal-overlay" onClick={() => setShowHistory(false)}>
-          <div className="modal" style={{ maxWidth:'620px', width:'95%' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth:'620px', width:'95%' }}>
             <div className="modal-header">
               <h3 className="modal-title">📋 {t('history')} — {historyTicket?.ticket_number || `#${historyTicket?.id}`} | {historyTicket?.subject}</h3>
               <button className="modal-close" onClick={() => setShowHistory(false)}>✕</button>
@@ -600,8 +600,8 @@ function SupportManagement() {
 
       {/* Send Product Popup */}
       {showSendProduct && (
-        <div className="modal-overlay" onClick={() => setShowSendProduct(false)}>
-          <div className="modal" style={{ maxWidth:'440px', width:'95%' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth:'440px', width:'95%' }}>
             <div className="modal-header">
               <h3 className="modal-title">📦 {t('send_product') || 'שלח מוצר למחסן'}</h3>
               <button className="modal-close" onClick={() => setShowSendProduct(false)}>✕</button>
@@ -646,8 +646,8 @@ function SupportManagement() {
 
       {/* Awaiting Customer Popup */}
       {showAwaitingPopup && (
-        <div className="modal-overlay" onClick={() => setShowAwaitingPopup(false)}>
-          <div className="modal" style={{ maxWidth:'420px', width:'95%' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth:'420px', width:'95%' }}>
             <div className="modal-header">
               <h3 className="modal-title">🟢 {t('status_awaiting_customer')}</h3>
               <button className="modal-close" onClick={() => setShowAwaitingPopup(false)}>✕</button>
