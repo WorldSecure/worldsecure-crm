@@ -722,7 +722,7 @@ async function syncWarehouseAlertsToCloud() {
 
   // 2. דווח לענן על alerts שהושלמו מקומית (synced_from='cloud' + status='completed')
   const completedAlerts = await sqliteAll(
-    `SELECT * FROM warehouse_alerts WHERE synced_from='cloud' AND status='completed' AND completion_synced IS NULL ORDER BY completed_at`
+    `SELECT * FROM warehouse_alerts WHERE synced_from='cloud' AND status='completed' AND (completion_synced = 0 OR completion_synced IS NULL) ORDER BY completed_at`
   ).catch(() => []);
 
   // הוסף עמודת completion_synced אם לא קיימת
