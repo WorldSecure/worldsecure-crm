@@ -2056,6 +2056,57 @@ app.post('/api/sync/email-signatures', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Sync: Push warehouse_alerts from local → cloud ────────────────────────────
+app.post('/api/sync/warehouse-alerts', authenticateToken, async (req, res) => {
+  const { alerts } = req.body;
+  if (!Array.isArray(alerts) || alerts.length === 0) return res.json({ upserted: [] });
+
+  try {
+    await query('ALTER TABLE warehouse_alerts ADD COLUMN IF NOT EXISTS outbound_id INTEGER').catch(() => {});
+    await query('ALTER TABLE warehouse_alerts ADD COLUMN IF NOT EXISTS outbound_ref TEXT').catch(() => {});
+    await query('ALTER TABLE warehouse_alerts ADD COLUMN IF NOT EXISTS customer_id INTEGER').catch(() => {});
+    await query('ALTER TABLE warehouse_alerts ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ').catch(() => {});
+
+    const upserted = [];
+
+    for (const a of alerts) {
+      const existing = await query(
+        `SELECT id FROM warehouse_alerts
+         WHERE ticket_id=$1 AND product_id=$2 AND created_at::text LIKE $3`,
+        [a.ticket_id, a.product_id, (a.created_at || '').slice(0, 19) + '%']
+      );
+
+      if (existing.rows.length > 0) {
+        const cloudId = existing.rows[0].id;
+        upserted.push({ local_id: a.id, cloud_id: cloudId });
+        if (a.status && a.status !== 'pending') {
+          await query(
+            `UPDATE warehouse_alerts SET status=$2, outbound_id=$3, outbound_ref=$4, completed_at=$5 WHERE id=$1`,
+            [cloudId, a.status, a.outbound_id||null, a.outbound_ref||null, a.completed_at||null]
+          ).catch(() => {});
+        }
+      } else {
+        const r = await query(
+          `INSERT INTO warehouse_alerts
+            (ticket_id, ticket_number, customer_name, customer_id, product_id, product_name,
+             quantity, requested_by, requested_by_name, status,
+             outbound_id, outbound_ref, created_at, completed_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+           RETURNING id`,
+          [a.ticket_id, a.ticket_number||null, a.customer_name||null, a.customer_id||null,
+           a.product_id, a.product_name||null, a.quantity||1,
+           a.requested_by||null, a.requested_by_name||null,
+           a.status||'pending', a.outbound_id||null, a.outbound_ref||null,
+           a.created_at||null, a.completed_at||null]
+        );
+        upserted.push({ local_id: a.id, cloud_id: r.rows[0].id });
+      }
+    }
+
+    res.json({ upserted });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
   const { entity } = req.params;
   const { rows } = req.body;
@@ -2217,63 +2268,6 @@ app.get('/api/sync/pull/warehouse-alerts', authenticateToken, async (req, res) =
     res.json(r.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
-
-// ── Sync: Push warehouse_alerts from local → cloud ────────────────────────────
-app.post('/api/sync/warehouse-alerts', authenticateToken, async (req, res) => {
-  const { alerts } = req.body;
-  if (!Array.isArray(alerts) || alerts.length === 0) return res.json({ upserted: [] });
-
-  try {
-    await query('ALTER TABLE warehouse_alerts ADD COLUMN IF NOT EXISTS outbound_id INTEGER').catch(() => {});
-    await query('ALTER TABLE warehouse_alerts ADD COLUMN IF NOT EXISTS outbound_ref TEXT').catch(() => {});
-    await query('ALTER TABLE warehouse_alerts ADD COLUMN IF NOT EXISTS customer_id INTEGER').catch(() => {});
-    await query('ALTER TABLE warehouse_alerts ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ').catch(() => {});
-
-    const upserted = [];
-
-    for (const a of alerts) {
-      // בדוק כפילות לפי ticket_id + product_id + created_at (למניעת כפילויות)
-      const existing = await query(
-        `SELECT id FROM warehouse_alerts
-         WHERE ticket_id=$1 AND product_id=$2 AND created_at::text LIKE $3`,
-        [a.ticket_id, a.product_id, (a.created_at || '').slice(0, 19) + '%']
-      );
-
-      if (existing.rows.length > 0) {
-        // כבר קיים — החזר את ה-ID הקיים
-        const cloudId = existing.rows[0].id;
-        upserted.push({ local_id: a.id, cloud_id: cloudId });
-        // עדכן סטטוס אם שונה
-        if (a.status && a.status !== 'pending') {
-          await query(
-            `UPDATE warehouse_alerts SET status=$2, outbound_id=$3, outbound_ref=$4, completed_at=$5 WHERE id=$1`,
-            [cloudId, a.status, a.outbound_id||null, a.outbound_ref||null, a.completed_at||null]
-          ).catch(() => {});
-        }
-      } else {
-        // alert חדש מהמקומי — הוסף לענן
-        const r = await query(
-          `INSERT INTO warehouse_alerts
-            (ticket_id, ticket_number, customer_name, customer_id, product_id, product_name,
-             quantity, requested_by, requested_by_name, status,
-             outbound_id, outbound_ref, created_at, completed_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-           RETURNING id`,
-          [a.ticket_id, a.ticket_number||null, a.customer_name||null, a.customer_id||null,
-           a.product_id, a.product_name||null, a.quantity||1,
-           a.requested_by||null, a.requested_by_name||null,
-           a.status||'pending', a.outbound_id||null, a.outbound_ref||null,
-           a.created_at||null, a.completed_at||null]
-        );
-        const cloudId = r.rows[0].id;
-        upserted.push({ local_id: a.id, cloud_id: cloudId });
-      }
-    }
-
-    res.json({ upserted });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
 
 // ── Backup endpoints (cloud stubs) ───────────────────────────────────────────
 app.get('/api/backup/list', authenticateToken, async (req, res) => {
