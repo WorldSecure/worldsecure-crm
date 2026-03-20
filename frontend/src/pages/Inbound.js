@@ -600,7 +600,7 @@ function Inbound() {
                     <option value="">{qrCodes.length === 0 ? t('no_qr_codes_created') : t('select_qr_code')}</option>
                     {qrCodes.map((qr, index) => (
                       <option key={qr.id} value={qr.id}>
-                        QR #{index + 1} - {qr.type}
+                        {qr.title || `QR #${index + 1} - ${qr.type}`}
                       </option>
                     ))}
                   </select>
