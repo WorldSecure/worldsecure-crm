@@ -761,32 +761,48 @@ async function syncWarehouseAlertsFromCloud() {
 
   let count = 0;
   for (const a of alerts) {
-    // אל תדרוס alert שנוצר מקומית ועוד לא נשלח לענן (synced_from IS NULL)
     const existing = await sqliteGet(
-      'SELECT id, synced_from FROM warehouse_alerts WHERE id=?', [a.id]
+      'SELECT id, synced_from, status, completion_synced FROM warehouse_alerts WHERE id=?', [a.id]
     ).catch(() => null);
 
-    if (existing && existing.synced_from === null) {
-      // נוצר מקומית — דלג, הוא יעלה ב-LOCAL→CLOUD
-      continue;
+    // אל תדרוס alert שנוצר מקומית ועוד לא נשלח לענן
+    if (existing && existing.synced_from === null) continue;
+
+    // לוגיקת completion_synced:
+    // 1. alert יורד מהענן כ-completed — סמן 1 מיד (לא צריך לעלות חזרה)
+    // 2. alert יורד כ-pending והושלם מקומית — שמור 0 כדי שיעלה לענן
+    // 3. alert שכבר סומן completion_synced=1 — שמור 1
+    let completionSynced;
+    if (a.status === 'completed') {
+      // הענן מדווח שהושלם — לא צריך לדווח חזרה
+      completionSynced = 1;
+    } else if (existing && existing.status === 'completed' && existing.completion_synced === 1) {
+      // הושלם מקומית וכבר דווח לענן
+      completionSynced = 1;
+    } else if (existing && existing.status === 'completed' && existing.completion_synced === 0) {
+      // הושלם מקומית ועוד לא דווח — שמור 0
+      completionSynced = 0;
+    } else {
+      // pending חדש או עדכון
+      completionSynced = 0;
     }
 
     await sqliteRun(`
       INSERT OR REPLACE INTO warehouse_alerts
         (id, ticket_id, ticket_number, customer_name, customer_id,
          product_id, product_name, quantity, requested_by, requested_by_name,
-         status, outbound_id, outbound_ref, created_at, completed_at, synced_from)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         status, outbound_id, outbound_ref, created_at, completed_at,
+         synced_from, completion_synced)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [a.id, a.ticket_id, a.ticket_number, a.customer_name, a.customer_id||null,
        a.product_id, a.product_name, a.quantity||1, a.requested_by, a.requested_by_name,
        a.status||'pending', a.outbound_id||null, a.outbound_ref||null,
-       a.created_at, a.completed_at||null, 'cloud']
+       a.created_at, a.completed_at||null, 'cloud', completionSynced]
     ).catch(() => {});
     count++;
   }
   if (count > 0) log(`  ↳ warehouse-alerts from cloud: ${count} synced`);
 }
-
 async function syncAll() {
   await pullDeletionsFromCloud();
   await syncLocalToCloud();

@@ -2088,10 +2088,31 @@ app.post('/api/sync/warehouse-alerts', authenticateToken, async (req, res) => {
         const cloudId = existing.rows[0].id;
         upserted.push({ local_id: a.id, cloud_id: cloudId });
         if (a.status && a.status !== 'pending') {
+          // בדוק אם כבר completed בענן — אל תכפיל notification
+          const currentCloud = await query('SELECT status FROM warehouse_alerts WHERE id=$1', [cloudId]);
+          const alreadyCompleted = currentCloud.rows[0]?.status === 'completed';
+
           await query(
             `UPDATE warehouse_alerts SET status=$2, outbound_id=$3, outbound_ref=$4, completed_at=$5 WHERE id=$1`,
             [cloudId, a.status, a.outbound_id||null, a.outbound_ref||null, a.completed_at||null]
           ).catch(() => {});
+
+          // צור notification + היסטוריה רק אם לא היה completed קודם
+          if (!alreadyCompleted) {
+            const alertRow = await query('SELECT * FROM warehouse_alerts WHERE id=$1', [cloudId]);
+            const alert = alertRow.rows[0];
+            if (alert) {
+              await logTicketHistory(alert.ticket_id, null, a.sync_username || a.requested_by_name || 'warehouse', 'product_dispatched',
+                { awaiting_note: alert.product_name + ' x' + alert.quantity + (a.outbound_ref ? ' | \u05ea\u05e2\u05d5\u05d3\u05d4: ' + a.outbound_ref : '') }
+              ).catch(() => {});
+              await query(`INSERT INTO notifications (user_id, type, title, message, data, needs_ack, created_at)
+                VALUES ($1,'warehouse_dispatched','warehouse_dispatched',$2,$3,1,NOW())`,
+                [alert.requested_by,
+                 JSON.stringify({ product_name: alert.product_name, quantity: alert.quantity, ticket_number: alert.ticket_number, outbound_ref: a.outbound_ref||null }),
+                 JSON.stringify({ ticket_id: alert.ticket_id, alert_id: cloudId, product_name: alert.product_name, quantity: alert.quantity, ticket_number: alert.ticket_number, outbound_ref: a.outbound_ref||null })]
+              ).catch(() => {});
+            }
+          }
         }
       } else {
         // אם ticket_id לא קיים בענן עדיין — דלג (יסונכרן בסינק הבא)
