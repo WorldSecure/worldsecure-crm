@@ -770,24 +770,14 @@ async function syncWarehouseAlertsFromCloud() {
     // אל תדרוס alert שנוצר מקומית ועוד לא נשלח לענן
     if (existing && existing.synced_from === null) continue;
 
+    // אם הושלם מקומית ועוד לא דווח לענן (completion_synced=0) — אל תדרוס בשום אופן!
+    // הסטאטוס המקומי הוא הנכון, הענן עוד לא יודע על השלמתה
+    if (existing && existing.status === 'completed' && existing.completion_synced === 0) continue;
+
     // לוגיקת completion_synced:
-    // 1. alert יורד מהענן כ-completed — סמן 1 מיד (לא צריך לעלות חזרה)
-    // 2. alert יורד כ-pending והושלם מקומית — שמור 0 כדי שיעלה לענן
-    // 3. alert שכבר סומן completion_synced=1 — שמור 1
-    let completionSynced;
-    if (a.status === 'completed') {
-      // הענן מדווח שהושלם — לא צריך לדווח חזרה
-      completionSynced = 1;
-    } else if (existing && existing.status === 'completed' && existing.completion_synced === 1) {
-      // הושלם מקומית וכבר דווח לענן
-      completionSynced = 1;
-    } else if (existing && existing.status === 'completed' && existing.completion_synced === 0) {
-      // הושלם מקומית ועוד לא דווח — שמור 0
-      completionSynced = 0;
-    } else {
-      // pending חדש או עדכון
-      completionSynced = 0;
-    }
+    // alert יורד מהענן כ-completed — סמן 1 (הענן יודע, לא צריך לדווח חזרה)
+    // alert יורד כ-pending — סמן 0 (בעתיד אם יושלם מקומית, יעלה לענן)
+    const completionSynced = a.status === 'completed' ? 1 : (existing?.completion_synced || 0);
 
     await sqliteRun(`
       INSERT OR REPLACE INTO warehouse_alerts
