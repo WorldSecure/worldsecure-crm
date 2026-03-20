@@ -2296,15 +2296,13 @@ app.get('/api/sync/pull/support', authenticateToken, async (req, res) => {
 // ── Sync: Pull notifications from cloud → local ───────────────────────────────
 app.get('/api/sync/pull/notifications', authenticateToken, async (req, res) => {
   try {
-    // החזר notifications מסוג warehouse_dispatched שעדיין צריכים ack
-    // רק מ-24 שעות אחרונות כדי לא להציף
+    // החזר notifications מסוג warehouse_dispatched מ-7 ימים אחרונים —
+    // גם pending וגם שאושרו לאחרונה, כדי שהמקומי יוכל לעדכן סטטוס
     const r = await query(`
       SELECT n.*, u.email as user_email
       FROM notifications n
       LEFT JOIN users u ON u.id = n.user_id
       WHERE n.type = 'warehouse_dispatched'
-        AND n.needs_ack = 1
-        AND n.is_read = 0
         AND n.created_at > NOW() - INTERVAL '7 days'
       ORDER BY n.created_at DESC
     `);
