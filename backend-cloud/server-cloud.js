@@ -1749,7 +1749,8 @@ app.post('/api/sync/qr-codes', authenticateToken, async (req, res) => {
       await query(
         `INSERT INTO qr_codes (id, type, qr_data, image_url, title, created_by, created_at)
          VALUES ($1,$2,$3,$4,$5,$6,$7)
-         ON CONFLICT (id) DO UPDATE SET type=$2, qr_data=$3, image_url=$4, title=$5`,
+         ON CONFLICT (id) DO UPDATE SET type=$2, qr_data=$3, image_url=$4,
+         title=CASE WHEN qr_codes.title IS NOT NULL AND qr_codes.title != '' THEN qr_codes.title ELSE $5 END`,
         [r.id, r.type, r.qr_data, r.image_url||null, r.title||null, r.created_by||null, r.created_at||null]
       );
     }

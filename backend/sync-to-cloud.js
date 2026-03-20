@@ -638,9 +638,12 @@ async function syncQrFromCloud() {
   await sqliteRun('CREATE TABLE IF NOT EXISTS qr_codes (id INTEGER PRIMARY KEY, type TEXT, qr_data TEXT, image_url TEXT, title TEXT, created_by INTEGER, created_at DATETIME)').catch(() => {});
   let count = 0;
   for (const r of rows) {
+    // שמור title מקומי אם כבר קיים — אל תדרוס שינוי שהמשתמש עשה
+    const existing = await sqliteGet('SELECT title FROM qr_codes WHERE id=?', [r.id]).catch(() => null);
+    const finalTitle = (existing?.title && existing.title !== '') ? existing.title : (r.title || null);
     await sqliteRun(
       'INSERT OR REPLACE INTO qr_codes (id, type, qr_data, image_url, title, created_by, created_at) VALUES (?,?,?,?,?,?,?)',
-      [r.id, r.type, r.qr_data, r.image_url||null, r.title||null, r.created_by||null, r.created_at||null]
+      [r.id, r.type, r.qr_data, r.image_url||null, finalTitle, r.created_by||null, r.created_at||null]
     ).catch(() => {});
     count++;
   }
