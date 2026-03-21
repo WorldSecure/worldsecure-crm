@@ -587,8 +587,8 @@ function Products() {
                 </th>
                 <th>{t('quantity')}</th>
                 <th>{t('unit')}</th>
-                <th>🏭 {t('suppliers') || 'Supplier'}</th>
-                <th>🏗️ {t('manufacturers') || 'Manufacturer'}</th>
+                <th>{t('suppliers') || 'Supplier'}</th>
+                <th>{t('manufacturers') || 'Manufacturer'}</th>
                 <th></th>
               </tr>
             </thead>
@@ -748,7 +748,7 @@ function Products() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">🏭 {t('suppliers') || 'Supplier'}</label>
+                  <label className="form-label">{t('suppliers') || 'Supplier'}</label>
                   <select
                     className="form-select"
                     value={formData.supplier_id}
@@ -762,7 +762,7 @@ function Products() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">🏗️ {t('manufacturers') || 'Manufacturer'}</label>
+                  <label className="form-label">{t('manufacturers') || 'Manufacturer'}</label>
                   <select
                     className="form-select"
                     value={formData.manufacturer_id}
