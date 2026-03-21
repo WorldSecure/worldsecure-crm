@@ -38,12 +38,18 @@ function Products() {
 
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [subcategories, setSubcategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [editingCategory, setEditingCategory] = useState(null); // null=new, obj=edit
+  const [showSubcategoryModal, setShowSubcategoryModal] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(null);
   const [categoryForm, setCategoryForm] = useState({ value: '' });
   const [savingCategory, setSavingCategory] = useState(false);
+  const [editingSubcategory, setEditingSubcategory] = useState(null);
+  const [subcategoryForm, setSubcategoryForm] = useState({ value: '' });
+  const [savingSubcategory, setSavingSubcategory] = useState(false);
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState(''); // לסינון במודל סאב-קטגוריות
   const [editingProduct, setEditingProduct] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState('name');
@@ -57,6 +63,7 @@ function Products() {
     name: '',
     description: '',
     category_id: '',
+    subcategory_id: '',
     price: '',
     currency: 'ILS',
     unit: 'unit',
@@ -83,13 +90,15 @@ function Products() {
 
   const fetchData = async () => {
     try {
-      const [productsRes, categoriesRes] = await Promise.all([
+      const [productsRes, categoriesRes, subcategoriesRes] = await Promise.all([
         axios.get('/api/products'),
-        axios.get('/api/categories')
+        axios.get('/api/categories'),
+        axios.get('/api/subcategories')
       ]);
       
       setProducts(productsRes.data);
       setCategories(categoriesRes.data);
+      setSubcategories(subcategoriesRes.data);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -172,6 +181,64 @@ function Products() {
     if (language === 'he' && cat.name_he) return cat.name_he;
     if (language === 'pt' && cat.name_pt) return cat.name_pt;
     return cat.name;
+  };
+
+  const getSubcatDisplayName = (sub) => {
+    if (language === 'he' && sub.name_he) return sub.name_he;
+    if (language === 'pt' && sub.name_pt) return sub.name_pt;
+    return sub.name;
+  };
+
+  // ── Subcategory management ─────────────────────────────────────────────────
+  const openEditSubcategory = (sub) => {
+    setEditingSubcategory(sub);
+    const currentVal = language === 'he' ? (sub.name_he || sub.name) :
+                       language === 'pt' ? (sub.name_pt || sub.name) : sub.name;
+    setSubcategoryForm({ value: currentVal || '' });
+  };
+
+  const handleSaveSubcategory = async () => {
+    if (!subcategoryForm.value.trim() || !selectedCategoryFilter) return;
+    try {
+      setSavingSubcategory(true);
+      const payload = { category_id: selectedCategoryFilter };
+      if (language === 'he') {
+        payload.name_he = subcategoryForm.value;
+        payload.name = editingSubcategory?.name || subcategoryForm.value;
+        payload.name_pt = editingSubcategory?.name_pt || null;
+      } else if (language === 'pt') {
+        payload.name_pt = subcategoryForm.value;
+        payload.name = editingSubcategory?.name || subcategoryForm.value;
+        payload.name_he = editingSubcategory?.name_he || null;
+      } else {
+        payload.name = subcategoryForm.value;
+        payload.name_he = editingSubcategory?.name_he || null;
+        payload.name_pt = editingSubcategory?.name_pt || null;
+      }
+      if (editingSubcategory) {
+        await axios.put(`/api/subcategories/${editingSubcategory.id}`, payload);
+      } else {
+        await axios.post('/api/subcategories', payload);
+      }
+      const res = await axios.get('/api/subcategories');
+      setSubcategories(res.data);
+      setEditingSubcategory(null);
+      setSubcategoryForm({ value: '' });
+    } catch(e) { alert(e.response?.data?.error || e.message); }
+    finally { setSavingSubcategory(false); }
+  };
+
+  const handleDeleteSubcategory = async (id) => {
+    if (!window.confirm(t('confirm_delete'))) return;
+    try {
+      await axios.delete(`/api/subcategories/${id}`);
+      const res = await axios.get('/api/subcategories');
+      setSubcategories(res.data);
+      if (editingSubcategory?.id === id) {
+        setEditingSubcategory(null);
+        setSubcategoryForm({ value: '' });
+      }
+    } catch(e) { alert(e.response?.data?.error || e.message); }
   };
 
   const handleSort = (field) => {
@@ -261,6 +328,7 @@ function Products() {
       name: product.name,
       description: product.description || '',
       category_id: product.category_id || '',
+      subcategory_id: product.subcategory_id || '',
       price: product.price || '',
       currency: product.currency || 'ILS',
       unit: product.unit,
@@ -294,6 +362,7 @@ function Products() {
       name: '',
       description: '',
       category_id: '',
+      subcategory_id: '',
       price: '',
       currency: 'ILS',
       unit: 'unit',
@@ -342,6 +411,14 @@ function Products() {
               onClick={() => setShowCategoryModal(true)}
             >
               📂 {t('edit_categories') || 'ערוך קטגוריות'}
+            </button>
+            )}
+            {isAdmin && (
+            <button 
+              className="btn btn-secondary"
+              onClick={() => { setSelectedCategoryFilter(categories[0]?.id?.toString() || ''); setShowSubcategoryModal(true); }}
+            >
+              📁 {t('edit_subcategories') || 'ערוך סאב-קטגוריות'}
             </button>
             )}
             {isAdmin && (
@@ -512,12 +589,14 @@ function Products() {
             <form onSubmit={handleSubmit}>
               <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">{t('sku')} *</label>
+                  <label className="form-label">{t('sku')} * <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: 400 }}>XXX-XXX-XXX-XXX</span></label>
                   <input
                     type="text"
                     className="form-input"
+                    style={{ fontFamily: 'monospace', letterSpacing: '0.05em' }}
                     value={formData.sku}
-                    onChange={(e) => setFormData({...formData, sku: e.target.value})}
+                    onChange={(e) => setFormData({...formData, sku: e.target.value.toUpperCase()})}
+                    placeholder="ABC-123-XYZ-456"
                     required
                   />
                 </div>
@@ -554,7 +633,7 @@ function Products() {
                   <select
                     className="form-select"
                     value={formData.category_id}
-                    onChange={(e) => setFormData({...formData, category_id: e.target.value})}
+                    onChange={(e) => setFormData({...formData, category_id: e.target.value, subcategory_id: ''})}
                   >
                     <option value="">{t('select_category')}</option>
                     {categories.map(cat => (
@@ -562,6 +641,25 @@ function Products() {
                     ))}
                   </select>
                 </div>
+
+                {/* סאב-קטגוריה — מוצג רק אם יש סאב-קטגוריות לקטגוריה שנבחרה */}
+                {formData.category_id && subcategories.filter(s => String(s.category_id) === String(formData.category_id)).length > 0 && (
+                  <div className="form-group">
+                    <label className="form-label">{t('subcategory') || 'סאב-קטגוריה'}</label>
+                    <select
+                      className="form-select"
+                      value={formData.subcategory_id}
+                      onChange={(e) => setFormData({...formData, subcategory_id: e.target.value})}
+                    >
+                      <option value="">{t('select_subcategory') || 'בחר סאב-קטגוריה'}</option>
+                      {subcategories
+                        .filter(s => String(s.category_id) === String(formData.category_id))
+                        .map(sub => (
+                          <option key={sub.id} value={sub.id}>{getSubcatDisplayName(sub)}</option>
+                        ))}
+                    </select>
+                  </div>
+                )}
 
                 <div className="form-group">
                   <label className="form-label">{t('unit')}</label>
@@ -834,6 +932,100 @@ function Products() {
                 disabled={savingCategory || !categoryForm.value.trim()}
                 onClick={handleSaveCategory}>
                 {savingCategory ? '...' : (editingCategory ? t('save') : `➕ ${t('add_category') || 'הוסף'}`)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Subcategory Management Modal ── */}
+      {showSubcategoryModal && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: '580px', width: '95%' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">📁 {t('edit_subcategories') || 'ערוך סאב-קטגוריות'}</h3>
+              <button className="modal-close" onClick={() => { setShowSubcategoryModal(false); setEditingSubcategory(null); setSubcategoryForm({ value: '' }); }}>×</button>
+            </div>
+
+            <div className="modal-body" style={{ padding: '1.2rem' }}>
+              {/* בחירת קטגוריה אב */}
+              <div className="form-group" style={{ marginBottom: '1.2rem' }}>
+                <label className="form-label">📂 {t('category') || 'קטגוריה'}</label>
+                <select className="form-select" value={selectedCategoryFilter}
+                  onChange={e => { setSelectedCategoryFilter(e.target.value); setEditingSubcategory(null); setSubcategoryForm({ value: '' }); }}>
+                  <option value="">{t('select_category') || 'בחר קטגוריה'}</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{getCatDisplayName(cat)}</option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedCategoryFilter && (
+                <>
+                  {/* סאב-קטגוריות קיימות */}
+                  <div style={{ marginBottom: '1.2rem' }}>
+                    <h4 style={{ marginBottom: '0.75rem', fontSize: '0.95rem', color: '#374151' }}>
+                      {t('existing_subcategories') || 'סאב-קטגוריות קיימות'}
+                    </h4>
+                    {subcategories.filter(s => String(s.category_id) === String(selectedCategoryFilter)).length === 0 ? (
+                      <div style={{ color: '#888', fontSize: '0.9rem' }}>{t('no_data')}</div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        {subcategories.filter(s => String(s.category_id) === String(selectedCategoryFilter)).map(sub => (
+                          <div key={sub.id} style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            padding: '0.6rem 0.8rem',
+                            background: editingSubcategory?.id === sub.id ? '#eff6ff' : '#f8fafc',
+                            border: `1px solid ${editingSubcategory?.id === sub.id ? '#bfdbfe' : '#e2e8f0'}`,
+                            borderRadius: '8px'
+                          }}>
+                            <span style={{ fontWeight: 500 }}>{getSubcatDisplayName(sub)}</span>
+                            <div style={{ display: 'flex', gap: '0.4rem' }}>
+                              <button onClick={() => openEditSubcategory(sub)}
+                                style={{ padding: '0.25rem 0.6rem', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem' }}>
+                                ✏️ {t('edit')}
+                              </button>
+                              <button onClick={() => handleDeleteSubcategory(sub.id)}
+                                style={{ padding: '0.25rem 0.6rem', background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem' }}>
+                                🗑️
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* טופס הוספה/עריכה */}
+                  <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1.2rem' }}>
+                    <h4 style={{ marginBottom: '0.75rem', fontSize: '0.95rem', color: '#374151' }}>
+                      {editingSubcategory ? `✏️ ${t('edit_subcategory') || 'ערוך'}: ${getSubcatDisplayName(editingSubcategory)}` : `➕ ${t('add_subcategory') || 'הוסף סאב-קטגוריה'}`}
+                    </h4>
+                    <div className="form-group" style={{ marginBottom: '0' }}>
+                      <label className="form-label">
+                        {language === 'he' ? '🇮🇱 ' : language === 'pt' ? '🇵🇹 ' : '🇬🇧 '}
+                        {t('subcategory_name') || 'שם סאב-קטגוריה'} *
+                      </label>
+                      <input className="form-input" type="text" value={subcategoryForm.value}
+                        onChange={e => setSubcategoryForm({ value: e.target.value })}
+                        placeholder={language === 'he' ? 'למשל: צלילה' : language === 'pt' ? 'ex: Mergulho' : 'e.g. Diving'} />
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              {editingSubcategory && (
+                <button type="button" className="btn btn-secondary"
+                  onClick={() => { setEditingSubcategory(null); setSubcategoryForm({ value: '' }); }}>
+                  {t('cancel')}
+                </button>
+              )}
+              <button type="button" className="btn btn-primary"
+                disabled={savingSubcategory || !subcategoryForm.value.trim() || !selectedCategoryFilter}
+                onClick={handleSaveSubcategory}>
+                {savingSubcategory ? '...' : (editingSubcategory ? t('save') : `➕ ${t('add_subcategory') || 'הוסף'}`)}
               </button>
             </div>
           </div>

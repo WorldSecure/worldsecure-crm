@@ -199,9 +199,12 @@ app.get('/api/customers', authenticateToken, async (req, res) => {
 
 app.get('/api/products', authenticateToken, async (req, res) => {
   try {
+    await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory_id INTEGER').catch(() => {});
     const r = await query(`
-      SELECT p.*, c.name as category_name, c.name_he as category_name_he, c.name_pt as category_name_pt
-      FROM products p LEFT JOIN categories c ON p.category_id = c.id ORDER BY p.name
+      SELECT p.*, c.name as category_name, c.name_he as category_name_he, c.name_pt as category_name_pt,
+             s.name as subcategory_name, s.name_he as subcategory_name_he, s.name_pt as subcategory_name_pt
+      FROM products p LEFT JOIN categories c ON p.category_id = c.id
+      LEFT JOIN subcategories s ON p.subcategory_id = s.id ORDER BY p.name
     `);
     res.json(r.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -265,7 +268,53 @@ app.delete('/api/categories/:id', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── חסימת עריכה ───────────────────────────────────────────────────────────────
+// ============ SUBCATEGORIES ROUTES ============
+
+app.get('/api/subcategories', authenticateToken, async (req, res) => {
+  try {
+    await query(`CREATE TABLE IF NOT EXISTS subcategories (
+      id SERIAL PRIMARY KEY, category_id INTEGER NOT NULL,
+      name TEXT NOT NULL, name_he TEXT, name_pt TEXT,
+      FOREIGN KEY (category_id) REFERENCES categories(id)
+    )`).catch(() => {});
+    const { category_id } = req.query;
+    const r = category_id
+      ? await query('SELECT * FROM subcategories WHERE category_id=$1 ORDER BY name', [category_id])
+      : await query('SELECT * FROM subcategories ORDER BY category_id, name');
+    res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/subcategories', authenticateToken, async (req, res) => {
+  const { category_id, name, name_he, name_pt } = req.body;
+  if (!category_id || !name) return res.status(400).json({ error: 'category_id and name required' });
+  try {
+    const r = await query(
+      'INSERT INTO subcategories (category_id, name, name_he, name_pt) VALUES ($1,$2,$3,$4) RETURNING *',
+      [category_id, name, name_he||null, name_pt||null]
+    );
+    res.json(r.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/subcategories/:id', authenticateToken, async (req, res) => {
+  const { name, name_he, name_pt } = req.body;
+  if (!name) return res.status(400).json({ error: 'name required' });
+  try {
+    await query('UPDATE subcategories SET name=$1, name_he=$2, name_pt=$3 WHERE id=$4',
+      [name, name_he||null, name_pt||null, req.params.id]);
+    res.json({ message: 'updated' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/subcategories/:id', authenticateToken, async (req, res) => {
+  try {
+    const used = await query('SELECT COUNT(*) as count FROM products WHERE subcategory_id=$1', [req.params.id]);
+    if (parseInt(used.rows[0].count) > 0) return res.status(400).json({ error: 'Cannot delete subcategory with products' });
+    await query('DELETE FROM subcategories WHERE id=$1', [req.params.id]);
+    res.json({ message: 'deleted' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 const adminOnly = (req, res, next) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
   next();

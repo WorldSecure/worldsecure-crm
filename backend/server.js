@@ -569,6 +569,7 @@ app.put('/api/company/email-signature', authenticateToken, (req, res) => {
 // migration — הוסף עמודות שפה אם לא קיימות
 db.run(`ALTER TABLE categories ADD COLUMN name_he TEXT`, () => {});
 db.run(`ALTER TABLE categories ADD COLUMN name_pt TEXT`, () => {});
+db.run(`ALTER TABLE products ADD COLUMN subcategory_id INTEGER`, () => {});
 
 app.get('/api/categories', authenticateToken, (req, res) => {
   db.all('SELECT * FROM categories ORDER BY id', [], (err, rows) => {
@@ -618,13 +619,73 @@ app.delete('/api/categories/:id', authenticateToken, (req, res) => {
   });
 });
 
-// ============ PRODUCTS ROUTES ============
+// ============ SUBCATEGORIES ROUTES ============
+
+db.run(`CREATE TABLE IF NOT EXISTS subcategories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  category_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  name_he TEXT,
+  name_pt TEXT,
+  FOREIGN KEY (category_id) REFERENCES categories(id)
+)`, () => {});
+
+app.get('/api/subcategories', authenticateToken, (req, res) => {
+  const { category_id } = req.query;
+  const sql = category_id
+    ? 'SELECT * FROM subcategories WHERE category_id=? ORDER BY name'
+    : 'SELECT * FROM subcategories ORDER BY category_id, name';
+  const params = category_id ? [category_id] : [];
+  db.all(sql, params, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.post('/api/subcategories', authenticateToken, (req, res) => {
+  const { category_id, name, name_he, name_pt } = req.body;
+  if (!category_id || !name) return res.status(400).json({ error: 'category_id and name required' });
+  db.run(
+    'INSERT INTO subcategories (category_id, name, name_he, name_pt) VALUES (?,?,?,?)',
+    [category_id, name, name_he||null, name_pt||null],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ id: this.lastID, category_id, name, name_he: name_he||null, name_pt: name_pt||null });
+    }
+  );
+});
+
+app.put('/api/subcategories/:id', authenticateToken, (req, res) => {
+  const { name, name_he, name_pt } = req.body;
+  if (!name) return res.status(400).json({ error: 'name required' });
+  db.run(
+    'UPDATE subcategories SET name=?, name_he=?, name_pt=? WHERE id=?',
+    [name, name_he||null, name_pt||null, req.params.id],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'updated' });
+    }
+  );
+});
+
+app.delete('/api/subcategories/:id', authenticateToken, (req, res) => {
+  db.get('SELECT COUNT(*) as count FROM products WHERE subcategory_id=?', [req.params.id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (row?.count > 0) return res.status(400).json({ error: 'Cannot delete subcategory with products' });
+    db.run('DELETE FROM subcategories WHERE id=?', [req.params.id], function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'deleted' });
+    });
+  });
+});
 
 app.get('/api/products', authenticateToken, (req, res) => {
   const query = `
-    SELECT p.*, c.name as category_name, c.name_he as category_name_he, c.name_pt as category_name_pt 
+    SELECT p.*, c.name as category_name, c.name_he as category_name_he, c.name_pt as category_name_pt,
+           s.name as subcategory_name, s.name_he as subcategory_name_he, s.name_pt as subcategory_name_pt
     FROM products p 
-    LEFT JOIN categories c ON p.category_id = c.id 
+    LEFT JOIN categories c ON p.category_id = c.id
+    LEFT JOIN subcategories s ON p.subcategory_id = s.id
     ORDER BY p.name
   `;
   
