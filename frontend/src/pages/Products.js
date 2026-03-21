@@ -335,7 +335,7 @@ function Products() {
       <div className="card">
         <div className="card-header">
           <h3 className="card-title">{t('products')}</h3>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             {isAdmin && (
               <button
                 className="btn btn-secondary"
@@ -357,7 +357,6 @@ function Products() {
             <button 
               className="btn btn-secondary"
               onClick={() => setShowCategoryModal(true)}
-              style={{ marginRight: '0.5rem' }}
             >
               📂 {t('edit_categories') || 'ערוך קטגוריות'}
             </button>
