@@ -52,6 +52,7 @@ function Products() {
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState(''); // לסינון במודל סאב-קטגוריות
   const [editingProduct, setEditingProduct] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [skuFilter, setSkuFilter] = useState('');
   const [sortField, setSortField] = useState('name');
   const [sortDirection, setSortDirection] = useState('asc');
   const [priceHistory, setPriceHistory] = useState([]);
@@ -251,10 +252,12 @@ function Products() {
   };
 
   const getSortedProducts = () => {
-    let filtered = products.filter(product =>
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.sku.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    let filtered = products.filter(product => {
+      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.sku.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSku = !skuFilter || product.sku.toUpperCase().startsWith(skuFilter);
+      return matchesSearch && matchesSku;
+    });
 
     return filtered.sort((a, b) => {
       let aValue, bValue;
@@ -432,14 +435,36 @@ function Products() {
           </div>
         </div>
 
-        <div className="form-group" style={{ marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
           <input
             type="text"
             className="form-input"
+            style={{ flex: 1, minWidth: '180px' }}
             placeholder={t('search')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
+          <select
+            className="form-select"
+            style={{ minWidth: '160px', flex: '0 0 auto' }}
+            value={skuFilter}
+            onChange={(e) => setSkuFilter(e.target.value)}
+          >
+            <option value="">🔖 {t('all_skus') || 'כל ה-SKU'}</option>
+            {/* קבוצה ראשונה — XXX */}
+            {[...new Set(products.map(p => p.sku?.split('-')[0]).filter(Boolean))].sort().map(seg1 => (
+              <optgroup key={seg1} label={seg1}>
+                <option value={seg1}>{seg1}</option>
+                {[...new Set(products
+                  .filter(p => p.sku?.startsWith(seg1 + '-'))
+                  .map(p => p.sku?.split('-').slice(0,2).join('-'))
+                  .filter(Boolean)
+                )].sort().map(seg2 => (
+                  <option key={seg2} value={seg2}>{seg2}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
         </div>
 
         {isMobile ? (

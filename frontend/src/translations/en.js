@@ -55,6 +55,7 @@ export const en = {
   quantity: 'Quantity',
   min_quantity: 'Minimum Quantity',
   add_product: 'Add Product',
+  all_skus: 'All SKUs',
   edit_product: 'Edit Product',
   category_name: 'Category Name',
   edit_categories: 'Edit Categories',

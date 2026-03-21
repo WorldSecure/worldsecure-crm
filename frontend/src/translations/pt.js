@@ -55,6 +55,7 @@ export const pt = {
   quantity: 'Quantidade em Estoque',
   min_quantity: 'Quantidade Mínima',
   add_product: 'Adicionar Produto',
+  all_skus: 'Todos os SKUs',
   edit_product: 'Editar Produto',
   category_name: 'Nome da Categoria',
   edit_categories: 'Editar Categorias',

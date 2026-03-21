@@ -55,6 +55,7 @@ export const he = {
   quantity: 'כמות במלאי',
   min_quantity: 'מלאי מינימום',
   add_product: 'הוסף מוצר',
+  all_skus: 'כל ה-SKU',
   edit_product: 'ערוך מוצר',
   category_name: 'שם קטגוריה',
   edit_categories: 'ערוך קטגוריות',
