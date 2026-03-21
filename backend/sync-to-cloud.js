@@ -234,12 +234,40 @@ async function syncSupportToCloud() {
 //  2. CLOUD → LOCAL
 // ════════════════════════════════════════════════════════════════════════════
 
+async function syncProductsFromCloud() {
+  const result = await apiRequest('GET', '/api/products');
+  if (result.status !== 200) { log(`  ⚠ pull products: ${JSON.stringify(result.body)}`); return; }
+  const products = result.body || [];
+
+  // migration — הוסף עמודות חדשות אם לא קיימות
+  await sqliteRun('ALTER TABLE products ADD COLUMN subcategory_id INTEGER').catch(() => {});
+  await sqliteRun('ALTER TABLE products ADD COLUMN name_he TEXT').catch(() => {});
+  await sqliteRun('ALTER TABLE products ADD COLUMN name_pt TEXT').catch(() => {});
+
+  let count = 0;
+  for (const p of products) {
+    await sqliteRun(`
+      INSERT OR REPLACE INTO products
+        (id, sku, name, name_he, name_pt, description, category_id, subcategory_id,
+         price, currency, unit, quantity, min_quantity)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [p.id, p.sku, p.name, p.name_he||null, p.name_pt||null, p.description||null,
+       p.category_id||null, p.subcategory_id||null,
+       p.price||null, p.currency||'ILS', p.unit||'unit',
+       p.quantity||0, p.min_quantity||0]
+    ).catch(() => {});
+    count++;
+  }
+  if (count > 0) log(`  ↳ products from cloud: ${count} synced`);
+}
+
 async function syncCloudToLocal() {
   log('▶ CLOUD → LOCAL sync...');
   try {
     await syncSettingsFromCloud();
     await syncUsersFromCloud();
     await syncQrFromCloud();
+    await syncProductsFromCloud();
     await syncInboundFromCloud();
     await syncOutboundFromCloud();
     await syncSupportFromCloud();
