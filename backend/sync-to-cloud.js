@@ -129,6 +129,7 @@ async function syncLocalToCloud() {
     await syncEntityToCloud('customers',  'SELECT * FROM customers');
     await syncEntityToCloud('products',   'SELECT id, sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at FROM products');
     await syncEntityToCloud('suppliers',  'SELECT * FROM suppliers');
+    await syncEntityToCloud('manufacturers', 'SELECT * FROM manufacturers');
     await syncEmailSignaturesToCloud();
     await syncInboundToCloud();
     await syncOutboundToCloud();
@@ -342,6 +343,29 @@ async function syncSuppliersFromCloud() {
   if (count > 0) log(`  ↳ suppliers from cloud: ${count} synced`);
 }
 
+async function syncManufacturersFromCloud() {
+  const result = await apiRequest('GET', '/api/manufacturers');
+  if (result.status !== 200) { log(`  ⚠ pull manufacturers: ${JSON.stringify(result.body)}`); return; }
+  const manufacturers = result.body || [];
+  await sqliteRun(`CREATE TABLE IF NOT EXISTS manufacturers (
+    id INTEGER PRIMARY KEY, name TEXT NOT NULL, address TEXT, phone TEXT,
+    email TEXT, tax_id TEXT, country TEXT, notes TEXT, contact_person TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`).catch(() => {});
+  let count = 0;
+  for (const s of manufacturers) {
+    await sqliteRun(`
+      INSERT OR REPLACE INTO manufacturers
+        (id, name, contact_person, address, phone, email, tax_id, country, notes)
+      VALUES (?,?,?,?,?,?,?,?,?)`,
+      [s.id, s.name, s.contact_person||null, s.address||null, s.phone||null,
+       s.email||null, s.tax_id||null, s.country||null, s.notes||null]
+    ).catch(() => {});
+    count++;
+  }
+  if (count > 0) log(`  ↳ manufacturers from cloud: ${count} synced`);
+}
+
 async function syncCloudToLocal() {
   log('▶ CLOUD → LOCAL sync...');
   try {
@@ -353,6 +377,7 @@ async function syncCloudToLocal() {
     await syncProductsFromCloud();
     await syncCustomersFromCloud();
     await syncSuppliersFromCloud();
+    await syncManufacturersFromCloud();
     await syncInboundFromCloud();
     await syncOutboundFromCloud();
     await syncSupportFromCloud();

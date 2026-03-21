@@ -178,6 +178,20 @@ db.serialize(() => {
   // Add contact_person column to existing suppliers table if it doesn't exist
   db.run(`ALTER TABLE suppliers ADD COLUMN contact_person TEXT`, () => {});
 
+  // Manufacturers table
+  db.run(`CREATE TABLE IF NOT EXISTS manufacturers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    address TEXT,
+    phone TEXT,
+    email TEXT,
+    tax_id TEXT,
+    country TEXT,
+    notes TEXT,
+    contact_person TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
   // Customers table
   db.run(`CREATE TABLE IF NOT EXISTS customers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

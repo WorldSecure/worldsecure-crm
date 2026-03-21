@@ -31,6 +31,7 @@ export const he = {
   inbound: 'קליטה למחסן',
   outbound: 'הוצאה מהמחסן',
   suppliers: 'ספקים',
+  manufacturers: 'יצרנים',
   customers: 'לקוחות',
   reports: 'דוחות',
   settings: 'הגדרות',

@@ -24,6 +24,10 @@ function AdminLayout() {
               <span className="sidebar-icon">🏭</span>
               {t('suppliers')}
             </Link>
+            <Link to="/admin/manufacturers" className={isActive('/admin/manufacturers')}>
+              <span className="sidebar-icon">🏗️</span>
+              {t('manufacturers') || 'Manufacturers'}
+            </Link>
             <Link to="/admin/customers" className={isActive('/admin/customers')}>
               <span className="sidebar-icon">👥</span>
               {t('customers')}
@@ -36,12 +40,6 @@ function AdminLayout() {
               <span className="sidebar-icon">👤</span>
               {t('users')}
             </Link>
-            {!isCloud && (
-              <Link to="/admin/reports" className={isActive('/admin/reports')}>
-                <span className="sidebar-icon">📊</span>
-                {t('Warehouse Reports')}
-              </Link>
-            )}
             {!isCloud && (
               <Link to="/admin/sales-reports" className={isActive('/admin/sales-reports')}>
                 <span className="sidebar-icon">💹</span>

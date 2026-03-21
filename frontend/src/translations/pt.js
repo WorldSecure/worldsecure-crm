@@ -31,6 +31,7 @@ export const pt = {
   inbound: 'Entrada',
   outbound: 'Saída',
   suppliers: 'Fornecedores',
+  manufacturers: 'Fabricantes',
   customers: 'Clientes',
   reports: 'Relatórios',
   settings: 'Configurações',

@@ -422,6 +422,48 @@ app.delete('/api/suppliers/:id', authenticateToken, adminOnly, async (req, res) 
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Manufacturers CRUD ────────────────────────────────────────────────────────
+app.get('/api/manufacturers', authenticateToken, async (req, res) => {
+  try {
+    await query(`CREATE TABLE IF NOT EXISTS manufacturers (
+      id SERIAL PRIMARY KEY, name TEXT NOT NULL, address TEXT, phone TEXT,
+      email TEXT, tax_id TEXT, country TEXT, notes TEXT, contact_person TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`).catch(() => {});
+    const r = await query('SELECT * FROM manufacturers ORDER BY name');
+    res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/manufacturers', authenticateToken, adminOnly, async (req, res) => {
+  const { name, address, phone, email, tax_id, notes, country, contact_person } = req.body;
+  try {
+    const r = await query(
+      'INSERT INTO manufacturers (name, address, phone, email, tax_id, notes, country, contact_person) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
+      [name, address||null, phone||null, email||null, tax_id||null, notes||null, country||null, contact_person||null]
+    );
+    res.json(r.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/manufacturers/:id', authenticateToken, adminOnly, async (req, res) => {
+  const { name, address, phone, email, tax_id, notes, country, contact_person } = req.body;
+  try {
+    await query(
+      'UPDATE manufacturers SET name=$1, address=$2, phone=$3, email=$4, tax_id=$5, notes=$6, country=$7, contact_person=$8 WHERE id=$9',
+      [name, address||null, phone||null, email||null, tax_id||null, notes||null, country||null, contact_person||null, req.params.id]
+    );
+    res.json({ message: 'Manufacturer updated' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/manufacturers/:id', authenticateToken, adminOnly, async (req, res) => {
+  try {
+    await query('DELETE FROM manufacturers WHERE id=$1', [req.params.id]);
+    res.json({ message: 'Manufacturer deleted' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ════════════════════════════════════════════════════════════════════════════
 //  COMPANY SETTINGS
 // ════════════════════════════════════════════════════════════════════════════
@@ -2241,7 +2283,7 @@ app.post('/api/sync/warehouse-alerts', authenticateToken, async (req, res) => {
 app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
   const { entity } = req.params;
   const { rows } = req.body;
-  const allowed = ['customers', 'products', 'suppliers', 'settings', 'inbound', 'outbound', 'support', 'categories', 'subcategories'];
+  const allowed = ['customers', 'products', 'suppliers', 'manufacturers', 'settings', 'inbound', 'outbound', 'support', 'categories', 'subcategories'];
   if (!allowed.includes(entity)) return res.status(400).json({ error: 'Invalid entity' });
   if (!rows || !Array.isArray(rows)) return res.status(400).json({ error: 'rows array required' });
 
@@ -2363,6 +2405,30 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
         const ids = rows.map(r => r.id);
         await client.query(`DELETE FROM suppliers WHERE id NOT IN (${ids.map((_,i)=>`$${i+1}`).join(',')})`, ids);
       }
+    }
+
+    if (entity === 'manufacturers') {
+      await client.query(`CREATE TABLE IF NOT EXISTS manufacturers (
+        id SERIAL PRIMARY KEY, name TEXT NOT NULL, address TEXT, phone TEXT,
+        email TEXT, tax_id TEXT, country TEXT, notes TEXT, contact_person TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )`).catch(() => {});
+      for (const r of rows) {
+        await client.query(`
+          INSERT INTO manufacturers (id, name, address, phone, email, tax_id, country, contact_person, notes, created_at)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+          ON CONFLICT (id) DO UPDATE SET
+            name=$2, address=$3, phone=$4, email=$5,
+            tax_id=$6, country=$7, contact_person=$8, notes=$9`,
+          [r.id, r.name, r.address||null, r.phone||null, r.email||null,
+           r.tax_id||null, r.country||null, r.contact_person||null, r.notes||null, r.created_at]);
+      }
+      if (rows.length > 0) {
+        const ids = rows.map(r => r.id);
+        await client.query(`DELETE FROM manufacturers WHERE id NOT IN (${ids.map((_,i)=>`$${i+1}`).join(',')})`, ids);
+      }
+      // אפס sequence
+      await client.query(`SELECT setval('manufacturers_id_seq', COALESCE((SELECT MAX(id) FROM manufacturers), 0) + 1, false)`).catch(() => {});
     }
 
     await client.query('COMMIT');

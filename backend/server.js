@@ -958,6 +958,51 @@ app.delete('/api/suppliers/:id', authenticateToken, (req, res) => {
   });
 });
 
+// ============ MANUFACTURERS ROUTES ============
+
+app.get('/api/manufacturers', authenticateToken, (req, res) => {
+  db.all('SELECT * FROM manufacturers ORDER BY name', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.post('/api/manufacturers', authenticateToken, (req, res) => {
+  const { name, address, phone, email, tax_id, notes, country, contact_person } = req.body;
+  db.run(
+    'INSERT INTO manufacturers (name, address, phone, email, tax_id, notes, country, contact_person) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [name, address, phone, email, tax_id, notes, country, contact_person],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      logActivity(req.user.id, 'CREATE_MANUFACTURER', 'manufacturer', this.lastID, { name });
+      res.json({ id: this.lastID, ...req.body });
+    }
+  );
+});
+
+app.put('/api/manufacturers/:id', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  const { name, address, phone, email, tax_id, notes, country, contact_person } = req.body;
+  db.run(
+    'UPDATE manufacturers SET name = ?, address = ?, phone = ?, email = ?, tax_id = ?, notes = ?, country = ?, contact_person = ? WHERE id = ?',
+    [name, address, phone, email, tax_id, notes, country, contact_person, id],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      logActivity(req.user.id, 'UPDATE_MANUFACTURER', 'manufacturer', id, req.body);
+      res.json({ message: 'Manufacturer updated' });
+    }
+  );
+});
+
+app.delete('/api/manufacturers/:id', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  db.run('DELETE FROM manufacturers WHERE id = ?', [id], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    logActivity(req.user.id, 'DELETE_MANUFACTURER', 'manufacturer', id, {});
+    res.json({ message: 'Manufacturer deleted' });
+  });
+});
+
 // ============ CUSTOMERS ROUTES ============
 
 app.get('/api/customers', authenticateToken, (req, res) => {

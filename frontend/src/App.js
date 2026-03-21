@@ -10,6 +10,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Products from './pages/Products';
 import Suppliers from './pages/Suppliers';
+import Manufacturers from './pages/Manufacturers';
 import Customers from './pages/Customers';
 import Inbound from './pages/Inbound';
 import Outbound from './pages/Outbound';
@@ -301,6 +302,7 @@ function AppRoutes() {
             <Route index element={<Navigate to="/admin/products" />} />
             <Route path="products" element={<Products />} />
             <Route path="suppliers" element={<Suppliers />} />
+            <Route path="manufacturers" element={<Manufacturers />} />
             <Route path="customers" element={<Customers />} />
             <Route path="settings" element={<Settings />} />
             <Route path="users" element={<Users />} />

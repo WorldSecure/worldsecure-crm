@@ -31,6 +31,7 @@ export const en = {
   inbound: 'Inbound',
   outbound: 'Outbound',
   suppliers: 'Suppliers',
+  manufacturers: 'Manufacturers',
   customers: 'Customers',
   reports: 'Reports',
   settings: 'Settings',
