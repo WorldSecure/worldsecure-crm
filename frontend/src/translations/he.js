@@ -91,6 +91,7 @@ export const he = {
   // Contact Info
   address: 'כתובת',
   phone: 'טלפון',
+  add_phone: 'הוסף טלפון',
   tax_id: 'עוסק מורשה / ח.פ.',
   website: 'אתר',
   notes: 'הערות',

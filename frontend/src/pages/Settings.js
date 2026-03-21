@@ -30,6 +30,14 @@ function Settings() {
   phone2_primary: false, 
   phone3_primary: false
 });
+
+  // phones array — [{number, primary}]
+  const [phones, setPhones] = useState([{ number: '', primary: false }]);
+
+  const addPhone = () => { if (phones.length < 5) setPhones([...phones, { number: '', primary: false }]); };
+  const removePhone = (i) => { if (phones.length <= 1) return; setPhones(phones.filter((_, idx) => idx !== i)); };
+  const updatePhone = (i, field, value) => { const n = [...phones]; n[i] = { ...n[i], [field]: value }; setPhones(n); };
+
   
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
@@ -63,6 +71,14 @@ function Settings() {
   phone3_primary: response.data.phone3_primary || false
 });
 
+      // בנה את phones array מהנתונים הישנים
+      const loadedPhones = [];
+      if (response.data.phone?.trim())  loadedPhones.push({ number: response.data.phone,  primary: response.data.phone1_primary || false });
+      if (response.data.phone2?.trim()) loadedPhones.push({ number: response.data.phone2, primary: response.data.phone2_primary || false });
+      if (response.data.phone3?.trim()) loadedPhones.push({ number: response.data.phone3, primary: response.data.phone3_primary || false });
+      setPhones(loadedPhones.length > 0 ? loadedPhones : [{ number: '', primary: false }]);
+
+
       if (response.data.logo_base64) {
         setLogoPreview(response.data.logo_base64);
       } else if (response.data.logo_path) {
@@ -79,7 +95,16 @@ function Settings() {
     e.preventDefault();
     
     try {
-      await axios.put('/api/company', companyData);
+      // המר phones array לשדות phone/phone2/phone3
+      const phoneData = {
+        phone:         phones[0]?.number || '',
+        phone2:        phones[1]?.number || '',
+        phone3:        phones[2]?.number || '',
+        phone1_primary: phones[0]?.primary || false,
+        phone2_primary: phones[1]?.primary || false,
+        phone3_primary: phones[2]?.primary || false,
+      };
+      await axios.put('/api/company', { ...companyData, ...phoneData });
       alert(t('success'));
     } catch (error) {
       alert(t('error') + ': ' + (error.response?.data?.error || error.message));
@@ -509,68 +534,38 @@ function Settings() {
   <div className="form-group">
     <label className="form-label">{t('phone')}</label>
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-      {/* טלפון 1 */}
-      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-        <input
-          type="tel"
-          className="form-input"
-          style={{ flex: 1 }}
-          value={companyData.phone || ''}
-          onChange={(e) => setCompanyData({...companyData, phone: e.target.value})}
-        />
-        <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.9rem', cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={companyData.phone1_primary}
-            onChange={(e) => setCompanyData({...companyData, phone1_primary: e.target.checked})}
-            style={{ width: '18px', height: '18px', margin: 0 }}
-          />
-          ✅ 
-        </label>
-      </div>
-
-      {/* טלפון 2 */}
-      {companyData.phone2?.trim() && (
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+      {phones.map((ph, i) => (
+        <div key={i} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <input
             type="tel"
             className="form-input"
             style={{ flex: 1 }}
-            value={companyData.phone2 || ''}
-            onChange={(e) => setCompanyData({...companyData, phone2: e.target.value})}
+            value={ph.number}
+            onChange={(e) => updatePhone(i, 'number', e.target.value)}
+            placeholder="+972..."
           />
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.9rem', cursor: 'pointer' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.9rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
             <input
               type="checkbox"
-              checked={companyData.phone2_primary}
-              onChange={(e) => setCompanyData({...companyData, phone2_primary: e.target.checked})}
+              checked={ph.primary}
+              onChange={(e) => updatePhone(i, 'primary', e.target.checked)}
               style={{ width: '18px', height: '18px', margin: 0 }}
             />
-            ✅ 
+            ✅
           </label>
+          {phones.length > 1 && (
+            <button type="button" onClick={() => removePhone(i)}
+              style={{ padding: '0.3rem 0.6rem', background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+              ✕
+            </button>
+          )}
         </div>
-      )}
-
-      {/* טלפון 3 */}
-      {companyData.phone3?.trim() && (
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-          <input
-            type="tel"
-            className="form-input"
-            style={{ flex: 1 }}
-            value={companyData.phone3 || ''}
-            onChange={(e) => setCompanyData({...companyData, phone3: e.target.value})}
-          />
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.9rem', cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={companyData.phone3_primary}
-              onChange={(e) => setCompanyData({...companyData, phone3_primary: e.target.checked})}
-              style={{ width: '18px', height: '18px', margin: 0 }}
-            />
-            ✅ 
-          </label>
-        </div>
+      ))}
+      {phones.length < 5 && (
+        <button type="button" onClick={addPhone}
+          style={{ alignSelf: 'flex-start', padding: '0.3rem 0.8rem', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
+          + {t('add_phone') || 'הוסף טלפון'}
+        </button>
       )}
     </div>
   </div>

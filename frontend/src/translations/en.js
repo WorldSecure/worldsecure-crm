@@ -91,6 +91,7 @@ export const en = {
   // Contact Info
   address: 'Address',
   phone: 'Phone',
+  add_phone: 'Add Phone',
   tax_id: 'Tax ID',
   website: 'Website',
   notes: 'Notes',

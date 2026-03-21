@@ -91,6 +91,7 @@ export const pt = {
   // Contact Info
   address: 'Endereço',
   phone: 'Telefone',
+  add_phone: 'Adicionar Telefone',
   tax_id: 'CNPJ/CPF',
   website: 'Website',
   notes: 'Notas',
