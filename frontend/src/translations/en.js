@@ -32,6 +32,8 @@ export const en = {
   outbound: 'Outbound',
   suppliers: 'Suppliers',
   manufacturers: 'Manufacturers',
+  add_manufacturer: 'Add Manufacturer',
+  edit_manufacturer: 'Edit Manufacturer',
   customers: 'Customers',
   reports: 'Reports',
   settings: 'Settings',

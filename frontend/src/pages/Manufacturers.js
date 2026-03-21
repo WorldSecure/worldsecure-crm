@@ -220,7 +220,7 @@ function Manufacturers() {
               setShowModal(true);
             }}
           >
-            {t('add_supplier')}
+            {t('add_manufacturer') || 'Add Manufacturer'}
           </button>
           )}
         </div>
@@ -390,7 +390,7 @@ function Manufacturers() {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="modal-title">
-                {editingSupplier ? t('edit_supplier') : t('add_supplier')}
+                {editingSupplier ? t('edit_manufacturer') || 'Edit Manufacturer' : t('add_manufacturer') || 'Add Manufacturer'}
               </h3>
               <button 
                 className="modal-close"

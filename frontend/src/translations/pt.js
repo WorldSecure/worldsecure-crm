@@ -32,6 +32,8 @@ export const pt = {
   outbound: 'Saída',
   suppliers: 'Fornecedores',
   manufacturers: 'Fabricantes',
+  add_manufacturer: 'Adicionar Fabricante',
+  edit_manufacturer: 'Editar Fabricante',
   customers: 'Clientes',
   reports: 'Relatórios',
   settings: 'Configurações',

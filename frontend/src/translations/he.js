@@ -32,6 +32,8 @@ export const he = {
   outbound: 'הוצאה מהמחסן',
   suppliers: 'ספקים',
   manufacturers: 'יצרנים',
+  add_manufacturer: 'הוסף יצרן',
+  edit_manufacturer: 'ערוך יצרן',
   customers: 'לקוחות',
   reports: 'דוחות',
   settings: 'הגדרות',
