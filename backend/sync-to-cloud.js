@@ -251,28 +251,35 @@ async function syncProductsFromCloud() {
 
   let count = 0;
   for (const p of products) {
-    // בדוק מי עדכן את הכמות אחרון לפי timestamp
     const existing = await sqliteGet(
       'SELECT quantity, quantity_updated_at FROM products WHERE id=?', [p.id]
     ).catch(() => null);
 
     const cloudTs = normalizeTs(p.quantity_updated_at);
     const localTs = normalizeTs(existing?.quantity_updated_at);
-    // אם הענן חדש יותר או אין timestamp מקומי — בטל את הכמות מהענן
     const useCloudQty = !existing || cloudTs >= localTs;
     const finalQty = useCloudQty ? (p.quantity || 0) : existing.quantity;
     const finalQtyTs = useCloudQty ? (p.quantity_updated_at || null) : existing.quantity_updated_at;
 
-    await sqliteRun(`
-      INSERT OR REPLACE INTO products
-        (id, sku, name, name_he, name_pt, description, category_id, subcategory_id,
-         price, currency, unit, quantity, min_quantity, quantity_updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [p.id, p.sku, p.name, p.name_he||null, p.name_pt||null, p.description||null,
-       p.category_id||null, p.subcategory_id||null,
-       p.price||null, p.currency||'ILS', p.unit||'unit',
-       finalQty, p.min_quantity||0, finalQtyTs]
-    ).catch(() => {});
+    if (!existing) {
+      // מוצר חדש מהענן — הוסף מקומית
+      await sqliteRun(`
+        INSERT OR IGNORE INTO products
+          (id, sku, name, name_he, name_pt, description, category_id, subcategory_id,
+           price, currency, unit, quantity, min_quantity, quantity_updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [p.id, p.sku, p.name, p.name_he||null, p.name_pt||null, p.description||null,
+         p.category_id||null, p.subcategory_id||null,
+         p.price||null, p.currency||'ILS', p.unit||'unit',
+         finalQty, p.min_quantity||0, finalQtyTs]
+      ).catch(() => {});
+    } else {
+      // מוצר קיים — עדכן רק כמות (SKU/name/unit/category נשלטים מקומית)
+      await sqliteRun(
+        'UPDATE products SET quantity=?, quantity_updated_at=? WHERE id=?',
+        [finalQty, finalQtyTs, p.id]
+      ).catch(() => {});
+    }
     count++;
   }
   if (count > 0) log(`  ↳ products from cloud: ${count} synced`);
