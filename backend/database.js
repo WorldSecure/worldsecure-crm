@@ -93,6 +93,9 @@ db.serialize(() => {
   // Add translation columns if they don't exist
   db.run(`ALTER TABLE products ADD COLUMN name_he TEXT`, () => {});
   db.run(`ALTER TABLE products ADD COLUMN name_pt TEXT`, () => {});
+  // meta_updated_at — timestamp לשדות SKU/name/unit/category (לוגיקת last-write-wins)
+  db.run(`ALTER TABLE products ADD COLUMN meta_updated_at TEXT`, () => {});
+  db.run(`ALTER TABLE products ADD COLUMN subcategory_id INTEGER`, () => {});
 
   // Price history table
   db.run(`CREATE TABLE IF NOT EXISTS product_price_history (

@@ -806,12 +806,12 @@ app.post('/api/products/translate', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/products', authenticateToken, (req, res) => {
-  const { sku, name, description, category_id, price, currency, unit, quantity, min_quantity, name_he, name_pt } = req.body;
+  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt } = req.body;
   
   db.run(
-    `INSERT INTO products (sku, name, description, category_id, price, currency, unit, quantity, min_quantity, name_he, name_pt) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [sku, name, description, category_id, price, currency || 'ILS', unit, quantity || 0, min_quantity || 0, name_he || null, name_pt || null],
+    `INSERT INTO products (sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, meta_updated_at) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+    [sku, name, description, category_id, subcategory_id||null, price, currency || 'ILS', unit, quantity || 0, min_quantity || 0, name_he || null, name_pt || null],
     function(err) {
       if (err) {
         return res.status(500).json({ error: err.message });
@@ -862,13 +862,13 @@ app.delete('/api/products/:id/price-history/:hid', authenticateToken, (req, res)
 
 app.put('/api/products/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
-  const { sku, name, description, category_id, price, currency, unit, quantity, min_quantity, name_he, name_pt } = req.body;
+  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt } = req.body;
   
   db.run(
     `UPDATE products 
-     SET sku = ?, name = ?, description = ?, category_id = ?, price = ?, currency = ?, unit = ?, quantity = ?, min_quantity = ?, name_he = ?, name_pt = ?, quantity_updated_at = datetime('now')
+     SET sku = ?, name = ?, description = ?, category_id = ?, subcategory_id = ?, price = ?, currency = ?, unit = ?, quantity = ?, min_quantity = ?, name_he = ?, name_pt = ?, quantity_updated_at = datetime('now'), meta_updated_at = datetime('now')
      WHERE id = ?`,
-    [sku, name, description, category_id, price, currency || 'ILS', unit, quantity, min_quantity, name_he || null, name_pt || null, id],
+    [sku, name, description, category_id, subcategory_id||null, price, currency || 'ILS', unit, quantity, min_quantity, name_he || null, name_pt || null, id],
     (err) => {
       if (err) {
         return res.status(500).json({ error: err.message });

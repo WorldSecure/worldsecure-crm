@@ -127,7 +127,7 @@ async function syncLocalToCloud() {
     await syncEntityToCloud('categories',    'SELECT * FROM categories');
     await syncEntityToCloud('subcategories', 'SELECT * FROM subcategories');
     await syncEntityToCloud('customers',  'SELECT * FROM customers');
-    await syncEntityToCloud('products',   'SELECT id, sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, quantity_updated_at FROM products');
+    await syncEntityToCloud('products',   'SELECT id, sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at FROM products');
     await syncEntityToCloud('suppliers',  'SELECT * FROM suppliers');
     await syncEmailSignaturesToCloud();
     await syncInboundToCloud();
@@ -246,35 +246,56 @@ async function syncProductsFromCloud() {
   await sqliteRun('ALTER TABLE products ADD COLUMN name_he TEXT').catch(() => {});
   await sqliteRun('ALTER TABLE products ADD COLUMN name_pt TEXT').catch(() => {});
   await sqliteRun('ALTER TABLE products ADD COLUMN quantity_updated_at TEXT').catch(() => {});
+  await sqliteRun('ALTER TABLE products ADD COLUMN meta_updated_at TEXT').catch(() => {});
 
   const normalizeTs = (v) => v ? String(v).replace(' ', 'T').slice(0, 19) : '';
 
   let count = 0;
   for (const p of products) {
     const existing = await sqliteGet(
-      'SELECT quantity, quantity_updated_at FROM products WHERE id=?', [p.id]
+      'SELECT quantity, quantity_updated_at, meta_updated_at FROM products WHERE id=?', [p.id]
     ).catch(() => null);
 
-    const cloudTs = normalizeTs(p.quantity_updated_at);
-    const localTs = normalizeTs(existing?.quantity_updated_at);
-    const useCloudQty = !existing || cloudTs >= localTs;
-    const finalQty = useCloudQty ? (p.quantity || 0) : existing.quantity;
+    // לוגיקת כמות — מי עדכן אחרון
+    const cloudQtyTs = normalizeTs(p.quantity_updated_at);
+    const localQtyTs = normalizeTs(existing?.quantity_updated_at);
+    const useCloudQty = !existing || cloudQtyTs >= localQtyTs;
+    const finalQty   = useCloudQty ? (p.quantity || 0) : existing.quantity;
     const finalQtyTs = useCloudQty ? (p.quantity_updated_at || null) : existing.quantity_updated_at;
+
+    // לוגיקת meta (SKU/name/unit/category) — מי עדכן אחרון
+    const cloudMetaTs = normalizeTs(p.meta_updated_at);
+    const localMetaTs = normalizeTs(existing?.meta_updated_at);
+    const useCloudMeta = !existing || cloudMetaTs >= localMetaTs;
 
     if (!existing) {
       // מוצר חדש מהענן — הוסף מקומית
       await sqliteRun(`
         INSERT OR IGNORE INTO products
           (id, sku, name, name_he, name_pt, description, category_id, subcategory_id,
-           price, currency, unit, quantity, min_quantity, quantity_updated_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [p.id, p.sku, p.name, p.name_he||null, p.name_pt||null, p.description||null,
          p.category_id||null, p.subcategory_id||null,
          p.price||null, p.currency||'ILS', p.unit||'unit',
-         finalQty, p.min_quantity||0, finalQtyTs]
+         finalQty, p.min_quantity||0, finalQtyTs, p.meta_updated_at||null]
+      ).catch(() => {});
+    } else if (useCloudMeta) {
+      // ענן עדכן meta אחרון — עדכן גם meta וגם כמות
+      await sqliteRun(`
+        UPDATE products SET
+          sku=?, name=?, name_he=?, name_pt=?, description=?,
+          category_id=?, subcategory_id=?, price=?, currency=?, unit=?,
+          min_quantity=?, meta_updated_at=?,
+          quantity=?, quantity_updated_at=?
+        WHERE id=?`,
+        [p.sku, p.name, p.name_he||null, p.name_pt||null, p.description||null,
+         p.category_id||null, p.subcategory_id||null, p.price||null, p.currency||'ILS', p.unit||'unit',
+         p.min_quantity||0, p.meta_updated_at||null,
+         finalQty, finalQtyTs, p.id]
       ).catch(() => {});
     } else {
-      // מוצר קיים — עדכן רק כמות (SKU/name/unit/category נשלטים מקומית)
+      // מקומי עדכן meta אחרון — עדכן רק כמות
       await sqliteRun(
         'UPDATE products SET quantity=?, quantity_updated_at=? WHERE id=?',
         [finalQty, finalQtyTs, p.id]
