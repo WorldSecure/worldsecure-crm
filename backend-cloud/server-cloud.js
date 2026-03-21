@@ -201,11 +201,22 @@ app.get('/api/products', authenticateToken, async (req, res) => {
   try {
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory_id INTEGER').catch(() => {});
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS quantity_updated_at TIMESTAMPTZ').catch(() => {});
+    await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier_id INTEGER').catch(() => {});
+    await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS manufacturer_id INTEGER').catch(() => {});
+    await query(`CREATE TABLE IF NOT EXISTS manufacturers (
+      id SERIAL PRIMARY KEY, name TEXT NOT NULL, address TEXT, phone TEXT,
+      email TEXT, tax_id TEXT, country TEXT, notes TEXT, contact_person TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`).catch(() => {});
     const r = await query(`
       SELECT p.*, c.name as category_name, c.name_he as category_name_he, c.name_pt as category_name_pt,
-             s.name as subcategory_name, s.name_he as subcategory_name_he, s.name_pt as subcategory_name_pt
+             s.name as subcategory_name, s.name_he as subcategory_name_he, s.name_pt as subcategory_name_pt,
+             sup.name as supplier_name, man.name as manufacturer_name
       FROM products p LEFT JOIN categories c ON p.category_id = c.id
-      LEFT JOIN subcategories s ON p.subcategory_id = s.id ORDER BY p.name
+      LEFT JOIN subcategories s ON p.subcategory_id = s.id
+      LEFT JOIN suppliers sup ON p.supplier_id = sup.id
+      LEFT JOIN manufacturers man ON p.manufacturer_id = man.id
+      ORDER BY p.name
     `);
     res.json(r.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -353,32 +364,34 @@ app.delete('/api/customers/:id', authenticateToken, adminOnly, async (req, res) 
 
 // ── Products write ────────────────────────────────────────────────────────────
 app.post('/api/products', authenticateToken, adminOnly, async (req, res) => {
-  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt } = req.body;
+  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id } = req.body;
   try {
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS meta_updated_at TIMESTAMPTZ').catch(() => {});
+    await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier_id INTEGER').catch(() => {});
+    await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS manufacturer_id INTEGER').catch(() => {});
     const r = await query(
-      'INSERT INTO products (sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, meta_updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW()) RETURNING *',
-      [sku, name, description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null, quantity||0, min_quantity||0, name_he||null, name_pt||null]
+      'INSERT INTO products (sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, meta_updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW()) RETURNING *',
+      [sku, name, description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null, quantity||0, min_quantity||0, name_he||null, name_pt||null, supplier_id||null, manufacturer_id||null]
     );
     res.json(r.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
-  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, _skip_quantity } = req.body;
+  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, _skip_quantity } = req.body;
   try {
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS meta_updated_at TIMESTAMPTZ').catch(() => {});
+    await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier_id INTEGER').catch(() => {});
+    await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS manufacturer_id INTEGER').catch(() => {});
     if (_skip_quantity) {
-      // קריאה מסינק — אל תדרוס כמות עדכנית יותר בענן
       await query(
-        'UPDATE products SET sku=$1, name=$2, description=$3, category_id=$4, subcategory_id=$5, price=$6, currency=$7, unit=$8, min_quantity=$9, name_he=$10, name_pt=$11, meta_updated_at=$12 WHERE id=$13',
-        [sku, name, description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null, min_quantity||0, name_he||null, name_pt||null, req.body.meta_updated_at||null, req.params.id]
+        'UPDATE products SET sku=$1, name=$2, description=$3, category_id=$4, subcategory_id=$5, price=$6, currency=$7, unit=$8, min_quantity=$9, name_he=$10, name_pt=$11, supplier_id=$12, manufacturer_id=$13, meta_updated_at=$14 WHERE id=$15',
+        [sku, name, description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null, min_quantity||0, name_he||null, name_pt||null, supplier_id||null, manufacturer_id||null, req.body.meta_updated_at||null, req.params.id]
       );
     } else {
-      // עריכה ידנית — עדכן גם כמות ו-meta_updated_at
       await query(
-        'UPDATE products SET sku=$1, name=$2, description=$3, category_id=$4, subcategory_id=$5, price=$6, currency=$7, unit=$8, quantity=$9, min_quantity=$10, name_he=$11, name_pt=$12, quantity_updated_at=NOW(), meta_updated_at=NOW() WHERE id=$13',
-        [sku, name, description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null, quantity||0, min_quantity||0, name_he||null, name_pt||null, req.params.id]
+        'UPDATE products SET sku=$1, name=$2, description=$3, category_id=$4, subcategory_id=$5, price=$6, currency=$7, unit=$8, quantity=$9, min_quantity=$10, name_he=$11, name_pt=$12, supplier_id=$13, manufacturer_id=$14, quantity_updated_at=NOW(), meta_updated_at=NOW() WHERE id=$15',
+        [sku, name, description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null, quantity||0, min_quantity||0, name_he||null, name_pt||null, supplier_id||null, manufacturer_id||null, req.params.id]
       );
     }
     res.json({ message: 'Product updated' });
@@ -2362,27 +2375,31 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
         const useLocalMeta = !cloudMetaTs || (localMetaTs && localMetaTs > cloudMetaTs.toISOString().slice(0,19));
         await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS meta_updated_at TIMESTAMPTZ`).catch(() => {});
         await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory_id INTEGER`).catch(() => {});
+        await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier_id INTEGER`).catch(() => {});
+        await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS manufacturer_id INTEGER`).catch(() => {});
         await client.query(`
-          INSERT INTO products (id, sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at, created_at)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+          INSERT INTO products (id, sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at, supplier_id, manufacturer_id, created_at)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
           ON CONFLICT (id) DO UPDATE SET
-            sku         = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $2  ELSE products.sku END,
-            name        = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $3  ELSE products.name END,
-            name_he     = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $4  ELSE products.name_he END,
-            name_pt     = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $5  ELSE products.name_pt END,
-            description = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $6  ELSE products.description END,
-            category_id = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $7  ELSE products.category_id END,
+            sku            = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $2  ELSE products.sku END,
+            name           = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $3  ELSE products.name END,
+            name_he        = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $4  ELSE products.name_he END,
+            name_pt        = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $5  ELSE products.name_pt END,
+            description    = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $6  ELSE products.description END,
+            category_id    = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $7  ELSE products.category_id END,
             subcategory_id = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $8  ELSE products.subcategory_id END,
-            price       = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $9  ELSE products.price END,
-            currency    = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $10 ELSE products.currency END,
-            unit        = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $11 ELSE products.unit END,
-            min_quantity= CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $13 ELSE products.min_quantity END,
-            meta_updated_at = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $15::timestamptz ELSE products.meta_updated_at END,
-            quantity    = CASE WHEN $14::text IS NOT NULL AND ($14::timestamptz > COALESCE(products.quantity_updated_at,'1970-01-01')) THEN $12 ELSE products.quantity END,
+            price          = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $9  ELSE products.price END,
+            currency       = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $10 ELSE products.currency END,
+            unit           = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $11 ELSE products.unit END,
+            min_quantity   = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $13 ELSE products.min_quantity END,
+            supplier_id    = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $16 ELSE products.supplier_id END,
+            manufacturer_id= CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $17 ELSE products.manufacturer_id END,
+            meta_updated_at= CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $15::timestamptz ELSE products.meta_updated_at END,
+            quantity       = CASE WHEN $14::text IS NOT NULL AND ($14::timestamptz > COALESCE(products.quantity_updated_at,'1970-01-01')) THEN $12 ELSE products.quantity END,
             quantity_updated_at = CASE WHEN $14::text IS NOT NULL AND ($14::timestamptz > COALESCE(products.quantity_updated_at,'1970-01-01')) THEN $14::timestamptz ELSE products.quantity_updated_at END`,
           [r.id, r.sku, r.name, r.name_he||null, r.name_pt||null, r.description||null,
            r.category_id||null, r.subcategory_id||null, r.price||null, r.currency||'ILS', r.unit||'unit',
-           qty, minQty, localQtyTs||null, localMetaTs||null, r.created_at]);
+           qty, minQty, localQtyTs||null, localMetaTs||null, r.supplier_id||null, r.manufacturer_id||null, r.created_at]);
       }
       if (rows.length > 0) {
         const ids = rows.map(r => r.id);

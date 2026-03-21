@@ -96,6 +96,8 @@ db.serialize(() => {
   // meta_updated_at — timestamp לשדות SKU/name/unit/category (לוגיקת last-write-wins)
   db.run(`ALTER TABLE products ADD COLUMN meta_updated_at TEXT`, () => {});
   db.run(`ALTER TABLE products ADD COLUMN subcategory_id INTEGER`, () => {});
+  db.run(`ALTER TABLE products ADD COLUMN supplier_id INTEGER`, () => {});
+  db.run(`ALTER TABLE products ADD COLUMN manufacturer_id INTEGER`, () => {});
 
   // Price history table
   db.run(`CREATE TABLE IF NOT EXISTS product_price_history (

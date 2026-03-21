@@ -39,6 +39,8 @@ function Products() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [manufacturers, setManufacturers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -71,7 +73,9 @@ function Products() {
     currency: 'ILS',
     unit: 'unit',
     quantity: 0,
-    min_quantity: 0
+    min_quantity: 0,
+    supplier_id: '',
+    manufacturer_id: ''
   });
 
   useEffect(() => {
@@ -93,15 +97,19 @@ function Products() {
 
   const fetchData = async () => {
     try {
-      const [productsRes, categoriesRes, subcategoriesRes] = await Promise.all([
+      const [productsRes, categoriesRes, subcategoriesRes, suppliersRes, manufacturersRes] = await Promise.all([
         axios.get('/api/products'),
         axios.get('/api/categories'),
-        axios.get('/api/subcategories')
+        axios.get('/api/subcategories'),
+        axios.get('/api/suppliers'),
+        axios.get('/api/manufacturers')
       ]);
       
       setProducts(productsRes.data);
       setCategories(categoriesRes.data);
       setSubcategories(subcategoriesRes.data);
+      setSuppliers(suppliersRes.data);
+      setManufacturers(manufacturersRes.data);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -338,7 +346,9 @@ function Products() {
       currency: product.currency || 'ILS',
       unit: product.unit,
       quantity: product.quantity,
-      min_quantity: product.min_quantity
+      min_quantity: product.min_quantity,
+      supplier_id: product.supplier_id || '',
+      manufacturer_id: product.manufacturer_id || ''
     });
     setShowAddPrice(false);
     setNewPrice({ price: '', currency: product.currency || 'ILS', effective_date: new Date().toISOString().split('T')[0] });
@@ -372,7 +382,9 @@ function Products() {
       currency: 'ILS',
       unit: 'unit',
       quantity: 0,
-      min_quantity: 0
+      min_quantity: 0,
+      supplier_id: '',
+      manufacturer_id: ''
     });
     setEditingProduct(null);
   };
@@ -533,13 +545,11 @@ function Products() {
                     {product.category_name && <span style={{ marginLeft: '0.75rem' }}>📂 {getCategoryName(product, language)}</span>}
                   </div>
 
-                  {/* Row 3: Unit + Min stock + Price (admin) */}
+                  {/* Row 3: Unit + Supplier + Manufacturer */}
                   <div style={{ fontSize: '0.82rem', color: '#666', marginBottom: '0.5rem' }}>
                     <span>📦 {getUnitTranslation(product.unit)}</span>
-                    <span style={{ marginLeft: '0.75rem' }}>⬇️ min: {product.min_quantity}</span>
-                    {isAdmin && product.price && (
-                      <span style={{ marginLeft: '0.75rem' }}>💰 {parseFloat(product.price).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} {product.currency || 'ILS'}</span>
-                    )}
+                    {product.supplier_name && <span style={{ marginLeft: '0.75rem' }}>🏭 {product.supplier_name}</span>}
+                    {product.manufacturer_name && <span style={{ marginLeft: '0.75rem' }}>🏗️ {product.manufacturer_name}</span>}
                   </div>
 
                   {/* Actions */}
@@ -576,16 +586,16 @@ function Products() {
                   {t('category')} <SortIcon field="category" />
                 </th>
                 <th>{t('quantity')}</th>
-                <th>{t('min_quantity')}</th>
-                {isAdmin && <th>{t('price')}</th>}
                 <th>{t('unit')}</th>
+                <th>🏭 {t('suppliers') || 'Supplier'}</th>
+                <th>🏗️ {t('manufacturers') || 'Manufacturer'}</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {sortedProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin ? "8" : "7"} className="text-center">{t('no_data')}</td>
+                  <td colSpan="8" className="text-center">{t('no_data')}</td>
                 </tr>
               ) : (
                 sortedProducts.map(product => (
@@ -600,9 +610,9 @@ function Products() {
                         <span className="badge badge-success">{product.quantity}</span>
                       )}
                     </td>
-                    <td>{product.min_quantity}</td>
-                    {isAdmin && <td>{product.price ? `${parseFloat(product.price).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ${product.currency || 'ILS'}` : '-'}</td>}
                     <td>{getUnitTranslation(product.unit)}</td>
+                    <td>{product.supplier_name || '-'}</td>
+                    <td>{product.manufacturer_name || '-'}</td>
                     <td>
                       {isAdmin && (
                       <div className="table-actions">
@@ -734,6 +744,34 @@ function Products() {
                     <option value="kg">{t('unit_kg')}</option>
                     <option value="liter">{t('unit_liter')}</option>
                     <option value="meter">{t('unit_meter')}</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">🏭 {t('suppliers') || 'Supplier'}</label>
+                  <select
+                    className="form-select"
+                    value={formData.supplier_id}
+                    onChange={(e) => setFormData({...formData, supplier_id: e.target.value})}
+                  >
+                    <option value="">{t('select') || '— None —'}</option>
+                    {suppliers.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">🏗️ {t('manufacturers') || 'Manufacturer'}</label>
+                  <select
+                    className="form-select"
+                    value={formData.manufacturer_id}
+                    onChange={(e) => setFormData({...formData, manufacturer_id: e.target.value})}
+                  >
+                    <option value="">{t('select') || '— None —'}</option>
+                    {manufacturers.map(m => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
                   </select>
                 </div>
               </div>

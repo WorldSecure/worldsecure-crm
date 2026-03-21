@@ -683,17 +683,17 @@ app.delete('/api/subcategories/:id', authenticateToken, (req, res) => {
 app.get('/api/products', authenticateToken, (req, res) => {
   const query = `
     SELECT p.*, c.name as category_name, c.name_he as category_name_he, c.name_pt as category_name_pt,
-           s.name as subcategory_name, s.name_he as subcategory_name_he, s.name_pt as subcategory_name_pt
+           s.name as subcategory_name, s.name_he as subcategory_name_he, s.name_pt as subcategory_name_pt,
+           sup.name as supplier_name, man.name as manufacturer_name
     FROM products p 
     LEFT JOIN categories c ON p.category_id = c.id
     LEFT JOIN subcategories s ON p.subcategory_id = s.id
+    LEFT JOIN suppliers sup ON p.supplier_id = sup.id
+    LEFT JOIN manufacturers man ON p.manufacturer_id = man.id
     ORDER BY p.name
   `;
-  
   db.all(query, [], (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
+    if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
 });
@@ -806,16 +806,14 @@ app.post('/api/products/translate', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/products', authenticateToken, (req, res) => {
-  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt } = req.body;
+  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id } = req.body;
   
   db.run(
-    `INSERT INTO products (sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, meta_updated_at) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-    [sku, name, description, category_id, subcategory_id||null, price, currency || 'ILS', unit, quantity || 0, min_quantity || 0, name_he || null, name_pt || null],
+    `INSERT INTO products (sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, meta_updated_at) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+    [sku, name, description, category_id, subcategory_id||null, price, currency || 'ILS', unit, quantity || 0, min_quantity || 0, name_he || null, name_pt || null, supplier_id||null, manufacturer_id||null],
     function(err) {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
+      if (err) return res.status(500).json({ error: err.message });
       logActivity(req.user.id, 'CREATE_PRODUCT', 'product', this.lastID, { sku, name });
       res.json({ id: this.lastID, ...req.body });
     }
@@ -862,18 +860,15 @@ app.delete('/api/products/:id/price-history/:hid', authenticateToken, (req, res)
 
 app.put('/api/products/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
-  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt } = req.body;
+  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id } = req.body;
   
   db.run(
     `UPDATE products 
-     SET sku = ?, name = ?, description = ?, category_id = ?, subcategory_id = ?, price = ?, currency = ?, unit = ?, quantity = ?, min_quantity = ?, name_he = ?, name_pt = ?, quantity_updated_at = datetime('now'), meta_updated_at = datetime('now')
+     SET sku = ?, name = ?, description = ?, category_id = ?, subcategory_id = ?, price = ?, currency = ?, unit = ?, quantity = ?, min_quantity = ?, name_he = ?, name_pt = ?, supplier_id = ?, manufacturer_id = ?, quantity_updated_at = datetime('now'), meta_updated_at = datetime('now')
      WHERE id = ?`,
-    [sku, name, description, category_id, subcategory_id||null, price, currency || 'ILS', unit, quantity, min_quantity, name_he || null, name_pt || null, id],
+    [sku, name, description, category_id, subcategory_id||null, price, currency || 'ILS', unit, quantity, min_quantity, name_he || null, name_pt || null, supplier_id||null, manufacturer_id||null, id],
     (err) => {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
-      // Auto-resolve stock alerts if quantity now sufficient
+      if (err) return res.status(500).json({ error: err.message });
       autoResolveStockAlerts(id);
       logActivity(req.user.id, 'UPDATE_PRODUCT', 'product', id, req.body);
       res.json({ message: 'Product updated' });
