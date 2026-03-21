@@ -124,6 +124,8 @@ async function syncLocalToCloud() {
   try {
     await syncUsersToCloud();
     await syncQrToCloud();
+    await syncEntityToCloud('categories',    'SELECT * FROM categories');
+    await syncEntityToCloud('subcategories', 'SELECT * FROM subcategories');
     await syncEntityToCloud('customers',  'SELECT * FROM customers');
     await syncEntityToCloud('products',   'SELECT id, sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, quantity_updated_at FROM products');
     await syncEntityToCloud('suppliers',  'SELECT * FROM suppliers');

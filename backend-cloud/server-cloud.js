@@ -2239,13 +2239,52 @@ app.post('/api/sync/warehouse-alerts', authenticateToken, async (req, res) => {
 app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
   const { entity } = req.params;
   const { rows } = req.body;
-  const allowed = ['customers', 'products', 'suppliers', 'settings', 'inbound', 'outbound', 'support'];
+  const allowed = ['customers', 'products', 'suppliers', 'settings', 'inbound', 'outbound', 'support', 'categories', 'subcategories'];
   if (!allowed.includes(entity)) return res.status(400).json({ error: 'Invalid entity' });
   if (!rows || !Array.isArray(rows)) return res.status(400).json({ error: 'rows array required' });
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    if (entity === 'categories') {
+      await client.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_he TEXT').catch(() => {});
+      await client.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_pt TEXT').catch(() => {});
+      for (const r of rows) {
+        await client.query(`
+          INSERT INTO categories (id, name, name_he, name_pt, description)
+          VALUES ($1,$2,$3,$4,$5)
+          ON CONFLICT (id) DO UPDATE SET
+            name=$2, name_he=$3, name_pt=$4, description=$5`,
+          [r.id, r.name, r.name_he||null, r.name_pt||null, r.description||null]);
+      }
+      if (rows.length > 0) {
+        const ids = rows.map(r => r.id);
+        await client.query(`DELETE FROM categories WHERE id NOT IN (${ids.map((_,i)=>`$${i+1}`).join(',')})`, ids);
+      }
+    }
+
+    if (entity === 'subcategories') {
+      await client.query(`CREATE TABLE IF NOT EXISTS subcategories (
+        id SERIAL PRIMARY KEY, category_id INTEGER NOT NULL,
+        name TEXT NOT NULL, name_he TEXT, name_pt TEXT,
+        FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+      )`).catch(() => {});
+      await client.query('ALTER TABLE subcategories ADD COLUMN IF NOT EXISTS name_he TEXT').catch(() => {});
+      await client.query('ALTER TABLE subcategories ADD COLUMN IF NOT EXISTS name_pt TEXT').catch(() => {});
+      for (const r of rows) {
+        await client.query(`
+          INSERT INTO subcategories (id, category_id, name, name_he, name_pt)
+          VALUES ($1,$2,$3,$4,$5)
+          ON CONFLICT (id) DO UPDATE SET
+            category_id=$2, name=$3, name_he=$4, name_pt=$5`,
+          [r.id, r.category_id, r.name, r.name_he||null, r.name_pt||null]);
+      }
+      if (rows.length > 0) {
+        const ids = rows.map(r => r.id);
+        await client.query(`DELETE FROM subcategories WHERE id NOT IN (${ids.map((_,i)=>`$${i+1}`).join(',')})`, ids);
+      }
+    }
 
     if (entity === 'customers') {
       for (const r of rows) {
