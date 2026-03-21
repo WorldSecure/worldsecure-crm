@@ -337,23 +337,6 @@ function Products() {
           <h3 className="card-title">{t('products')}</h3>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             {isAdmin && (
-              <button
-                className="btn btn-secondary"
-                onClick={async () => {
-                  if (!window.confirm('תרגם אוטומטית את כל המוצרים שאין להם תרגום?')) return;
-                  try {
-                    const res = await axios.post('/api/products/translate-existing');
-                    alert(`✅ ${res.data.message}`);
-                    fetchData();
-                  } catch (e) {
-                    alert('שגיאה בתרגום: ' + e.message);
-                  }
-                }}
-              >
-                🌐 {t('translate_products') || 'תרגם מוצרים'}
-              </button>
-            )}
-            {isAdmin && (
             <button 
               className="btn btn-secondary"
               onClick={() => setShowCategoryModal(true)}
