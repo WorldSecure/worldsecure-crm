@@ -570,6 +570,7 @@ app.put('/api/company/email-signature', authenticateToken, (req, res) => {
 db.run(`ALTER TABLE categories ADD COLUMN name_he TEXT`, () => {});
 db.run(`ALTER TABLE categories ADD COLUMN name_pt TEXT`, () => {});
 db.run(`ALTER TABLE products ADD COLUMN subcategory_id INTEGER`, () => {});
+db.run(`ALTER TABLE products ADD COLUMN quantity_updated_at TEXT`, () => {});
 
 app.get('/api/categories', authenticateToken, (req, res) => {
   db.all('SELECT * FROM categories ORDER BY id', [], (err, rows) => {
@@ -865,7 +866,7 @@ app.put('/api/products/:id', authenticateToken, (req, res) => {
   
   db.run(
     `UPDATE products 
-     SET sku = ?, name = ?, description = ?, category_id = ?, price = ?, currency = ?, unit = ?, quantity = ?, min_quantity = ?, name_he = ?, name_pt = ?
+     SET sku = ?, name = ?, description = ?, category_id = ?, price = ?, currency = ?, unit = ?, quantity = ?, min_quantity = ?, name_he = ?, name_pt = ?, quantity_updated_at = datetime('now')
      WHERE id = ?`,
     [sku, name, description, category_id, price, currency || 'ILS', unit, quantity, min_quantity, name_he || null, name_pt || null, id],
     (err) => {
@@ -1056,7 +1057,7 @@ app.post('/api/inbound', authenticateToken, (req, res) => {
               
               // Update product quantity
               db.run(
-                'UPDATE products SET quantity = quantity + ? WHERE id = ?',
+                'UPDATE products SET quantity = quantity + ?, quantity_updated_at = datetime("now") WHERE id = ?',
                 [item.quantity, item.product_id],
                 (err) => {
                   if (err) return reject(err);
@@ -1146,7 +1147,7 @@ app.put('/api/inbound/:id', authenticateToken, (req, res) => {
         const reversePromises = oldItems.map(item => {
           return new Promise((resolve, reject) => {
             db.run(
-              'UPDATE products SET quantity = quantity - ? WHERE id = ?',
+              'UPDATE products SET quantity = quantity - ?, quantity_updated_at = datetime("now") WHERE id = ?',
               [item.quantity, item.product_id],
               (err) => {
                 if (err) return reject(err);
@@ -1175,7 +1176,7 @@ app.put('/api/inbound/:id', authenticateToken, (req, res) => {
                       
                       // Update product quantity
                       db.run(
-                        'UPDATE products SET quantity = quantity + ? WHERE id = ?',
+                        'UPDATE products SET quantity = quantity + ?, quantity_updated_at = datetime("now") WHERE id = ?',
                         [item.quantity, item.product_id],
                         (err) => {
                           if (err) return reject(err);
@@ -1294,7 +1295,7 @@ app.post('/api/outbound', authenticateToken, (req, res) => {
                 
                 // Update product quantity
                 db.run(
-                  'UPDATE products SET quantity = quantity - ? WHERE id = ?',
+                  'UPDATE products SET quantity = quantity - ?, quantity_updated_at = datetime("now") WHERE id = ?',
                   [item.quantity, item.product_id],
                   (err) => {
                     if (err) return reject(err);
@@ -1389,7 +1390,7 @@ app.put('/api/outbound/:id', authenticateToken, (req, res) => {
         const reversePromises = oldItems.map(item => {
           return new Promise((resolve, reject) => {
             db.run(
-              'UPDATE products SET quantity = quantity + ? WHERE id = ?',
+              'UPDATE products SET quantity = quantity + ?, quantity_updated_at = datetime("now") WHERE id = ?',
               [item.quantity, item.product_id],
               (err) => {
                 if (err) return reject(err);
@@ -1452,7 +1453,7 @@ app.put('/api/outbound/:id', authenticateToken, (req, res) => {
                           
                           // Update product quantity
                           db.run(
-                            'UPDATE products SET quantity = quantity - ? WHERE id = ?',
+                            'UPDATE products SET quantity = quantity - ?, quantity_updated_at = datetime("now") WHERE id = ?',
                             [item.quantity, item.product_id],
                             (err) => {
                               if (err) return reject(err);
@@ -1504,7 +1505,7 @@ app.delete('/api/inbound/:id', authenticateToken, (req, res) => {
       const updatePromises = items.map(item => {
         return new Promise((resolve, reject) => {
           db.run(
-            'UPDATE products SET quantity = quantity - ? WHERE id = ?',
+            'UPDATE products SET quantity = quantity - ?, quantity_updated_at = datetime("now") WHERE id = ?',
             [item.quantity, item.product_id],
             (err) => {
               if (err) return reject(err);
@@ -1550,7 +1551,7 @@ app.delete('/api/outbound/:id', authenticateToken, (req, res) => {
       const updatePromises = items.map(item => {
         return new Promise((resolve, reject) => {
           db.run(
-            'UPDATE products SET quantity = quantity + ? WHERE id = ?',
+            'UPDATE products SET quantity = quantity + ?, quantity_updated_at = datetime("now") WHERE id = ?',
             [item.quantity, item.product_id],
             (err) => {
               if (err) return reject(err);

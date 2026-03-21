@@ -125,7 +125,7 @@ async function syncLocalToCloud() {
     await syncUsersToCloud();
     await syncQrToCloud();
     await syncEntityToCloud('customers',  'SELECT * FROM customers');
-    await syncEntityToCloud('products',   'SELECT id, sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, min_quantity FROM products');
+    await syncEntityToCloud('products',   'SELECT id, sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, quantity_updated_at FROM products');
     await syncEntityToCloud('suppliers',  'SELECT * FROM suppliers');
     await syncEmailSignaturesToCloud();
     await syncInboundToCloud();
@@ -239,22 +239,37 @@ async function syncProductsFromCloud() {
   if (result.status !== 200) { log(`  ⚠ pull products: ${JSON.stringify(result.body)}`); return; }
   const products = result.body || [];
 
-  // migration — הוסף עמודות חדשות אם לא קיימות
+  // migration
   await sqliteRun('ALTER TABLE products ADD COLUMN subcategory_id INTEGER').catch(() => {});
   await sqliteRun('ALTER TABLE products ADD COLUMN name_he TEXT').catch(() => {});
   await sqliteRun('ALTER TABLE products ADD COLUMN name_pt TEXT').catch(() => {});
+  await sqliteRun('ALTER TABLE products ADD COLUMN quantity_updated_at TEXT').catch(() => {});
+
+  const normalizeTs = (v) => v ? String(v).replace(' ', 'T').slice(0, 19) : '';
 
   let count = 0;
   for (const p of products) {
+    // בדוק מי עדכן את הכמות אחרון לפי timestamp
+    const existing = await sqliteGet(
+      'SELECT quantity, quantity_updated_at FROM products WHERE id=?', [p.id]
+    ).catch(() => null);
+
+    const cloudTs = normalizeTs(p.quantity_updated_at);
+    const localTs = normalizeTs(existing?.quantity_updated_at);
+    // אם הענן חדש יותר או אין timestamp מקומי — בטל את הכמות מהענן
+    const useCloudQty = !existing || cloudTs >= localTs;
+    const finalQty = useCloudQty ? (p.quantity || 0) : existing.quantity;
+    const finalQtyTs = useCloudQty ? (p.quantity_updated_at || null) : existing.quantity_updated_at;
+
     await sqliteRun(`
       INSERT OR REPLACE INTO products
         (id, sku, name, name_he, name_pt, description, category_id, subcategory_id,
-         price, currency, unit, quantity, min_quantity)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         price, currency, unit, quantity, min_quantity, quantity_updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [p.id, p.sku, p.name, p.name_he||null, p.name_pt||null, p.description||null,
        p.category_id||null, p.subcategory_id||null,
        p.price||null, p.currency||'ILS', p.unit||'unit',
-       p.quantity||0, p.min_quantity||0]
+       finalQty, p.min_quantity||0, finalQtyTs]
     ).catch(() => {});
     count++;
   }

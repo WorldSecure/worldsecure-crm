@@ -200,6 +200,7 @@ app.get('/api/customers', authenticateToken, async (req, res) => {
 app.get('/api/products', authenticateToken, async (req, res) => {
   try {
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory_id INTEGER').catch(() => {});
+    await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS quantity_updated_at TIMESTAMPTZ').catch(() => {});
     const r = await query(`
       SELECT p.*, c.name as category_name, c.name_he as category_name_he, c.name_pt as category_name_pt,
              s.name as subcategory_name, s.name_he as subcategory_name_he, s.name_pt as subcategory_name_pt
@@ -363,13 +364,21 @@ app.post('/api/products', authenticateToken, adminOnly, async (req, res) => {
 });
 
 app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
-  const { sku, name, description, category_id, price, currency, unit, min_quantity, name_he, name_pt } = req.body;
+  const { sku, name, description, category_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, _skip_quantity } = req.body;
   try {
-    // quantity לא מתעדכן כאן — נשלט רק ע"י תעודות קבלה/משלוח
-    await query(
-      'UPDATE products SET sku=$1, name=$2, description=$3, category_id=$4, price=$5, currency=$6, unit=$7, min_quantity=$8, name_he=$9, name_pt=$10 WHERE id=$11',
-      [sku, name, description||null, category_id||null, price||null, currency||'ILS', unit||null, min_quantity||0, name_he||null, name_pt||null, req.params.id]
-    );
+    if (_skip_quantity) {
+      // קריאה מסינק — אל תדרוס כמות עדכנית יותר בענן
+      await query(
+        'UPDATE products SET sku=$1, name=$2, description=$3, category_id=$4, price=$5, currency=$6, unit=$7, min_quantity=$8, name_he=$9, name_pt=$10 WHERE id=$11',
+        [sku, name, description||null, category_id||null, price||null, currency||'ILS', unit||null, min_quantity||0, name_he||null, name_pt||null, req.params.id]
+      );
+    } else {
+      // עריכה ידנית — עדכן גם כמות
+      await query(
+        'UPDATE products SET sku=$1, name=$2, description=$3, category_id=$4, price=$5, currency=$6, unit=$7, quantity=$8, min_quantity=$9, name_he=$10, name_pt=$11, quantity_updated_at=NOW() WHERE id=$12',
+        [sku, name, description||null, category_id||null, price||null, currency||'ILS', unit||null, quantity||0, min_quantity||0, name_he||null, name_pt||null, req.params.id]
+      );
+    }
     res.json({ message: 'Product updated' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -616,7 +625,7 @@ app.post('/api/inbound', authenticateToken, async (req, res) => {
         [transactionId, item.product_id, item.quantity, item.notes]
       );
       await client.query(
-        'UPDATE products SET quantity = quantity + $1 WHERE id = $2',
+        'UPDATE products SET quantity = quantity + $1, quantity_updated_at = NOW() WHERE id = $2',
         [item.quantity, item.product_id]
       );
     }
@@ -699,7 +708,7 @@ app.post('/api/outbound', authenticateToken, async (req, res) => {
          item.num_cartons||null, item.use_pallets||false, item.cartons_per_pallet||null,
          item.pallet_dimensions||null, item.pallet_weight||null, item.num_pallets||null]
       );
-      await client.query('UPDATE products SET quantity = quantity - $1 WHERE id = $2', [item.quantity, item.product_id]);
+      await client.query('UPDATE products SET quantity = quantity - $1, quantity_updated_at = NOW() WHERE id = $2', [item.quantity, item.product_id]);
     }
     await client.query('COMMIT');
     await logActivity(req.user.id, 'CREATE_OUTBOUND', 'outbound', transactionId, { items: items.length });
@@ -739,7 +748,7 @@ app.delete('/api/inbound/:id', authenticateToken, async (req, res) => {
     // החזר כמויות למלאי
     const items = await client.query('SELECT product_id, quantity FROM inbound_items WHERE transaction_id=$1', [req.params.id]);
     for (const item of items.rows) {
-      await client.query('UPDATE products SET quantity = quantity - $1 WHERE id=$2', [item.quantity, item.product_id]);
+      await client.query('UPDATE products SET quantity = quantity - $1, quantity_updated_at = NOW() WHERE id=$2', [item.quantity, item.product_id]);
     }
     await client.query('DELETE FROM inbound_items WHERE transaction_id=$1', [req.params.id]);
     await client.query('DELETE FROM inbound_transactions WHERE id=$1', [req.params.id]);
@@ -760,7 +769,7 @@ app.delete('/api/outbound/:id', authenticateToken, async (req, res) => {
     // החזר כמויות למלאי
     const items = await client.query('SELECT product_id, quantity FROM outbound_items WHERE transaction_id=$1', [req.params.id]);
     for (const item of items.rows) {
-      await client.query('UPDATE products SET quantity = quantity + $1 WHERE id=$2', [item.quantity, item.product_id]);
+      await client.query('UPDATE products SET quantity = quantity + $1, quantity_updated_at = NOW() WHERE id=$2', [item.quantity, item.product_id]);
     }
     await client.query('DELETE FROM outbound_items WHERE transaction_id=$1', [req.params.id]);
     await client.query('DELETE FROM outbound_transactions WHERE id=$1', [req.params.id]);
@@ -2256,20 +2265,28 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
     }
 
     if (entity === 'products') {
+      await client.query('ALTER TABLE products ADD COLUMN IF NOT EXISTS quantity_updated_at TIMESTAMPTZ').catch(() => {});
       for (const r of rows) {
         const qty    = (r.quantity    != null) ? parseInt(r.quantity)    : 0;
         const minQty = (r.min_quantity != null) ? parseInt(r.min_quantity) : 0;
         // מחק כפילות sku עם id שונה (אם קיים מגרסה קודמת של הענן)
         await client.query(`DELETE FROM products WHERE sku=$1 AND id<>$2`, [r.sku, r.id]);
+        // עדכן כמות רק אם timestamp המקומי חדש יותר מהענן
+        const existing = await client.query('SELECT quantity_updated_at FROM products WHERE id=$1', [r.id]);
+        const cloudTs = existing.rows[0]?.quantity_updated_at;
+        const localTs = r.quantity_updated_at;
+        const useLocalQty = !cloudTs || (localTs && localTs > cloudTs.toISOString().slice(0,19));
         await client.query(`
-          INSERT INTO products (id, sku, name, name_he, name_pt, description, category_id, price, currency, unit, quantity, min_quantity, created_at)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+          INSERT INTO products (id, sku, name, name_he, name_pt, description, category_id, price, currency, unit, quantity, min_quantity, quantity_updated_at, created_at)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
           ON CONFLICT (id) DO UPDATE SET
             sku=$2, name=$3, name_he=$4, name_pt=$5, description=$6,
-            category_id=$7, price=$8, currency=$9, unit=$10, min_quantity=$12`,
+            category_id=$7, price=$8, currency=$9, unit=$10, min_quantity=$12,
+            quantity=CASE WHEN $13::text IS NOT NULL AND ($13::timestamptz > products.quantity_updated_at OR products.quantity_updated_at IS NULL) THEN $11 ELSE products.quantity END,
+            quantity_updated_at=CASE WHEN $13::text IS NOT NULL AND ($13::timestamptz > products.quantity_updated_at OR products.quantity_updated_at IS NULL) THEN $13::timestamptz ELSE products.quantity_updated_at END`,
           [r.id, r.sku, r.name, r.name_he||null, r.name_pt||null, r.description||null,
            r.category_id||null, r.price||null, r.currency||'ILS', r.unit||'unit',
-           qty, minQty, r.created_at]);
+           qty, minQty, localTs||null, r.created_at]);
       }
       if (rows.length > 0) {
         const ids = rows.map(r => r.id);
