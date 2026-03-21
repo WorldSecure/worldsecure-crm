@@ -363,11 +363,12 @@ app.post('/api/products', authenticateToken, adminOnly, async (req, res) => {
 });
 
 app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
-  const { sku, name, description, category_id, price, currency, unit, quantity, min_quantity, name_he, name_pt } = req.body;
+  const { sku, name, description, category_id, price, currency, unit, min_quantity, name_he, name_pt } = req.body;
   try {
+    // quantity לא מתעדכן כאן — נשלט רק ע"י תעודות קבלה/משלוח
     await query(
-      'UPDATE products SET sku=$1, name=$2, description=$3, category_id=$4, price=$5, currency=$6, unit=$7, quantity=$8, min_quantity=$9, name_he=$10, name_pt=$11 WHERE id=$12',
-      [sku, name, description||null, category_id||null, price||null, currency||'ILS', unit||null, quantity||0, min_quantity||0, name_he||null, name_pt||null, req.params.id]
+      'UPDATE products SET sku=$1, name=$2, description=$3, category_id=$4, price=$5, currency=$6, unit=$7, min_quantity=$8, name_he=$9, name_pt=$10 WHERE id=$11',
+      [sku, name, description||null, category_id||null, price||null, currency||'ILS', unit||null, min_quantity||0, name_he||null, name_pt||null, req.params.id]
     );
     res.json({ message: 'Product updated' });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -2265,7 +2266,7 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
           ON CONFLICT (id) DO UPDATE SET
             sku=$2, name=$3, name_he=$4, name_pt=$5, description=$6,
-            category_id=$7, price=$8, currency=$9, unit=$10, quantity=$11, min_quantity=$12`,
+            category_id=$7, price=$8, currency=$9, unit=$10, min_quantity=$12`,
           [r.id, r.sku, r.name, r.name_he||null, r.name_pt||null, r.description||null,
            r.category_id||null, r.price||null, r.currency||'ILS', r.unit||'unit',
            qty, minQty, r.created_at]);
