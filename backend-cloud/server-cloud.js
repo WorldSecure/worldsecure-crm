@@ -2258,10 +2258,7 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
             name=$2, name_he=$3, name_pt=$4, description=$5`,
           [r.id, r.name, r.name_he||null, r.name_pt||null, r.description||null]);
       }
-      if (rows.length > 0) {
-        const ids = rows.map(r => r.id);
-        await client.query(`DELETE FROM categories WHERE id NOT IN (${ids.map((_,i)=>`$${i+1}`).join(',')})`, ids);
-      }
+      // אין DELETE – categories מנוהלות משני הכיוונים, לא דורסים מחיקות ענן
       // אפס את ה-sequence
       await client.query(`SELECT setval('categories_id_seq', COALESCE((SELECT MAX(id) FROM categories), 0) + 1, false)`).catch(() => {});
     }
@@ -2282,10 +2279,7 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
             category_id=$2, name=$3, name_he=$4, name_pt=$5`,
           [r.id, r.category_id, r.name, r.name_he||null, r.name_pt||null]);
       }
-      if (rows.length > 0) {
-        const ids = rows.map(r => r.id);
-        await client.query(`DELETE FROM subcategories WHERE id NOT IN (${ids.map((_,i)=>`$${i+1}`).join(',')})`, ids);
-      }
+      // אין DELETE – subcategories מנוהלות משני הכיוונים, לא דורסים מחיקות ענן
       // אפס את ה-sequence כדי למנוע duplicate key בהוספה עתידית
       await client.query(`SELECT setval('subcategories_id_seq', COALESCE((SELECT MAX(id) FROM subcategories), 0) + 1, false)`).catch(() => {});
     }
@@ -2487,6 +2481,25 @@ app.get('/api/sync/pull/warehouse-alerts', authenticateToken, async (req, res) =
   try {
     // החזר הכל (pending + completed) כדי שהמקומי יידע על שינויי סטטוס
     const r = await query(`SELECT * FROM warehouse_alerts ORDER BY created_at DESC`);
+    res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Sync: Pull categories + subcategories from cloud → local ─────────────────
+app.get('/api/sync/pull/categories', authenticateToken, async (req, res) => {
+  try {
+    const r = await query('SELECT * FROM categories ORDER BY id');
+    res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/sync/pull/subcategories', authenticateToken, async (req, res) => {
+  try {
+    await query(`CREATE TABLE IF NOT EXISTS subcategories (
+      id SERIAL PRIMARY KEY, category_id INTEGER NOT NULL,
+      name TEXT NOT NULL, name_he TEXT, name_pt TEXT
+    )`).catch(() => {});
+    const r = await query('SELECT * FROM subcategories ORDER BY id');
     res.json(r.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

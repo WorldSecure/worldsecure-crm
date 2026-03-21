@@ -320,6 +320,8 @@ async function syncCloudToLocal() {
     await syncSettingsFromCloud();
     await syncUsersFromCloud();
     await syncQrFromCloud();
+    await syncCategoriesFromCloud();
+    await syncSubcategoriesFromCloud();
     await syncProductsFromCloud();
     await syncCustomersFromCloud();
     await syncSuppliersFromCloud();
@@ -333,6 +335,51 @@ async function syncCloudToLocal() {
   } catch (err) {
     log(`❌ CLOUD → LOCAL error: ${err.message}`);
   }
+}
+
+// ── Categories + Subcategories מהענן ──────────────────────────────────────────
+async function syncCategoriesFromCloud() {
+  const result = await apiRequest('GET', '/api/sync/pull/categories');
+  if (result.status !== 200) { log(`  ⚠ pull categories: ${JSON.stringify(result.body)}`); return; }
+  const rows = result.body || [];
+  let count = 0;
+  for (const r of rows) {
+    const existing = await sqliteGet('SELECT id FROM categories WHERE id=?', [r.id]).catch(() => null);
+    if (!existing) {
+      await sqliteRun(
+        'INSERT OR IGNORE INTO categories (id, name, name_he, name_pt, description) VALUES (?,?,?,?,?)',
+        [r.id, r.name, r.name_he||null, r.name_pt||null, r.description||null]
+      ).catch(() => {});
+      count++;
+    }
+  }
+  if (count > 0) log(`  ↳ categories from cloud: ${count} new`);
+}
+
+async function syncSubcategoriesFromCloud() {
+  const result = await apiRequest('GET', '/api/sync/pull/subcategories');
+  if (result.status !== 200) { log(`  ⚠ pull subcategories: ${JSON.stringify(result.body)}`); return; }
+  const rows = result.body || [];
+  // ודא שטבלת subcategories קיימת מקומית
+  await sqliteRun(`CREATE TABLE IF NOT EXISTS subcategories (
+    id INTEGER PRIMARY KEY,
+    category_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    name_he TEXT,
+    name_pt TEXT
+  )`).catch(() => {});
+  let count = 0;
+  for (const r of rows) {
+    const existing = await sqliteGet('SELECT id FROM subcategories WHERE id=?', [r.id]).catch(() => null);
+    if (!existing) {
+      await sqliteRun(
+        'INSERT OR IGNORE INTO subcategories (id, category_id, name, name_he, name_pt) VALUES (?,?,?,?,?)',
+        [r.id, r.category_id, r.name, r.name_he||null, r.name_pt||null]
+      ).catch(() => {});
+      count++;
+    }
+  }
+  if (count > 0) log(`  ↳ subcategories from cloud: ${count} new`);
 }
 
 // ── Inbound מהענן ─────────────────────────────────────────────────────────────
