@@ -42,7 +42,7 @@ function Products() {
   const [showModal, setShowModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null); // null=new, obj=edit
-  const [categoryForm, setCategoryForm] = useState({ name: '', name_he: '', name_pt: '' });
+  const [categoryForm, setCategoryForm] = useState({ value: '' });
   const [savingCategory, setSavingCategory] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -100,28 +100,57 @@ function Products() {
   // ── Category management ───────────────────────────────────────────────────
   const openNewCategory = () => {
     setEditingCategory(null);
-    setCategoryForm({ name: '', name_he: '', name_pt: '' });
+    setCategoryForm({ value: '' });
     setShowCategoryModal(true);
   };
 
   const openEditCategory = (cat) => {
     setEditingCategory(cat);
-    setCategoryForm({ name: cat.name || '', name_he: cat.name_he || '', name_pt: cat.name_pt || '' });
+    // הצג את השם בשפת המערכת הנוכחית
+    const currentVal = language === 'he' ? (cat.name_he || cat.name) :
+                       language === 'pt' ? (cat.name_pt || cat.name) : cat.name;
+    setCategoryForm({ value: currentVal || '' });
   };
 
   const handleSaveCategory = async () => {
-    if (!categoryForm.name.trim()) return;
+    if (!categoryForm.value.trim()) return;
     try {
       setSavingCategory(true);
-      if (editingCategory) {
-        await axios.put(`/api/categories/${editingCategory.id}`, categoryForm);
+      // בנה payload לפי שפת מערכת
+      const payload = {};
+      if (language === 'he') {
+        payload.name_he = categoryForm.value;
+        if (editingCategory) {
+          payload.name = editingCategory.name || categoryForm.value;
+          payload.name_pt = editingCategory.name_pt || null;
+        } else {
+          payload.name = categoryForm.value; // fallback לאנגלית
+        }
+      } else if (language === 'pt') {
+        payload.name_pt = categoryForm.value;
+        if (editingCategory) {
+          payload.name = editingCategory.name || categoryForm.value;
+          payload.name_he = editingCategory.name_he || null;
+        } else {
+          payload.name = categoryForm.value;
+        }
       } else {
-        await axios.post('/api/categories', categoryForm);
+        payload.name = categoryForm.value;
+        if (editingCategory) {
+          payload.name_he = editingCategory.name_he || null;
+          payload.name_pt = editingCategory.name_pt || null;
+        }
+      }
+
+      if (editingCategory) {
+        await axios.put(`/api/categories/${editingCategory.id}`, payload);
+      } else {
+        await axios.post('/api/categories', payload);
       }
       const res = await axios.get('/api/categories');
       setCategories(res.data);
       setEditingCategory(null);
-      setCategoryForm({ name: '', name_he: '', name_pt: '' });
+      setCategoryForm({ value: '' });
     } catch(e) { alert(e.response?.data?.error || e.message); }
     finally { setSavingCategory(false); }
   };
@@ -134,7 +163,7 @@ function Products() {
       setCategories(res.data);
       if (editingCategory?.id === id) {
         setEditingCategory(null);
-        setCategoryForm({ name: '', name_he: '', name_pt: '' });
+        setCategoryForm({ value: '' });
       }
     } catch(e) { alert(e.response?.data?.error || e.message); }
   };
@@ -754,7 +783,7 @@ function Products() {
           <div className="modal" style={{ maxWidth: '560px', width: '95%' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="modal-title">📂 {t('edit_categories') || 'ערוך קטגוריות'}</h3>
-              <button className="modal-close" onClick={() => { setShowCategoryModal(false); setEditingCategory(null); setCategoryForm({ name: '', name_he: '', name_pt: '' }); }}>×</button>
+              <button className="modal-close" onClick={() => { setShowCategoryModal(false); setEditingCategory(null); setCategoryForm({ value: '' }); }}>×</button>
             </div>
 
             <div className="modal-body" style={{ padding: '1.2rem' }}>
@@ -796,23 +825,18 @@ function Products() {
                 <h4 style={{ marginBottom: '0.75rem', fontSize: '0.95rem', color: '#374151' }}>
                   {editingCategory ? `✏️ ${t('edit_category') || 'ערוך קטגוריה'}: ${getCatDisplayName(editingCategory)}` : `➕ ${t('add_category') || 'הוסף קטגוריה'}`}
                 </h4>
-                <div className="form-group" style={{ marginBottom: '0.75rem' }}>
-                  <label className="form-label">🇬🇧 {t('name_en') || 'שם באנגלית'} *</label>
-                  <input className="form-input" type="text" value={categoryForm.name}
-                    onChange={e => setCategoryForm({ ...categoryForm, name: e.target.value })}
-                    placeholder="e.g. Electronics" />
-                </div>
-                <div className="form-group" style={{ marginBottom: '0.75rem' }}>
-                  <label className="form-label">🇮🇱 {t('name_he') || 'שם בעברית'}</label>
-                  <input className="form-input" type="text" value={categoryForm.name_he}
-                    onChange={e => setCategoryForm({ ...categoryForm, name_he: e.target.value })}
-                    placeholder="למשל: אלקטרוניקה" />
-                </div>
                 <div className="form-group" style={{ marginBottom: '0' }}>
-                  <label className="form-label">🇵🇹 {t('name_pt') || 'שם בפורטוגזית'}</label>
-                  <input className="form-input" type="text" value={categoryForm.name_pt}
-                    onChange={e => setCategoryForm({ ...categoryForm, name_pt: e.target.value })}
-                    placeholder="ex: Eletrônicos" />
+                  <label className="form-label">
+                    {language === 'he' ? '🇮🇱 ' : language === 'pt' ? '🇵🇹 ' : '🇬🇧 '}
+                    {t('category_name') || 'שם קטגוריה'} *
+                  </label>
+                  <input className="form-input" type="text" value={categoryForm.value}
+                    onChange={e => setCategoryForm({ value: e.target.value })}
+                    placeholder={
+                      language === 'he' ? 'למשל: אלקטרוניקה' :
+                      language === 'pt' ? 'ex: Eletrônicos' :
+                      'e.g. Electronics'
+                    } />
                 </div>
               </div>
             </div>
@@ -820,12 +844,12 @@ function Products() {
             <div className="modal-footer">
               {editingCategory && (
                 <button type="button" className="btn btn-secondary"
-                  onClick={() => { setEditingCategory(null); setCategoryForm({ name: '', name_he: '', name_pt: '' }); }}>
+                  onClick={() => { setEditingCategory(null); setCategoryForm({ value: '' }); }}>
                   {t('cancel')}
                 </button>
               )}
               <button type="button" className="btn btn-primary"
-                disabled={savingCategory || !categoryForm.name.trim()}
+                disabled={savingCategory || !categoryForm.value.trim()}
                 onClick={handleSaveCategory}>
                 {savingCategory ? '...' : (editingCategory ? t('save') : `➕ ${t('add_category') || 'הוסף'}`)}
               </button>

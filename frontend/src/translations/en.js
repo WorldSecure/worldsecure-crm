@@ -56,6 +56,7 @@ export const en = {
   min_quantity: 'Minimum Quantity',
   add_product: 'Add Product',
   edit_product: 'Edit Product',
+  category_name: 'Category Name',
   edit_categories: 'Edit Categories',
   add_category: 'Add Category',
   edit_category: 'Edit Category',
