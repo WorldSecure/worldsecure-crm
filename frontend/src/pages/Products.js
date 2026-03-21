@@ -55,6 +55,8 @@ function Products() {
   const [skuFilter, setSkuFilter] = useState('');
   const [sortField, setSortField] = useState('name');
   const [sortDirection, setSortDirection] = useState('asc');
+  const [pageSize, setPageSize] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
   const [priceHistory, setPriceHistory] = useState([]);
   const [showAddPrice, setShowAddPrice] = useState(false);
   const [newPrice, setNewPrice] = useState({ price: '', currency: 'ILS', effective_date: new Date().toISOString().split('T')[0] });
@@ -251,17 +253,15 @@ function Products() {
     }
   };
 
-  const getSortedProducts = () => {
+  const getFilteredSortedProducts = () => {
     let filtered = products.filter(product => {
       const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.sku.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesSku = !skuFilter || product.sku.toUpperCase().startsWith(skuFilter);
+      const matchesSku = !skuFilter || product.sku.toUpperCase().startsWith(skuFilter.toUpperCase());
       return matchesSearch && matchesSku;
     });
-
     return filtered.sort((a, b) => {
       let aValue, bValue;
-      
       if (sortField === 'category') {
         aValue = (a.category_name || '').toLowerCase();
         bValue = (b.category_name || '').toLowerCase();
@@ -269,13 +269,15 @@ function Products() {
         aValue = (a[sortField] || '').toString().toLowerCase();
         bValue = (b[sortField] || '').toString().toLowerCase();
       }
-
-      if (sortDirection === 'asc') {
-        return aValue > bValue ? 1 : -1;
-      } else {
-        return aValue < bValue ? 1 : -1;
-      }
+      return sortDirection === 'asc' ? (aValue > bValue ? 1 : -1) : (aValue < bValue ? 1 : -1);
     });
+  };
+
+  const getSortedProducts = () => {
+    const all = getFilteredSortedProducts();
+    if (pageSize === 'all') return all;
+    const start = (currentPage - 1) * pageSize;
+    return all.slice(start, start + pageSize);
   };
 
   const handleSubmit = async (e) => {
@@ -387,7 +389,38 @@ function Products() {
     return t(unitMap[unit] || 'unit_piece');
   };
 
+  const allFiltered = getFilteredSortedProducts();
+  const totalFiltered = allFiltered.length;
+  const totalPages = pageSize === 'all' ? 1 : Math.ceil(totalFiltered / pageSize);
   const sortedProducts = getSortedProducts();
+
+  const PaginationBar = () => (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'0.5rem', marginTop:'0.75rem', paddingTop:'0.75rem', borderTop:'1px solid #e2e8f0' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', fontSize:'0.85rem', color:'#555' }}>
+        <span>{totalFiltered} {t('products') || 'מוצרים'}</span>
+        <span>|</span>
+        <label>{t('per_page') || 'פר עמוד'}:</label>
+        <select value={pageSize} onChange={e => { setPageSize(e.target.value === 'all' ? 'all' : parseInt(e.target.value)); setCurrentPage(1); }}
+          style={{ padding:'0.2rem 0.4rem', borderRadius:'6px', border:'1px solid #d1d5db', fontSize:'0.85rem' }}>
+          {[10,15,20,50].map(n => <option key={n} value={n}>{n}</option>)}
+          <option value="all">{t('all') || 'הכל'}</option>
+        </select>
+      </div>
+      {pageSize !== 'all' && totalPages > 1 && (
+        <div style={{ display:'flex', gap:'0.3rem', alignItems:'center' }}>
+          <button onClick={() => setCurrentPage(1)} disabled={currentPage===1}
+            style={{ padding:'0.2rem 0.5rem', borderRadius:'6px', border:'1px solid #d1d5db', background: currentPage===1 ? '#f3f4f6':'#fff', cursor: currentPage===1 ? 'default':'pointer' }}>«</button>
+          <button onClick={() => setCurrentPage(p => Math.max(1,p-1))} disabled={currentPage===1}
+            style={{ padding:'0.2rem 0.5rem', borderRadius:'6px', border:'1px solid #d1d5db', background: currentPage===1 ? '#f3f4f6':'#fff', cursor: currentPage===1 ? 'default':'pointer' }}>‹</button>
+          <span style={{ fontSize:'0.85rem', padding:'0 0.3rem' }}>{currentPage} / {totalPages}</span>
+          <button onClick={() => setCurrentPage(p => Math.min(totalPages,p+1))} disabled={currentPage===totalPages}
+            style={{ padding:'0.2rem 0.5rem', borderRadius:'6px', border:'1px solid #d1d5db', background: currentPage===totalPages ? '#f3f4f6':'#fff', cursor: currentPage===totalPages ? 'default':'pointer' }}>›</button>
+          <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage===totalPages}
+            style={{ padding:'0.2rem 0.5rem', borderRadius:'6px', border:'1px solid #d1d5db', background: currentPage===totalPages ? '#f3f4f6':'#fff', cursor: currentPage===totalPages ? 'default':'pointer' }}>»</button>
+        </div>
+      )}
+    </div>
+  );
 
   if (loading) {
     return <div className="loading"><div className="spinner"></div></div>;
@@ -442,13 +475,13 @@ function Products() {
             style={{ flex: 1, minWidth: '180px' }}
             placeholder={t('search')}
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
           />
           <select
             className="form-select"
             style={{ minWidth: '160px', flex: '0 0 auto' }}
             value={skuFilter}
-            onChange={(e) => setSkuFilter(e.target.value)}
+            onChange={(e) => { setSkuFilter(e.target.value); setCurrentPage(1); }}
           >
             <option value="">🔖 {t('all_skus') || 'כל ה-SKU'}</option>
             {/* קבוצה ראשונה — XXX */}
@@ -525,6 +558,7 @@ function Products() {
                 </div>
               ))
             )}
+            <PaginationBar />
           </div>
         ) : (
           /* ===== DESKTOP TABLE VIEW ===== */
@@ -592,6 +626,7 @@ function Products() {
               )}
             </tbody>
           </table>
+            <PaginationBar />
           </div>
         )}
       </div>
