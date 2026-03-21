@@ -261,6 +261,42 @@ async function syncProductsFromCloud() {
   if (count > 0) log(`  ↳ products from cloud: ${count} synced`);
 }
 
+async function syncCustomersFromCloud() {
+  const result = await apiRequest('GET', '/api/customers');
+  if (result.status !== 200) { log(`  ⚠ pull customers: ${JSON.stringify(result.body)}`); return; }
+  const customers = result.body || [];
+  let count = 0;
+  for (const c of customers) {
+    await sqliteRun(`
+      INSERT OR REPLACE INTO customers
+        (id, name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes)
+      VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [c.id, c.name, c.contact_person||null, c.address||null, c.phone||null,
+       c.email||null, c.tax_id||null, c.country||null, c.is_sensitive ? 1 : 0, c.notes||null]
+    ).catch(() => {});
+    count++;
+  }
+  if (count > 0) log(`  ↳ customers from cloud: ${count} synced`);
+}
+
+async function syncSuppliersFromCloud() {
+  const result = await apiRequest('GET', '/api/suppliers');
+  if (result.status !== 200) { log(`  ⚠ pull suppliers: ${JSON.stringify(result.body)}`); return; }
+  const suppliers = result.body || [];
+  let count = 0;
+  for (const s of suppliers) {
+    await sqliteRun(`
+      INSERT OR REPLACE INTO suppliers
+        (id, name, contact_person, address, phone, email, tax_id, country, notes)
+      VALUES (?,?,?,?,?,?,?,?,?)`,
+      [s.id, s.name, s.contact_person||null, s.address||null, s.phone||null,
+       s.email||null, s.tax_id||null, s.country||null, s.notes||null]
+    ).catch(() => {});
+    count++;
+  }
+  if (count > 0) log(`  ↳ suppliers from cloud: ${count} synced`);
+}
+
 async function syncCloudToLocal() {
   log('▶ CLOUD → LOCAL sync...');
   try {
@@ -268,6 +304,8 @@ async function syncCloudToLocal() {
     await syncUsersFromCloud();
     await syncQrFromCloud();
     await syncProductsFromCloud();
+    await syncCustomersFromCloud();
+    await syncSuppliersFromCloud();
     await syncInboundFromCloud();
     await syncOutboundFromCloud();
     await syncSupportFromCloud();
