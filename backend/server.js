@@ -566,29 +566,56 @@ app.put('/api/company/email-signature', authenticateToken, (req, res) => {
 
 // ============ CATEGORIES ROUTES ============
 
+// migration — הוסף עמודות שפה אם לא קיימות
+db.run(`ALTER TABLE categories ADD COLUMN name_he TEXT`, () => {});
+db.run(`ALTER TABLE categories ADD COLUMN name_pt TEXT`, () => {});
+
 app.get('/api/categories', authenticateToken, (req, res) => {
   db.all('SELECT * FROM categories ORDER BY id', [], (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
+    if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
 });
 
 app.post('/api/categories', authenticateToken, (req, res) => {
-  const { name, description } = req.body;
-  
+  const { name, name_he, name_pt, description } = req.body;
+  if (!name) return res.status(400).json({ error: 'name required' });
   db.run(
-    'INSERT INTO categories (name, description) VALUES (?, ?)',
-    [name, description],
+    'INSERT INTO categories (name, name_he, name_pt, description) VALUES (?, ?, ?, ?)',
+    [name, name_he||null, name_pt||null, description||null],
     function(err) {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
+      if (err) return res.status(500).json({ error: err.message });
       logActivity(req.user.id, 'CREATE_CATEGORY', 'category', this.lastID, { name });
-      res.json({ id: this.lastID, name, description });
+      res.json({ id: this.lastID, name, name_he: name_he||null, name_pt: name_pt||null, description });
     }
   );
+});
+
+app.put('/api/categories/:id', authenticateToken, (req, res) => {
+  const { name, name_he, name_pt, description } = req.body;
+  if (!name) return res.status(400).json({ error: 'name required' });
+  db.run(
+    'UPDATE categories SET name=?, name_he=?, name_pt=?, description=? WHERE id=?',
+    [name, name_he||null, name_pt||null, description||null, req.params.id],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      logActivity(req.user.id, 'UPDATE_CATEGORY', 'category', req.params.id, { name });
+      res.json({ message: 'updated' });
+    }
+  );
+});
+
+app.delete('/api/categories/:id', authenticateToken, (req, res) => {
+  // בדוק אם יש מוצרים מקושרים
+  db.get('SELECT COUNT(*) as count FROM products WHERE category_id=?', [req.params.id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (row.count > 0) return res.status(400).json({ error: 'Cannot delete category with products' });
+    db.run('DELETE FROM categories WHERE id=?', [req.params.id], function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      logActivity(req.user.id, 'DELETE_CATEGORY', 'category', req.params.id, {});
+      res.json({ message: 'deleted' });
+    });
+  });
 });
 
 // ============ PRODUCTS ROUTES ============

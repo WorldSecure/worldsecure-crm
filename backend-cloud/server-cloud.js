@@ -228,6 +228,43 @@ app.get('/api/categories', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.post('/api/categories', authenticateToken, async (req, res) => {
+  const { name, name_he, name_pt, description } = req.body;
+  if (!name) return res.status(400).json({ error: 'name required' });
+  try {
+    await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_he TEXT').catch(() => {});
+    await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_pt TEXT').catch(() => {});
+    const r = await query(
+      'INSERT INTO categories (name, name_he, name_pt, description) VALUES ($1,$2,$3,$4) RETURNING *',
+      [name, name_he||null, name_pt||null, description||null]
+    );
+    res.json(r.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/categories/:id', authenticateToken, async (req, res) => {
+  const { name, name_he, name_pt, description } = req.body;
+  if (!name) return res.status(400).json({ error: 'name required' });
+  try {
+    await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_he TEXT').catch(() => {});
+    await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_pt TEXT').catch(() => {});
+    await query(
+      'UPDATE categories SET name=$1, name_he=$2, name_pt=$3, description=$4 WHERE id=$5',
+      [name, name_he||null, name_pt||null, description||null, req.params.id]
+    );
+    res.json({ message: 'updated' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/categories/:id', authenticateToken, async (req, res) => {
+  try {
+    const used = await query('SELECT COUNT(*) as count FROM products WHERE category_id=$1', [req.params.id]);
+    if (parseInt(used.rows[0].count) > 0) return res.status(400).json({ error: 'Cannot delete category with products' });
+    await query('DELETE FROM categories WHERE id=$1', [req.params.id]);
+    res.json({ message: 'deleted' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── חסימת עריכה ───────────────────────────────────────────────────────────────
 const adminOnly = (req, res, next) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });

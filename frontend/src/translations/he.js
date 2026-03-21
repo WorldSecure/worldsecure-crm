@@ -56,6 +56,13 @@ export const he = {
   min_quantity: 'מלאי מינימום',
   add_product: 'הוסף מוצר',
   edit_product: 'ערוך מוצר',
+  edit_categories: 'ערוך קטגוריות',
+  add_category: 'הוסף קטגוריה',
+  edit_category: 'ערוך קטגוריה',
+  existing_categories: 'קטגוריות קיימות',
+  name_en: 'שם באנגלית',
+  name_he: 'שם בעברית',
+  name_pt: 'שם בפורטוגזית',
   product_details: 'פרטי מוצר',
   
   // Units

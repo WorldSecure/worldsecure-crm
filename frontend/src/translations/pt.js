@@ -56,6 +56,13 @@ export const pt = {
   min_quantity: 'Quantidade Mínima',
   add_product: 'Adicionar Produto',
   edit_product: 'Editar Produto',
+  edit_categories: 'Editar Categorias',
+  add_category: 'Adicionar Categoria',
+  edit_category: 'Editar Categoria',
+  existing_categories: 'Categorias Existentes',
+  name_en: 'Nome em Inglês',
+  name_he: 'Nome em Hebraico',
+  name_pt: 'Nome em Português',
   product_details: 'Detalhes do Produto',
   
   // Units

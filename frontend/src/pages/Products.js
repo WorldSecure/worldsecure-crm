@@ -40,6 +40,10 @@ function Products() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(null); // null=new, obj=edit
+  const [categoryForm, setCategoryForm] = useState({ name: '', name_he: '', name_pt: '' });
+  const [savingCategory, setSavingCategory] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState('name');
@@ -91,6 +95,54 @@ function Products() {
       console.error('Error fetching products:', error);
       setLoading(false);
     }
+  };
+
+  // ── Category management ───────────────────────────────────────────────────
+  const openNewCategory = () => {
+    setEditingCategory(null);
+    setCategoryForm({ name: '', name_he: '', name_pt: '' });
+    setShowCategoryModal(true);
+  };
+
+  const openEditCategory = (cat) => {
+    setEditingCategory(cat);
+    setCategoryForm({ name: cat.name || '', name_he: cat.name_he || '', name_pt: cat.name_pt || '' });
+  };
+
+  const handleSaveCategory = async () => {
+    if (!categoryForm.name.trim()) return;
+    try {
+      setSavingCategory(true);
+      if (editingCategory) {
+        await axios.put(`/api/categories/${editingCategory.id}`, categoryForm);
+      } else {
+        await axios.post('/api/categories', categoryForm);
+      }
+      const res = await axios.get('/api/categories');
+      setCategories(res.data);
+      setEditingCategory(null);
+      setCategoryForm({ name: '', name_he: '', name_pt: '' });
+    } catch(e) { alert(e.response?.data?.error || e.message); }
+    finally { setSavingCategory(false); }
+  };
+
+  const handleDeleteCategory = async (id) => {
+    if (!window.confirm(t('confirm_delete'))) return;
+    try {
+      await axios.delete(`/api/categories/${id}`);
+      const res = await axios.get('/api/categories');
+      setCategories(res.data);
+      if (editingCategory?.id === id) {
+        setEditingCategory(null);
+        setCategoryForm({ name: '', name_he: '', name_pt: '' });
+      }
+    } catch(e) { alert(e.response?.data?.error || e.message); }
+  };
+
+  const getCatDisplayName = (cat) => {
+    if (language === 'he' && cat.name_he) return cat.name_he;
+    if (language === 'pt' && cat.name_pt) return cat.name_pt;
+    return cat.name;
   };
 
   const handleSort = (field) => {
@@ -271,6 +323,15 @@ function Products() {
               >
                 🌐 {t('translate_products') || 'תרגם מוצרים'}
               </button>
+            )}
+            {isAdmin && (
+            <button 
+              className="btn btn-secondary"
+              onClick={() => setShowCategoryModal(true)}
+              style={{ marginRight: '0.5rem' }}
+            >
+              📂 {t('edit_categories') || 'ערוך קטגוריות'}
+            </button>
             )}
             {isAdmin && (
             <button 
@@ -683,6 +744,92 @@ function Products() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Category Management Modal ── */}
+      {showCategoryModal && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: '560px', width: '95%' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">📂 {t('edit_categories') || 'ערוך קטגוריות'}</h3>
+              <button className="modal-close" onClick={() => { setShowCategoryModal(false); setEditingCategory(null); setCategoryForm({ name: '', name_he: '', name_pt: '' }); }}>×</button>
+            </div>
+
+            <div className="modal-body" style={{ padding: '1.2rem' }}>
+              {/* קטגוריות קיימות */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h4 style={{ marginBottom: '0.75rem', fontSize: '0.95rem', color: '#374151' }}>
+                  {t('existing_categories') || 'קטגוריות קיימות'}
+                </h4>
+                {categories.length === 0 ? (
+                  <div style={{ color: '#888', fontSize: '0.9rem' }}>{t('no_data')}</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {categories.map(cat => (
+                      <div key={cat.id} style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '0.6rem 0.8rem', background: editingCategory?.id === cat.id ? '#eff6ff' : '#f8fafc',
+                        border: `1px solid ${editingCategory?.id === cat.id ? '#bfdbfe' : '#e2e8f0'}`,
+                        borderRadius: '8px'
+                      }}>
+                        <span style={{ fontWeight: 500 }}>{getCatDisplayName(cat)}</span>
+                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                          <button onClick={() => openEditCategory(cat)}
+                            style={{ padding: '0.25rem 0.6rem', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem' }}>
+                            ✏️ {t('edit')}
+                          </button>
+                          <button onClick={() => handleDeleteCategory(cat.id)}
+                            style={{ padding: '0.25rem 0.6rem', background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem' }}>
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* טופס הוספה/עריכה */}
+              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1.2rem' }}>
+                <h4 style={{ marginBottom: '0.75rem', fontSize: '0.95rem', color: '#374151' }}>
+                  {editingCategory ? `✏️ ${t('edit_category') || 'ערוך קטגוריה'}: ${getCatDisplayName(editingCategory)}` : `➕ ${t('add_category') || 'הוסף קטגוריה'}`}
+                </h4>
+                <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                  <label className="form-label">🇬🇧 {t('name_en') || 'שם באנגלית'} *</label>
+                  <input className="form-input" type="text" value={categoryForm.name}
+                    onChange={e => setCategoryForm({ ...categoryForm, name: e.target.value })}
+                    placeholder="e.g. Electronics" />
+                </div>
+                <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                  <label className="form-label">🇮🇱 {t('name_he') || 'שם בעברית'}</label>
+                  <input className="form-input" type="text" value={categoryForm.name_he}
+                    onChange={e => setCategoryForm({ ...categoryForm, name_he: e.target.value })}
+                    placeholder="למשל: אלקטרוניקה" />
+                </div>
+                <div className="form-group" style={{ marginBottom: '0' }}>
+                  <label className="form-label">🇵🇹 {t('name_pt') || 'שם בפורטוגזית'}</label>
+                  <input className="form-input" type="text" value={categoryForm.name_pt}
+                    onChange={e => setCategoryForm({ ...categoryForm, name_pt: e.target.value })}
+                    placeholder="ex: Eletrônicos" />
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              {editingCategory && (
+                <button type="button" className="btn btn-secondary"
+                  onClick={() => { setEditingCategory(null); setCategoryForm({ name: '', name_he: '', name_pt: '' }); }}>
+                  {t('cancel')}
+                </button>
+              )}
+              <button type="button" className="btn btn-primary"
+                disabled={savingCategory || !categoryForm.name.trim()}
+                onClick={handleSaveCategory}>
+                {savingCategory ? '...' : (editingCategory ? t('save') : `➕ ${t('add_category') || 'הוסף'}`)}
+              </button>
+            </div>
           </div>
         </div>
       )}
