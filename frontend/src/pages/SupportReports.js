@@ -45,7 +45,11 @@ function SupportReports() {
   const [countryOpen, setCountryOpen] = useState(false);
   const [countryData, setCountryData] = useState(null);
   const [countryLoading, setCountryLoading] = useState(false);
-  const [countrySort, setCountrySort] = useState({ field: 'total', dir: 'desc' });
+  const [countrySort, setCountrySort] = useState({ field: 'total_cases', dir: 'desc' });
+  const [countryFilter, setCountryFilter] = useState('all');
+  const [countryCustomFrom, setCountryCustomFrom] = useState('');
+  const [countryCustomTo, setCountryCustomTo] = useState('');
+  const [countryAllData, setCountryAllData] = useState(null);
 
   const [productsOpen, setProductsOpen] = useState(false);
   const [productsData, setProductsData] = useState(null);
@@ -167,14 +171,64 @@ function SupportReports() {
     setProfitCalcLoading(false);
   };
 
+  const applyCountryFilter = (data, filter, customFrom, customTo) => {
+    if (!data || filter === 'all') return data;
+    const now = new Date();
+    const startOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
+    const startOfQuarter = (d) => new Date(d.getFullYear(), Math.floor(d.getMonth()/3)*3, 1);
+    const startOfYear = (d) => new Date(d.getFullYear(), 0, 1);
+    let from = null, to = null;
+    if (filter === '7d') { from = new Date(now - 7*86400000); }
+    else if (filter === '30d') { from = new Date(now - 30*86400000); }
+    else if (filter === '90d') { from = new Date(now - 90*86400000); }
+    else if (filter === 'this_month') { from = startOfMonth(now); }
+    else if (filter === 'last_month') { from = startOfMonth(new Date(now.getFullYear(), now.getMonth()-1, 1)); to = startOfMonth(now); }
+    else if (filter === 'this_quarter') { from = startOfQuarter(now); }
+    else if (filter === 'last_quarter') { from = startOfQuarter(new Date(now.getFullYear(), now.getMonth()-3, 1)); to = startOfQuarter(now); }
+    else if (filter === 'this_year') { from = startOfYear(now); }
+    else if (filter === 'last_year') { from = startOfYear(new Date(now.getFullYear()-1, 0, 1)); to = startOfYear(now); }
+    else if (filter === 'custom') {
+      from = customFrom ? new Date(new Date(customFrom).setHours(0,0,0,0)) : null;
+      to = customTo ? new Date(new Date(customTo).setHours(23,59,59,999)) : null;
+    }
+    return data.filter(tk => {
+      const d = tk.created_at ? new Date(tk.created_at) : null;
+      if (!d) return false;
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    });
+  };
+
+  const buildCustomerStats = (tickets) => {
+    const map = {};
+    tickets.forEach(tk => {
+      const name = tk.customer_name || 'Unknown';
+      if (!map[name]) map[name] = { customer_name: name, total_cases: 0, open: 0, closed: 0, totalDays: 0, closedCount: 0 };
+      map[name].total_cases++;
+      if (['closed','cancelled'].includes(tk.status)) {
+        map[name].closed++;
+        if (tk.created_at && tk.updated_at) {
+          const days = Math.round((new Date(tk.updated_at) - new Date(tk.created_at)) / 86400000);
+          map[name].totalDays += days;
+          map[name].closedCount++;
+        }
+      } else {
+        map[name].open++;
+      }
+    });
+    return Object.values(map).map(r => ({ ...r, avg_days: r.closedCount > 0 ? Math.round(r.totalDays / r.closedCount) : null }));
+  };
+
   const toggleCountryReport = async () => {
     if (countryOpen) { setCountryOpen(false); return; }
-    if (!countryData) {
-      setCountryLoading(true);
-      try { const res = await axios.get('/api/quotes/country-summary'); setCountryData(res.data); }
-      catch(e) { console.error(e); }
-      setCountryLoading(false);
-    }
+    setCountryLoading(true);
+    try {
+      const res = await axios.get('/api/support-tickets');
+      setCountryAllData(res.data);
+      setCountryData(buildCustomerStats(applyCountryFilter(res.data, countryFilter, countryCustomFrom, countryCustomTo)));
+    } catch(e) { console.error(e); }
+    setCountryLoading(false);
     setCountryOpen(true);
   };
 
@@ -217,7 +271,7 @@ function SupportReports() {
 
   const handleStatusSort = (f) => setStatusSort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' }));
   const handleCountrySort = (f) => setCountrySort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' }));
-
+  const countryGetters = { customer_name: r => r.customer_name || '', total_cases: r => r.total_cases || 0, open: r => r.open || 0, closed: r => r.closed || 0, avg_days: r => r.avg_days || 0 };
   const statusGetters = {
     ticket_number: r => r.ticket_number || r.id || 0,
     customer_name: r => r.customer_name || '',
@@ -266,7 +320,7 @@ function SupportReports() {
     country: r => r.country || '',
     percent: r => r.percent || 0,
   };
-  const countryGetters = { country: r => r.country || '', deals: r => r.deals, total: r => r.total, currency: r => (r.currencies[0] || ''), percent: r => r.percent };
+
 
   const AccordionBtn = ({ open, onClick, color, children }) => (
     <button onClick={onClick} style={{
@@ -700,338 +754,205 @@ function SupportReports() {
         </AccordionBody>
       </div>
 
-      {/* דוח 2 - מכירות לפי מדינה */}
+      {/* דוח 2 - Customer Cases Analysis */}
       <div style={{ marginBottom: '1rem' }}>
-        <AccordionBtn open={countryOpen} onClick={toggleCountryReport} color={{ base: '#28a745', dark: '#1e7e34' }}>
-          🌍 {t('sales_by_country') || 'מכירות לפי מדינה'}
+        <AccordionBtn open={countryOpen} onClick={toggleCountryReport} color={{ base: '#17a2b8', dark: '#117a8b' }}>
+          👥 {t('customer_cases_analysis') || 'Customer Cases Analysis'}
         </AccordionBtn>
         <AccordionBody open={countryOpen} loading={countryLoading}>
-          {countryData && countryData.rows.length === 0 && (
-            <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>אין נתונים</div>
-          )}
-          {countryData && countryData.rows.length > 0 && (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', tableLayout: 'fixed' }}>
-              <colgroup>
-                <col />
-                <col style={{ width: '110px' }} />
-                <col style={{ width: '130px' }} />
-                <col style={{ width: '100px' }} />
-                <col style={{ width: '130px' }} />
-              </colgroup>
-              <thead>
-                <tr>
-                  <SortTh field="country" sortState={countrySort} onSort={handleCountrySort}>{t('country') || 'מדינה'}</SortTh>
-                  <SortTh field="deals" sortState={countrySort} onSort={handleCountrySort} style={{ textAlign: 'center' }}>{t('deals') || 'עסקאות'}</SortTh>
-                  <SortTh field="total" sortState={countrySort} onSort={handleCountrySort} style={{ textAlign: 'right' }}>{t('sales') || 'מכירות'}</SortTh>
-                  <SortTh field="currency" sortState={countrySort} onSort={handleCountrySort} style={{ textAlign: 'center' }}>{t('currency') || 'מטבע'}</SortTh>
-                  <SortTh field="percent" sortState={countrySort} onSort={handleCountrySort} style={{ textAlign: 'center' }}>%</SortTh>
-                </tr>
-              </thead>
-              <tbody>
-                {doSort(countryData.rows, countrySort.field, countrySort.dir, countryGetters).map((row, i) => (
-                  <tr key={row.country} style={{ borderBottom: '1px solid #f0f0f0', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
-                    <td style={{ padding: '0.6rem 1rem', fontWeight: 500, textAlign: 'center' }}>🌍 {row.country}</td>
-                    <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
-                      <span style={{ background: '#e3f2fd', color: '#1565c0', padding: '2px 10px', borderRadius: '12px', fontWeight: 600, fontSize: '0.85rem' }}>{row.deals}</span>
-                    </td>
-                    <td style={{ padding: '0.6rem 1rem', textAlign: 'right', fontWeight: 600 }}>{fmt(row.total)}</td>
-                    <td style={{ padding: '0.6rem 1rem', textAlign: 'center', color: '#666', fontSize: '0.85rem' }}>{row.currencies.join(', ')}</td>
-                    <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', justifyContent: 'center' }}>
-                        <div style={{ flex: 1, height: '6px', background: '#e9ecef', borderRadius: '3px', overflow: 'hidden', maxWidth: '60px' }}>
-                          <div style={{ width: row.percent + '%', height: '100%', background: '#28a745', borderRadius: '3px' }}></div>
-                        </div>
-                        <span style={{ fontSize: '0.82rem', color: '#555', minWidth: '34px', textAlign: 'left' }}>{row.percent}%</span>
-                      </div>
-                    </td>
-                  </tr>
+          {countryData && (
+            <>
+              {/* Filter Bar */}
+              <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #f0f0f0', background: '#f8f9fa', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+                <span style={{ fontWeight: 600, color: '#555', fontSize: '0.88rem', marginInlineEnd: '0.25rem' }}>📅</span>
+                {[
+                  { key: 'all', label: t('filter_all') || 'All' },
+                  { key: '7d', label: t('filter_7d') || 'Last 7 days' },
+                  { key: '30d', label: t('filter_30d') || 'Last 30 days' },
+                  { key: '90d', label: t('filter_90d') || 'Last 90 days' },
+                  { key: 'this_month', label: t('filter_this_month') || 'This month' },
+                  { key: 'last_month', label: t('filter_last_month') || 'Last month' },
+                  { key: 'this_quarter', label: t('filter_this_quarter') || 'This quarter' },
+                  { key: 'last_quarter', label: t('filter_last_quarter') || 'Last quarter' },
+                  { key: 'this_year', label: t('filter_this_year') || 'This year' },
+                  { key: 'last_year', label: t('filter_last_year') || 'Last year' },
+                  { key: 'custom', label: t('filter_custom') || 'Custom' },
+                ].map(opt => (
+                  <button key={opt.key} onClick={() => {
+                    setCountryFilter(opt.key);
+                    setCountryData(buildCustomerStats(applyCountryFilter(countryAllData, opt.key, countryCustomFrom, countryCustomTo)));
+                  }} style={{
+                    padding: '0.3rem 0.75rem', fontSize: '0.82rem', fontWeight: 600, borderRadius: '20px', border: 'none', cursor: 'pointer',
+                    background: countryFilter === opt.key ? '#17a2b8' : '#e9ecef',
+                    color: countryFilter === opt.key ? 'white' : '#495057',
+                  }}>{opt.label}</button>
                 ))}
-              </tbody>
-              <tfoot>
-                <tr style={{ background: '#d4edda', fontWeight: 700, borderTop: '2px solid #28a745' }}>
-                  <td style={{ padding: '0.65rem 1rem', color: '#155724' }}>{t('total') || 'סה"כ'}</td>
-                  <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#155724' }}>{countryData.grandDeals}</td>
-                  <td style={{ padding: '0.65rem 1rem', textAlign: 'right', color: '#155724' }}>{fmt(countryData.grandTotal)}</td>
-                  <td style={{ padding: '0.65rem 1rem' }}></td>
-                  <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#155724' }}>100%</td>
-                </tr>
-              </tfoot>
-            </table>
-          )}
-          {countryData && countryData.rows.length > 0 && (
-            <div style={{ padding: '1rem', borderTop: '1px solid #dee2e6', display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-              <button
-                onClick={async () => {
-                  // Determine direction based on language
-                  const dir = language === 'he' ? 'rtl' : 'ltr';
-                  const textAlign = language === 'he' ? 'right' : 'left';
-                  
-                  // Use preloaded logo
-                  const logoBase64 = logoBase64Cache;
-                  
-                  // Create printable content
-                  const printContent = `
-                    <html dir="${dir}">
-                    <head>
-                      <meta charset="utf-8">
-                      <title>Sales by Country Report</title>
-                      <style>
-                        @media print {
-                          @page { margin: 1cm; }
-                        }
-                        body { 
-                          font-family: Arial, sans-serif; 
-                          padding: 20px; 
-                          direction: ${dir}; 
-                          margin: 0;
-                        }
-                        .header {
-                          display: flex;
-                          justify-content: space-between;
-                          align-items: center;
-                          padding: 20px 0;
-                          border-bottom: 3px solid #28a745;
-                          margin-bottom: 30px;
-                        }
-                        .logo {
-                          width: 150px;
-                          height: auto;
-                          ${!logoBase64 ? 'display: none;' : ''}
-                        }
-                        .company-info {
-                          text-align: ${textAlign === 'right' ? 'left' : 'right'};
-                          color: #666;
-                          font-size: 0.9rem;
-                        }
-                        .company-info strong {
-                          display: block;
-                          color: #28a745;
-                          font-size: 1.8rem;
-                          font-weight: 700;
-                          margin-bottom: 5px;
-                        }
-                        .logo-placeholder {
-                          font-size: 2.5rem;
-                          color: #28a745;
-                          font-weight: 700;
-                        }
-                        h1 { 
-                          text-align: center; 
-                          color: #28a745; 
-                          margin: 20px 0;
-                          font-size: 1.8rem;
-                        }
-                        .report-meta {
-                          text-align: center;
-                          color: #666;
-                          font-size: 0.9rem;
-                          margin-bottom: 20px;
-                        }
-                        table { 
-                          width: 100%; 
-                          border-collapse: collapse; 
-                          margin-top: 20px; 
-                          direction: ${dir}; 
-                        }
-                        th, td { 
-                          border: 1px solid #dee2e6; 
-                          padding: 12px; 
-                          text-align: ${textAlign}; 
-                        }
-                        th { 
-                          background: #f8f9fa; 
-                          font-weight: 600; 
-                          color: #333;
-                        }
-                        tfoot { 
-                          background: #d4edda; 
-                          font-weight: 700; 
-                        }
-                        .footer {
-                          margin-top: 30px;
-                          padding: 20px 0 0 0;
-                          border-top: 1px solid #dee2e6;
-                          text-align: center;
-                          color: #999;
-                          font-size: 0.8rem;
-                          page-break-inside: avoid;
-                        }
-                      .button-container {
-      text-align: center;
-      margin-bottom: 20px;
-      padding: 15px;
-      background: #f8f9fa;
-      border-bottom: 1px solid #dee2e6;
-    }
-    .btn-print-doc, .btn-close-doc {
-      padding: 12px 24px;
-      margin: 0 8px;
-      font-size: 16px;
-      cursor: pointer;
-      border: none;
-      border-radius: 5px;
-      font-weight: 600;
-    }
-    .btn-print-doc { background: #3498db; color: white; }
-    .btn-print-doc:hover { background: #2980b9; }
-    .btn-close-doc { background: #95a5a6; color: white; }
-    .btn-close-doc:hover { background: #7f8c8d; }
-    @media print { .button-container { display: none !important; } }
-                      </style>
-                    </head>
-                    <body>
-
+              </div>
+              {countryFilter === 'custom' && (
+                <div style={{ padding: '0.6rem 1rem', borderBottom: '1px solid #f0f0f0', background: '#fff', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <label style={{ fontSize: '0.85rem', color: '#555', fontWeight: 600 }}>{t('from') || 'From'}:</label>
+                  <input type="date" value={countryCustomFrom} onChange={e => { setCountryCustomFrom(e.target.value); setCountryData(buildCustomerStats(applyCountryFilter(countryAllData, 'custom', e.target.value, countryCustomTo))); }} style={{ border: '1px solid #ced4da', borderRadius: '4px', padding: '0.3rem 0.5rem', fontSize: '0.85rem' }} />
+                  <label style={{ fontSize: '0.85rem', color: '#555', fontWeight: 600 }}>{t('to') || 'To'}:</label>
+                  <input type="date" value={countryCustomTo} onChange={e => { setCountryCustomTo(e.target.value); setCountryData(buildCustomerStats(applyCountryFilter(countryAllData, 'custom', countryCustomFrom, e.target.value))); }} style={{ border: '1px solid #ced4da', borderRadius: '4px', padding: '0.3rem 0.5rem', fontSize: '0.85rem' }} />
+                </div>
+              )}
+              {/* Count row */}
+              <div style={{ padding: '0.75rem 1rem', color: '#666', fontSize: '0.88rem', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>{t('customer') || 'לקוחות'}: <strong>{countryData.length}</strong>
+                  {countryAllData && countryFilter !== 'all' && <span style={{ color: '#999', fontWeight: 400 }}> &nbsp;| {t('total_cases') || 'Total Cases'}: <strong>{countryData.reduce((s,r) => s+r.total_cases, 0)}</strong></span>}
+                </span>
+                <button onClick={async () => {
+                  setCountryLoading(true);
+                  try {
+                    const res = await axios.get('/api/support-tickets');
+                    setCountryAllData(res.data);
+                    setCountryData(buildCustomerStats(applyCountryFilter(res.data, countryFilter, countryCustomFrom, countryCustomTo)));
+                  } catch(e) { console.error(e); }
+                  setCountryLoading(false);
+                }} style={{ background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem 0.8rem', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}>
+                  🔄 {t('refresh') || 'רענן'}
+                </button>
+              </div>
+              {countryData.length === 0 ? (
+                <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>{t('no_data') || 'No data'}</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
+                  <thead>
+                    <tr style={{ background: '#f8f9fa' }}>
+                      <SortTh field="customer_name" sortState={countrySort} onSort={handleCountrySort}>{t('customer') || 'לקוח'}</SortTh>
+                      <SortTh field="total_cases" sortState={countrySort} onSort={handleCountrySort} style={{ width: '110px', textAlign: 'center' }}>{t('total_cases') || 'Total Cases'}</SortTh>
+                      <SortTh field="open" sortState={countrySort} onSort={handleCountrySort} style={{ width: '90px', textAlign: 'center' }}>{t('open') || 'Open'}</SortTh>
+                      <SortTh field="closed" sortState={countrySort} onSort={handleCountrySort} style={{ width: '90px', textAlign: 'center' }}>{t('closed') || 'Closed'}</SortTh>
+                      <SortTh field="avg_days" sortState={countrySort} onSort={handleCountrySort} style={{ width: '130px', textAlign: 'center' }}>{t('avg_open_days') || 'Avg. Open Days'}</SortTh>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {doSort(countryData, countrySort.field, countrySort.dir, countryGetters).map((row, i) => (
+                      <tr key={row.customer_name} style={{ borderBottom: '1px solid #f0f0f0', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                        <td style={{ padding: '0.6rem 1rem', fontWeight: 500 }}>👤 {row.customer_name}</td>
+                        <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
+                          <span style={{ background: '#e3f2fd', color: '#1565c0', padding: '2px 10px', borderRadius: '12px', fontWeight: 700, fontSize: '0.85rem' }}>{row.total_cases}</span>
+                        </td>
+                        <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
+                          {row.open > 0 ? <span style={{ background: '#fff3cd', color: '#856404', padding: '2px 8px', borderRadius: '12px', fontWeight: 600, fontSize: '0.85rem' }}>{row.open}</span> : <span style={{ color: '#aaa' }}>—</span>}
+                        </td>
+                        <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
+                          {row.closed > 0 ? <span style={{ background: '#d4edda', color: '#155724', padding: '2px 8px', borderRadius: '12px', fontWeight: 600, fontSize: '0.85rem' }}>{row.closed}</span> : <span style={{ color: '#aaa' }}>—</span>}
+                        </td>
+                        <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
+                          {row.avg_days !== null
+                            ? <span style={{ background: row.avg_days <= 3 ? '#d4edda' : row.avg_days <= 7 ? '#fff3cd' : '#f8d7da', color: row.avg_days <= 3 ? '#155724' : row.avg_days <= 7 ? '#856404' : '#721c24', padding: '2px 10px', borderRadius: '12px', fontWeight: 700, fontSize: '0.85rem' }}>{row.avg_days}d</span>
+                            : <span style={{ color: '#aaa' }}>—</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ background: '#e3f2fd', fontWeight: 700, borderTop: '2px solid #17a2b8' }}>
+                      <td style={{ padding: '0.65rem 1rem', color: '#1565c0' }}>{t('total') || 'Total'}</td>
+                      <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#1565c0' }}>{countryData.reduce((s,r) => s+r.total_cases, 0)}</td>
+                      <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#856404' }}>{countryData.reduce((s,r) => s+r.open, 0)}</td>
+                      <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#155724' }}>{countryData.reduce((s,r) => s+r.closed, 0)}</td>
+                      <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#1565c0' }}>
+                        {(() => { const c = countryData.filter(r => r.avg_days !== null); return c.length > 0 ? Math.round(c.reduce((s,r) => s+r.avg_days, 0)/c.length) + 'd' : '—'; })()}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+              {countryData && countryData.length > 0 && (
+                <div style={{ padding: '1rem', borderTop: '1px solid #dee2e6', display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={async () => {
+                      const dir = language === 'he' ? 'rtl' : 'ltr';
+                      const textAlign = language === 'he' ? 'right' : 'left';
+                      const logoBase64 = logoBase64Cache;
+                      const sorted = doSort(countryData, countrySort.field, countrySort.dir, countryGetters);
+                      const rows = sorted.map(row => `
+                        <tr>
+                          <td>${row.customer_name}</td>
+                          <td style="text-align:center;">${row.total_cases}</td>
+                          <td style="text-align:center;">${row.open}</td>
+                          <td style="text-align:center;">${row.closed}</td>
+                          <td style="text-align:center;">${row.avg_days !== null ? row.avg_days + 'd' : '—'}</td>
+                        </tr>`).join('');
+                      const printContent = `<html dir="${dir}"><head><meta charset="utf-8"><title>Customer Cases Analysis</title>
+                        <style>
+                          @media print { @page { margin: 1cm; } }
+                          body { font-family: Arial, sans-serif; padding: 20px; direction: ${dir}; margin: 0; }
+                          .header { display: flex; justify-content: space-between; align-items: center; padding: 20px 0; border-bottom: 3px solid #17a2b8; margin-bottom: 30px; }
+                          .logo { width: 150px; height: auto; }
+                          .company-info { color: #666; font-size: 0.9rem; }
+                          .company-info strong { display: block; color: #17a2b8; font-size: 1.8rem; font-weight: 700; margin-bottom: 5px; }
+                          h1 { text-align: center; color: #17a2b8; margin: 20px 0; font-size: 1.8rem; }
+                          .report-meta { text-align: center; color: #666; font-size: 0.9rem; margin-bottom: 20px; }
+                          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                          th, td { border: 1px solid #dee2e6; padding: 10px; text-align: ${textAlign}; font-size: 0.85rem; }
+                          th { background: #f8f9fa; font-weight: 600; color: #333; }
+                          tfoot { background: #e3f2fd; font-weight: 700; }
+                          .footer { margin-top: 30px; padding: 20px 0 0; border-top: 1px solid #dee2e6; text-align: center; color: #999; font-size: 0.8rem; }
+                          .button-container { text-align: center; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-bottom: 1px solid #dee2e6; }
+                          .btn-print-doc, .btn-close-doc { padding: 12px 24px; margin: 0 8px; font-size: 16px; cursor: pointer; border: none; border-radius: 5px; font-weight: 600; }
+                          .btn-print-doc { background: #3498db; color: white; }
+                          .btn-close-doc { background: #95a5a6; color: white; }
+                          @media print { .button-container { display: none !important; } }
+                        </style></head><body>
                         <div class="button-container">
                           <button class="btn-print-doc" onclick="window.print()">&#128424; Print / Save as PDF</button>
                           <button class="btn-close-doc" onclick="window.close()">&#10005; Close</button>
                         </div>
-                      <div class="header">
-                        ${logoBase64 
-                          ? `<img src="${logoBase64}" alt="Company Logo" class="logo">` 
-                          : `<div class="logo-placeholder">🌐 WorldSecure</div>`
-                        }
-                        <div class="company-info">
-                          <strong>WorldSecure</strong>
-                          <div>${new Date().toLocaleDateString(language === 'he' ? 'he-IL' : language === 'pt' ? 'pt-PT' : 'en-US')}</div>
+                        <div class="header">
+                          ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" class="logo">` : `<div style="font-size:2rem;color:#17a2b8;font-weight:700;">🌐 WorldSecure</div>`}
+                          <div class="company-info"><strong>WorldSecure</strong><div>${new Date().toLocaleDateString(language === 'he' ? 'he-IL' : language === 'pt' ? 'pt-PT' : 'en-US')}</div></div>
                         </div>
-                      </div>
-                      
-                      <h1>🌍 ${t('sales_by_country') || 'מכירות לפי מדינה'}</h1>
-                      
-                      <div class="report-meta">
-                        ${t('total') || 'סה"כ'}: <strong>${countryData.grandDeals}</strong> ${t('deals') || 'עסקאות'} | 
-                        ${t('sales') || 'מכירות'}: <strong>${fmt(countryData.grandTotal)}</strong>
-                      </div>
-                      
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>${t('country') || 'מדינה'}</th>
-                            <th>${t('deals') || 'עסקאות'}</th>
-                            <th>${t('sales') || 'מכירות'}</th>
-                            <th>${t('currency') || 'מטבע'}</th>
-                            <th>%</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          ${countryData.rows.map(row => `
-                            <tr>
-                              <td>${row.country}</td>
-                              <td>${row.deals}</td>
-                              <td>${fmt(row.total)}</td>
-                              <td>${row.currencies.join(', ')}</td>
-                              <td>${row.percent}%</td>
-                            </tr>
-                          `).join('')}
-                        </tbody>
-                        <tfoot>
-                          <tr>
-                            <td><strong>${t('total') || 'סה"כ'}</strong></td>
-                            <td><strong>${countryData.grandDeals}</strong></td>
-                            <td><strong>${fmt(countryData.grandTotal)}</strong></td>
-                            <td></td>
-                            <td><strong>100%</strong></td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                      
-                      <div class="footer">
-                        Generated by WorldSecure CRM • ${new Date().toLocaleString(language === 'he' ? 'he-IL' : language === 'pt' ? 'pt-PT' : 'en-US')}
-                      
-                      </div>
-                    </body>
-                    </html>
-                  `;
-                  const printWindow = window.open('', '_blank');
-                  printWindow.document.write(printContent);
-                  printWindow.document.close();
-                  
-                  // Wait for images to load before printing
-                  if (logoBase64) {
-                    await new Promise(resolve => {
-                      const checkReady = setInterval(() => {
-                        if (printWindow.document.readyState === 'complete') {
-                          clearInterval(checkReady);
-                          setTimeout(resolve, 200); // Extra delay for image rendering
-                        }
-                      }, 50);
-                    });
-                  }
-                }}
-                style={{
-                  background: '#007bff',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  padding: '0.5rem 1rem',
-                  fontSize: '0.9rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem'
-                }}
-              >
-                🖨️ {t('print_pdf') || 'Print / Save as PDF'}
-              </button>
-              <button
-                onClick={async () => {
-                  // Dynamic import of SheetJS
-                  const XLSX = await import('xlsx');
-                  
-                  // Prepare data
-                  const data = [
-                    // Headers
-                    [t('country') || 'מדינה', t('deals') || 'עסקאות', t('sales') || 'מכירות', t('currency') || 'מטבע', '%'],
-                    // Data rows
-                    ...countryData.rows.map(row => [
-                      row.country,
-                      row.deals,
-                      row.total,
-                      row.currencies.join(', '),
-                      row.percent
-                    ]),
-                    // Total row
-                    [t('total') || 'סה"כ', countryData.grandDeals, countryData.grandTotal, '', 100]
-                  ];
-                  
-                  // Create worksheet
-                  const ws = XLSX.utils.aoa_to_sheet(data);
-                  
-                  // Set column widths
-                  ws['!cols'] = [
-                    { wch: 20 }, // Country
-                    { wch: 12 }, // Deals
-                    { wch: 15 }, // Sales
-                    { wch: 12 }, // Currency
-                    { wch: 8 }   // %
-                  ];
-                  
-                  // Create workbook
-                  const wb = XLSX.utils.book_new();
-                  XLSX.utils.book_append_sheet(wb, ws, 'Sales by Country');
-                  
-                  // Download
-                  const fileName = `sales_by_country_${new Date().toISOString().split('T')[0]}.xlsx`;
-                  XLSX.writeFile(wb, fileName);
-                }}
-                style={{
-                  background: '#28a745',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  padding: '0.5rem 1rem',
-                  fontSize: '0.9rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem'
-                }}
-              >
-                📊 {t('save_excel') || 'שמור כאקסל'}
-              </button>
-            </div>
+                        <h1>👥 ${t('customer_cases_analysis') || 'Customer Cases Analysis'}</h1>
+                        <div class="report-meta">${t('customer') || 'Customers'}: <strong>${sorted.length}</strong> | ${t('total_cases') || 'Total Cases'}: <strong>${countryData.reduce((s,r) => s+r.total_cases, 0)}</strong></div>
+                        <table><thead><tr>
+                          <th>${t('customer') || 'Customer'}</th>
+                          <th>${t('total_cases') || 'Total Cases'}</th>
+                          <th>${t('open') || 'Open'}</th>
+                          <th>${t('closed') || 'Closed'}</th>
+                          <th>${t('avg_open_days') || 'Avg. Open Days'}</th>
+                        </tr></thead><tbody>${rows}</tbody>
+                        <tfoot><tr>
+                          <td><strong>${t('total') || 'Total'}</strong></td>
+                          <td style="text-align:center;"><strong>${countryData.reduce((s,r) => s+r.total_cases, 0)}</strong></td>
+                          <td style="text-align:center;"><strong>${countryData.reduce((s,r) => s+r.open, 0)}</strong></td>
+                          <td style="text-align:center;"><strong>${countryData.reduce((s,r) => s+r.closed, 0)}</strong></td>
+                          <td style="text-align:center;"></td>
+                        </tr></tfoot></table>
+                        <div class="footer">Generated by WorldSecure CRM • ${new Date().toLocaleString(language === 'he' ? 'he-IL' : language === 'pt' ? 'pt-PT' : 'en-US')}</div>
+                        </body></html>`;
+                      const printWindow = window.open('', '_blank');
+                      printWindow.document.write(printContent);
+                      printWindow.document.close();
+                    }}
+                    style={{ background: '#007bff', color: 'white', border: 'none', borderRadius: '6px', padding: '0.5rem 1rem', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                  >
+                    🖨️ {t('print_pdf') || 'Print / Save as PDF'}
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const XLSX = await import('xlsx');
+                      const sorted = doSort(countryData, countrySort.field, countrySort.dir, countryGetters);
+                      const data = [
+                        [t('customer') || 'Customer', t('total_cases') || 'Total Cases', t('open') || 'Open', t('closed') || 'Closed', t('avg_open_days') || 'Avg. Open Days'],
+                        ...sorted.map(r => [r.customer_name, r.total_cases, r.open, r.closed, r.avg_days !== null ? r.avg_days : '']),
+                        [t('total') || 'Total', countryData.reduce((s,r) => s+r.total_cases,0), countryData.reduce((s,r) => s+r.open,0), countryData.reduce((s,r) => s+r.closed,0), '']
+                      ];
+                      const ws = XLSX.utils.aoa_to_sheet(data);
+                      ws['!cols'] = [{ wch: 25 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 15 }];
+                      const wb = XLSX.utils.book_new();
+                      XLSX.utils.book_append_sheet(wb, ws, 'Customer Cases');
+                      XLSX.writeFile(wb, `customer_cases_${new Date().toISOString().split('T')[0]}.xlsx`);
+                    }}
+                    style={{ background: '#28a745', color: 'white', border: 'none', borderRadius: '6px', padding: '0.5rem 1rem', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                  >
+                    📊 {t('save_excel') || 'שמור כאקסל'}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </AccordionBody>
       </div>
