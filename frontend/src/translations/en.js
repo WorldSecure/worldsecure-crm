@@ -633,4 +633,7 @@ file: 'File',
   closed_cases: 'Closed Cases',
   no_open_cases: 'No open cases',
   no_closed_cases: 'No closed cases',
+  open_date: 'Open Date',
+  closed_date: 'Closed Date',
+  total_open_days: 'Total Open Days',
 };

@@ -593,4 +593,7 @@ file: 'Arquivo',
   closed_cases: 'Casos Fechados',
   no_open_cases: 'Sem casos abertos',
   no_closed_cases: 'Sem casos fechados',
+  open_date: 'Data de Abertura',
+  closed_date: 'Data de Fechamento',
+  total_open_days: 'Total de Dias Aberto',
 };

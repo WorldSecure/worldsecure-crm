@@ -436,14 +436,18 @@ function SupportReports() {
                       <SortTh field="priority" sortState={closedSort} onSort={f => setClosedSort(p => ({ field: f, dir: p.field===f && p.dir==='asc'?'desc':'asc' }))} style={{ width: '100px' }}>{t('priority') || 'עדיפות'}</SortTh>
                       <SortTh field="status" sortState={closedSort} onSort={f => setClosedSort(p => ({ field: f, dir: p.field===f && p.dir==='asc'?'desc':'asc' }))} style={{ width: '130px' }}>{t('status') || 'סטטוס'}</SortTh>
                       <SortTh field="owner_name" sortState={closedSort} onSort={f => setClosedSort(p => ({ field: f, dir: p.field===f && p.dir==='asc'?'desc':'asc' }))} style={{ width: '110px' }}>{t('owner') || 'מטפל'}</SortTh>
-                      <SortTh field="created_at" sortState={closedSort} onSort={f => setClosedSort(p => ({ field: f, dir: p.field===f && p.dir==='asc'?'desc':'asc' }))} style={{ width: '100px' }}>{t('date') || 'תאריך פתיחה'}</SortTh>
-                      <SortTh field="updated_at" sortState={closedSort} onSort={f => setClosedSort(p => ({ field: f, dir: p.field===f && p.dir==='asc'?'desc':'asc' }))} style={{ width: '110px' }}>{t('last_updated') || 'עדכון אחרון'}</SortTh>
+                      <SortTh field="created_at" sortState={closedSort} onSort={f => setClosedSort(p => ({ field: f, dir: p.field===f && p.dir==='asc'?'desc':'asc' }))} style={{ width: '100px' }}>{t('open_date') || 'Open Date'}</SortTh>
+                      <SortTh field="updated_at" sortState={closedSort} onSort={f => setClosedSort(p => ({ field: f, dir: p.field===f && p.dir==='asc'?'desc':'asc' }))} style={{ width: '110px' }}>{t('closed_date') || 'Closed Date'}</SortTh>
+                      <SortTh field="open_days" sortState={closedSort} onSort={f => setClosedSort(p => ({ field: f, dir: p.field===f && p.dir==='asc'?'desc':'asc' }))} style={{ width: '110px', textAlign: 'center' }}>{t('total_open_days') || 'Total Open Days'}</SortTh>
                     </tr>
                   </thead>
                   <tbody>
-                    {doSort(closedData, closedSort.field, closedSort.dir, closedGetters).map((tk, i) => {
+                    {doSort(closedData, closedSort.field, closedSort.dir, { ...closedGetters, open_days: r => r.created_at && r.updated_at ? Math.round((new Date(r.updated_at) - new Date(r.created_at)) / 86400000) : 0 }).map((tk, i) => {
                       const sc = statusColors[tk.status] || { bg: '#ccc', text: '#333', label: tk.status };
                       const pc = priorityColors[tk.priority] || { bg: '#eee', text: '#333', label: tk.priority };
+                      const openDays = tk.created_at && tk.updated_at ? Math.round((new Date(tk.updated_at) - new Date(tk.created_at)) / 86400000) : '-';
+                      const daysColor = openDays === '-' ? '#888' : openDays <= 3 ? '#155724' : openDays <= 7 ? '#856404' : '#721c24';
+                      const daysBg = openDays === '-' ? '#eee' : openDays <= 3 ? '#d4edda' : openDays <= 7 ? '#fff3cd' : '#f8d7da';
                       return (
                         <tr key={tk.id} style={{ borderBottom: '1px solid #f0f0f0', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
                           <td style={{ padding: '0.6rem 1rem', fontWeight: 700, color: '#2196F3', whiteSpace: 'nowrap' }}>{tk.ticket_number || `#${tk.id}`}</td>
@@ -458,6 +462,9 @@ function SupportReports() {
                           <td style={{ padding: '0.6rem 1rem', color: '#555' }}>{tk.owner_name || '-'}</td>
                           <td style={{ padding: '0.6rem 1rem', color: '#666', whiteSpace: 'nowrap' }}>{tk.created_at ? new Date(tk.created_at).toLocaleDateString() : '-'}</td>
                           <td style={{ padding: '0.6rem 1rem', color: '#666', whiteSpace: 'nowrap' }}>{tk.updated_at ? new Date(tk.updated_at).toLocaleDateString() : '-'}</td>
+                          <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
+                            <span style={{ background: daysBg, color: daysColor, padding: '2px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 700 }}>{openDays === '-' ? '-' : `${openDays}d`}</span>
+                          </td>
                         </tr>
                       );
                     })}
@@ -472,7 +479,9 @@ function SupportReports() {
                       const textAlign = language === 'he' ? 'right' : 'left';
                       const logoBase64 = logoBase64Cache;
                       const sorted = doSort(closedData, closedSort.field, closedSort.dir, closedGetters);
-                      const rows = sorted.map(tk => `
+                      const rows = sorted.map(tk => {
+                          const openDays = tk.created_at && tk.updated_at ? Math.round((new Date(tk.updated_at) - new Date(tk.created_at)) / 86400000) : '-';
+                          return `
                         <tr>
                           <td>${tk.ticket_number || '#' + tk.id}</td>
                           <td>${tk.customer_name || '-'}</td>
@@ -482,8 +491,9 @@ function SupportReports() {
                           <td>${tk.owner_name || '-'}</td>
                           <td>${tk.created_at ? new Date(tk.created_at).toLocaleDateString() : '-'}</td>
                           <td>${tk.updated_at ? new Date(tk.updated_at).toLocaleDateString() : '-'}</td>
+                          <td style="text-align:center; font-weight:700;">${openDays === '-' ? '-' : openDays + 'd'}</td>
                         </tr>
-                      `).join('');
+                      `}).join('');
                       const printContent = `<html dir="${dir}"><head><meta charset="utf-8"><title>Support Closed Cases Report</title>
                         <style>
                           @media print { @page { margin: 1cm; } }
@@ -508,7 +518,7 @@ function SupportReports() {
                         <div class="report-meta">Closed Cases: <strong>${sorted.length}</strong></div>
                         <table><thead><tr>
                           <th>Ticket #</th><th>Customer</th><th>Subject</th><th>Priority</th>
-                          <th>Status</th><th>Owner</th><th>Created</th><th>Last Updated</th>
+                          <th>Status</th><th>Owner</th><th>Open Date</th><th>Closed Date</th><th>Total Open Days</th>
                         </tr></thead><tbody>${rows}</tbody></table>
                         <div class="footer">Generated by WorldSecure CRM • ${new Date().toLocaleString(language === 'he' ? 'he-IL' : language === 'pt' ? 'pt-PT' : 'en-US')}</div>
                         </body></html>`;

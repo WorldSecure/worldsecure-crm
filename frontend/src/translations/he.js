@@ -616,4 +616,7 @@ file: 'קובץ',
   closed_cases: 'פניות סגורות',
   no_open_cases: 'אין פניות פתוחות',
   no_closed_cases: 'אין פניות סגורות',
+  open_date: 'תאריך פתיחה',
+  closed_date: 'תאריך סגירה',
+  total_open_days: 'סה"כ ימים פתוח',
 };
