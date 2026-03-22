@@ -612,4 +612,8 @@ file: 'קובץ',
   support_status_report: 'דוח סטטוס תמיכה',
   open_cases: 'פניות פתוחות',
   last_updated: 'עדכון אחרון',
+  support_closed_report: 'דוח פניות סגורות',
+  closed_cases: 'פניות סגורות',
+  no_open_cases: 'אין פניות פתוחות',
+  no_closed_cases: 'אין פניות סגורות',
 };

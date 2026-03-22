@@ -286,7 +286,7 @@ function SupportReports() {
                 </button>
               </div>
               {statusData.length === 0 ? (
-                <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>אין פניות פתוחות</div>
+                <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>{t('no_open_cases') || 'No open cases'}</div>
               ) : (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
                   <thead>
@@ -425,7 +425,7 @@ function SupportReports() {
                 </button>
               </div>
               {closedData.length === 0 ? (
-                <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>אין פניות סגורות</div>
+                <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>{t('no_closed_cases') || 'No closed cases'}</div>
               ) : (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
                   <thead>

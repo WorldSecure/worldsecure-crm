@@ -589,4 +589,8 @@ file: 'Arquivo',
   support_status_report: 'Relatório de Status de Suporte',
   open_cases: 'Casos Abertos',
   last_updated: 'Última Atualização',
+  support_closed_report: 'Relatório de Casos Fechados',
+  closed_cases: 'Casos Fechados',
+  no_open_cases: 'Sem casos abertos',
+  no_closed_cases: 'Sem casos fechados',
 };

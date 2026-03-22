@@ -629,4 +629,8 @@ file: 'File',
   support_status_report: 'Support Status Report',
   open_cases: 'Open Cases',
   last_updated: 'Last Updated',
+  support_closed_report: 'Support Closed Cases Report',
+  closed_cases: 'Closed Cases',
+  no_open_cases: 'No open cases',
+  no_closed_cases: 'No closed cases',
 };
