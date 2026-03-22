@@ -48,16 +48,7 @@ function SupportLayout() {
               {t('support_management') || 'Support Management'}
             </Link>
             
-            {hasModuleAccess('warehouse') && (
-              <>
 
-                
-                <Link to="/support/customers" className={isActive('/support/customers')}>
-                  <span className="sidebar-icon">👥</span>
-                  {t('customers')}
-                </Link>
-              </>
-            )}
 
           </nav>
         </aside>

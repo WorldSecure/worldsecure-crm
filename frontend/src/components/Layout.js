@@ -76,11 +76,7 @@ function Layout() {
                   {t('outbound')}
                 </Link>
                 
-                <Link to="/products" className={isActive('/products')}>
-                  <span className="sidebar-icon">📦</span>
-                  {t('products')}
-                </Link>
-                
+
 
               </>
             )}
