@@ -586,4 +586,7 @@ file: 'Arquivo',
   show_in_table: 'Exibir na tabela',
   add_contact: 'Adicionar contato',
   support_reports: 'Relatórios de Suporte',
+  support_status_report: 'Relatório de Status de Suporte',
+  open_cases: 'Casos Abertos',
+  last_updated: 'Última Atualização',
 };

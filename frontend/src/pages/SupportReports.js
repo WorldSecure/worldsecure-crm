@@ -31,7 +31,7 @@ function SupportReports() {
   const [statusOpen, setStatusOpen] = useState(false);
   const [statusData, setStatusData] = useState(null);
   const [statusLoading, setStatusLoading] = useState(false);
-  const [statusSort, setStatusSort] = useState({ field: 'stage', dir: 'asc' });
+  const [statusSort, setStatusSort] = useState({ field: 'ticket_number', dir: 'asc' });
 
   const [countryOpen, setCountryOpen] = useState(false);
   const [countryData, setCountryData] = useState(null);
@@ -59,12 +59,14 @@ function SupportReports() {
 
   const toggleStatusReport = async () => {
     if (statusOpen) { setStatusOpen(false); return; }
-    if (!statusData) {
-      setStatusLoading(true);
-      try { const res = await axios.get('/api/quotes/stages-summary'); setStatusData(res.data); }
-      catch(e) { console.error(e); }
-      setStatusLoading(false);
-    }
+    setStatusLoading(true);
+    try {
+      const res = await axios.get('/api/support-tickets');
+      // סינון רק פתוחים
+      const open = res.data.filter(t => ['open','in_progress','awaiting_customer'].includes(t.status));
+      setStatusData(open);
+    } catch(e) { console.error(e); }
+    setStatusLoading(false);
     setStatusOpen(true);
   };
 
@@ -162,7 +164,27 @@ function SupportReports() {
   const handleStatusSort = (f) => setStatusSort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' }));
   const handleCountrySort = (f) => setCountrySort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' }));
 
-  const statusGetters = { stage: r => r.stage, count: r => r.count, total: r => r.total };
+  const statusGetters = {
+    ticket_number: r => r.ticket_number || r.id || 0,
+    customer_name: r => r.customer_name || '',
+    subject: r => r.subject || '',
+    priority: r => r.priority || '',
+    status: r => r.status || '',
+    owner_name: r => r.owner_name || '',
+    created_at: r => r.created_at || '',
+    updated_at: r => r.updated_at || '',
+  };
+  const priorityOrder = { high: 0, medium: 1, low: 2 };
+  const statusColors = {
+    open: { bg: '#FF9800', text: 'white', label: 'Open' },
+    in_progress: { bg: '#FF5722', text: 'white', label: 'In Progress' },
+    awaiting_customer: { bg: '#4CAF50', text: 'white', label: 'Awaiting' },
+  };
+  const priorityColors = {
+    high: { bg: '#f8d7da', text: '#c0392b', label: '🔴 High' },
+    medium: { bg: '#fff3cd', text: '#856404', label: '🟡 Medium' },
+    low: { bg: '#d4edda', text: '#155724', label: '🟢 Low' },
+  };
   const productsGetters = {
     name: r => r.name || '',
     total_qty: r => r.total_qty || 0,
@@ -211,91 +233,70 @@ function SupportReports() {
         <h2>📊 {t('support_reports') || 'דוחות מכירות'}</h2>
       </div>
 
-      {/* דוח 1 - סטטוס עסקאות */}
+      {/* דוח 1 - Support Status Report */}
       <div style={{ marginBottom: '1rem' }}>
         <AccordionBtn open={statusOpen} onClick={toggleStatusReport} color={{ base: '#007bff', dark: '#0056b3' }}>
-          📈 {t('stages_status_report') || 'דוח סטטוס עסקאות'}
+          📞 {t('support_status_report') || 'Support Status Report'}
         </AccordionBtn>
         <AccordionBody open={statusOpen} loading={statusLoading}>
           {statusData && (
             <>
               <div style={{ padding: '0.75rem 1rem', color: '#666', fontSize: '0.88rem', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>
-                  {t('total') || 'סה"כ'} <strong>{statusData.total}</strong> {t('deals') || 'עסקאות'}
-                </span>
+                <span>{t('open_cases') || 'פניות פתוחות'}: <strong>{statusData.length}</strong></span>
                 <button
                   onClick={async () => {
                     setStatusLoading(true);
                     try {
-                      const res = await axios.get('/api/quotes/stages-summary');
-                      setStatusData(res.data);
-                    } catch (err) {
-                      console.error('Error refreshing:', err);
-                    }
+                      const res = await axios.get('/api/support-tickets');
+                      setStatusData(res.data.filter(t => ['open','in_progress','awaiting_customer'].includes(t.status)));
+                    } catch(err) { console.error(err); }
                     setStatusLoading(false);
                   }}
-                  style={{
-                    background: '#28a745',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    padding: '0.4rem 0.8rem',
-                    fontSize: '0.85rem',
-                    cursor: 'pointer',
-                    fontWeight: 600
-                  }}
+                  style={{ background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem 0.8rem', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}
                 >
                   🔄 {t('refresh') || 'רענן'}
                 </button>
               </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', tableLayout: 'fixed' }}>
-                <colgroup>
-                  <col style={{ width: '90px' }} />
-                  <col />
-                  <col style={{ width: '120px' }} />
-                  <col style={{ width: '130px' }} />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th style={{ padding: '0.65rem 1rem', borderBottom: '2px solid #dee2e6', background: '#f8f9fa', fontWeight: 600, color: '#495057', textAlign: 'left' }}>{t('stage') || 'שלב'}</th>
-                    <th style={{ padding: '0.65rem 1rem', borderBottom: '2px solid #dee2e6', background: '#f8f9fa', fontWeight: 600, color: '#495057' }}>{t('document') || 'מסמך'}</th>
-                    <th style={{ padding: '0.65rem 1rem', borderBottom: '2px solid #dee2e6', background: '#f8f9fa', fontWeight: 600, color: '#495057', textAlign: 'center' }}>{t('quantity') || 'כמות'}</th>
-                    <th style={{ padding: '0.65rem 1rem', borderBottom: '2px solid #dee2e6', background: '#f8f9fa', fontWeight: 600, color: '#495057', textAlign: 'center' }}>{t('total_deals') || 'סך עסקאות'}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {statusData.summary.map((row) => {
-                    // Color logic: green if count === total, red if count < total
-                    const ovalBg = row.count === row.total ? '#28a745' : (row.count > 0 ? '#dc3545' : '#e9ecef');
-                    const textColor = row.count > 0 ? 'white' : '#999';
-                    
-                    return (
-                      <tr key={row.stage} style={{ borderBottom: '1px solid #f0f0f0', background: row.stage === 9 ? '#f0fff4' : 'white' }}>
-                        <td style={{ padding: '0.6rem 1rem', fontWeight: 700 }}>{stageIcons[row.stage - 1]} {row.stage}</td>
-                        <td style={{ padding: '0.6rem 1rem', textAlign: 'center', color: row.stage === 9 ? '#155724' : '#333', fontWeight: row.stage === 9 ? 600 : 400 }}>
-                          {row.stage === 9 && <span style={{ color: '#28a745', marginLeft: '0.3rem' }}>✓ </span>}
-                          {stageLabels[row.stage]}
-                        </td>
-                        <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
-                          <span style={{ 
-                            background: ovalBg,
-                            color: textColor,
-                            padding: '2px 10px',
-                            borderRadius: '12px',
-                            fontWeight: 600,
-                            fontSize: '0.85rem',
-                            display: 'inline-block',
-                            minWidth: '32px'
-                          }}>
-                            {row.count}
-                          </span>
-                        </td>
-                        <td style={{ padding: '0.6rem 1rem', textAlign: 'center', color: '#555' }}>{row.total}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              {statusData.length === 0 ? (
+                <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>אין פניות פתוחות</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
+                  <thead>
+                    <tr style={{ background: '#f8f9fa' }}>
+                      <SortTh field="ticket_number" sortState={statusSort} onSort={f => setStatusSort(p => ({ field: f, dir: p.field===f && p.dir==='asc'?'desc':'asc' }))} style={{ width: '100px' }}>{t('ticket_number') || 'Ticket #'}</SortTh>
+                      <SortTh field="customer_name" sortState={statusSort} onSort={f => setStatusSort(p => ({ field: f, dir: p.field===f && p.dir==='asc'?'desc':'asc' }))}>{t('customer') || 'לקוח'}</SortTh>
+                      <SortTh field="subject" sortState={statusSort} onSort={f => setStatusSort(p => ({ field: f, dir: p.field===f && p.dir==='asc'?'desc':'asc' }))}>{t('subject') || 'נושא'}</SortTh>
+                      <SortTh field="priority" sortState={statusSort} onSort={f => setStatusSort(p => ({ field: f, dir: p.field===f && p.dir==='asc'?'desc':'asc' }))} style={{ width: '100px' }}>{t('priority') || 'עדיפות'}</SortTh>
+                      <SortTh field="status" sortState={statusSort} onSort={f => setStatusSort(p => ({ field: f, dir: p.field===f && p.dir==='asc'?'desc':'asc' }))} style={{ width: '130px' }}>{t('status') || 'סטטוס'}</SortTh>
+                      <SortTh field="owner_name" sortState={statusSort} onSort={f => setStatusSort(p => ({ field: f, dir: p.field===f && p.dir==='asc'?'desc':'asc' }))} style={{ width: '110px' }}>{t('owner') || 'מטפל'}</SortTh>
+                      <SortTh field="created_at" sortState={statusSort} onSort={f => setStatusSort(p => ({ field: f, dir: p.field===f && p.dir==='asc'?'desc':'asc' }))} style={{ width: '100px' }}>{t('date') || 'תאריך פתיחה'}</SortTh>
+                      <SortTh field="updated_at" sortState={statusSort} onSort={f => setStatusSort(p => ({ field: f, dir: p.field===f && p.dir==='asc'?'desc':'asc' }))} style={{ width: '110px' }}>{t('last_updated') || 'עדכון אחרון'}</SortTh>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {doSort(statusData, statusSort.field, statusSort.dir, statusGetters).map((tk, i) => {
+                      const sc = statusColors[tk.status] || { bg: '#ccc', text: '#333', label: tk.status };
+                      const pc = priorityColors[tk.priority] || { bg: '#eee', text: '#333', label: tk.priority };
+                      return (
+                        <tr key={tk.id} style={{ borderBottom: '1px solid #f0f0f0', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                          <td style={{ padding: '0.6rem 1rem', fontWeight: 700, color: '#2196F3', whiteSpace: 'nowrap' }}>{tk.ticket_number || `#${tk.id}`}</td>
+                          <td style={{ padding: '0.6rem 1rem', wordBreak: 'break-word' }}>{tk.customer_name || '-'}</td>
+                          <td style={{ padding: '0.6rem 1rem', wordBreak: 'break-word' }}>{tk.subject || '-'}</td>
+                          <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
+                            <span style={{ background: pc.bg, color: pc.text, padding: '2px 8px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 600 }}>{pc.label}</span>
+                          </td>
+                          <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
+                            <span style={{ background: sc.bg, color: sc.text, padding: '2px 8px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 600 }}>{sc.label}</span>
+                          </td>
+                          <td style={{ padding: '0.6rem 1rem', color: '#555' }}>{tk.owner_name || '-'}</td>
+                          <td style={{ padding: '0.6rem 1rem', color: '#666', whiteSpace: 'nowrap' }}>{tk.created_at ? new Date(tk.created_at).toLocaleDateString() : '-'}</td>
+                          <td style={{ padding: '0.6rem 1rem', color: '#666', whiteSpace: 'nowrap' }}>{tk.updated_at ? new Date(tk.updated_at).toLocaleDateString() : '-'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
             </>
           )}
         </AccordionBody>

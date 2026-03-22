@@ -609,4 +609,7 @@ file: 'קובץ',
   show_in_table: 'הצג בטבלה',
   add_contact: 'הוסף איש קשר',
   support_reports: 'דוחות תמיכה',
+  support_status_report: 'דוח סטטוס תמיכה',
+  open_cases: 'פניות פתוחות',
+  last_updated: 'עדכון אחרון',
 };

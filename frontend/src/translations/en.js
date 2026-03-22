@@ -626,4 +626,7 @@ file: 'File',
   show_in_table: 'Show in table',
   add_contact: 'Add contact',
   support_reports: 'Support Reports',
+  support_status_report: 'Support Status Report',
+  open_cases: 'Open Cases',
+  last_updated: 'Last Updated',
 };
