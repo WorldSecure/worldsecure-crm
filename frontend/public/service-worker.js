@@ -1,5 +1,5 @@
 // WorldSecure PWA Service Worker
-const CACHE_NAME = 'worldsecure-v1';
+const CACHE_NAME = 'worldsecure-20260322';
 
 const STATIC_ASSETS = [
   '/',
