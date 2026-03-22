@@ -583,4 +583,6 @@ file: 'Arquivo',
   case_management: 'Gestão do Caso',
   ticket_details: 'Detalhes do Ticket',
   ticket_deleted: 'Ticket excluído',
+  show_in_table: 'Exibir na tabela',
+  add_contact: 'Adicionar contato',
 };

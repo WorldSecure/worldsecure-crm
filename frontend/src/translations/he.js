@@ -606,4 +606,6 @@ file: 'קובץ',
   case_management: 'ניהול קריאה',
   ticket_details: 'פרטי הקריאה',
   ticket_deleted: 'הקריאה נמחקה',
+  show_in_table: 'הצג בטבלה',
+  add_contact: 'הוסף איש קשר',
 };

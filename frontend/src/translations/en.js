@@ -623,4 +623,6 @@ file: 'File',
   case_management: 'Case Management',
   ticket_details: 'Ticket Details',
   ticket_deleted: 'Ticket deleted',
+  show_in_table: 'Show in table',
+  add_contact: 'Add contact',
 };
