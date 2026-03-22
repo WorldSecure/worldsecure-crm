@@ -292,17 +292,23 @@ function Customers() {
                   {isAdmin && (() => {
                     try {
                       const p = JSON.parse(customer.contact_person);
-                      if (Array.isArray(p) && p.length > 0) return (
-                        <div style={{ fontSize: '0.82rem', color: '#555', marginBottom: '0.35rem' }}>
-                          {p.map((c, i) => (
-                            <div key={i}>
-                              {c.name && <span>👤 {c.name} </span>}
-                              {c.phone && <span>📞 {c.phone} </span>}
-                              {c.email && <span>✉️ {c.email}</span>}
-                            </div>
-                          ))}
-                        </div>
-                      );
+                      if (Array.isArray(p) && p.length > 0) {
+                        const visible = p.filter(c => c.show_in_table);
+                        if (visible.length === 0) return null;
+                        return (
+                          <div style={{ fontSize: '0.82rem', color: '#555', marginBottom: '0.35rem' }}>
+                            {visible.map((c, i) => (
+                              <div key={i}>
+                                {c.name && <span>👤 {c.name} </span>}
+                                {(Array.isArray(c.phones) ? c.phones : (c.phone ? [c.phone] : [])).filter(Boolean).map((ph, pi) => (
+                                  <span key={pi}>📞 {ph} </span>
+                                ))}
+                                {c.email && <span>✉️ {c.email}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      }
                     } catch(e) {}
                     return customer.contact_person || customer.phone ? (
                       <div style={{ fontSize: '0.82rem', color: '#555', marginBottom: '0.35rem' }}>

@@ -280,17 +280,23 @@ function Manufacturers() {
                   {(() => {
                     try {
                       const p = JSON.parse(manufacturer.contact_person);
-                      if (Array.isArray(p) && p.length > 0) return (
-                        <div style={{ fontSize: '0.82rem', color: '#555', marginBottom: '0.5rem' }}>
-                          {p.map((c, i) => (
-                            <div key={i}>
-                              {c.name && <span>👤 {c.name} </span>}
-                              {c.phone && <span>📞 {c.phone} </span>}
-                              {c.email && <span>✉️ {c.email}</span>}
-                            </div>
-                          ))}
-                        </div>
-                      );
+                      if (Array.isArray(p) && p.length > 0) {
+                        const visible = p.filter(c => c.show_in_table);
+                        if (visible.length === 0) return null;
+                        return (
+                          <div style={{ fontSize: '0.82rem', color: '#555', marginBottom: '0.5rem' }}>
+                            {visible.map((c, i) => (
+                              <div key={i}>
+                                {c.name && <span>👤 {c.name} </span>}
+                                {(Array.isArray(c.phones) ? c.phones : (c.phone ? [c.phone] : [])).filter(Boolean).map((ph, pi) => (
+                                  <span key={pi}>📞 {ph} </span>
+                                ))}
+                                {c.email && <span>✉️ {c.email}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      }
                     } catch(e) {}
                     return (manufacturer.contact_person || manufacturer.phone || manufacturer.email) ? (
                       <div style={{ fontSize: '0.82rem', color: '#555', marginBottom: '0.5rem' }}>
