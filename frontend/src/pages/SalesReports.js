@@ -35,20 +35,32 @@ function SalesReports() {
 
   const [countryOpen, setCountryOpen] = useState(false);
   const [countryData, setCountryData] = useState(null);
+  const [countryAllData, setCountryAllData] = useState(null);
   const [countryLoading, setCountryLoading] = useState(false);
   const [countrySort, setCountrySort] = useState({ field: 'total', dir: 'desc' });
+  const [countryFilter, setCountryFilter] = useState('all');
+  const [countryCustomFrom, setCountryCustomFrom] = useState('');
+  const [countryCustomTo, setCountryCustomTo] = useState('');
 
   const [productsOpen, setProductsOpen] = useState(false);
   const [productsData, setProductsData] = useState(null);
+  const [productsAllData, setProductsAllData] = useState(null);
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsSort, setProductsSort] = useState({ field: 'total_qty', dir: 'desc' });
   const [productsSearch, setProductsSearch] = useState('');
+  const [productsFilter, setProductsFilter] = useState('all');
+  const [productsCustomFrom, setProductsCustomFrom] = useState('');
+  const [productsCustomTo, setProductsCustomTo] = useState('');
 
   const [customersOpen, setCustomersOpen] = useState(false);
   const [customersData, setCustomersData] = useState(null);
+  const [customersAllData, setCustomersAllData] = useState(null);
   const [customersLoading, setCustomersLoading] = useState(false);
   const [customersSort, setCustomersSort] = useState({ field: 'total', dir: 'desc' });
   const [customersSearch, setCustomersSearch] = useState('');
+  const [customersFilter, setCustomersFilter] = useState('all');
+  const [customersCustomFrom, setCustomersCustomFrom] = useState('');
+  const [customersCustomTo, setCustomersCustomTo] = useState('');
 
   const [profitOpen, setProfitOpen] = useState(false);
   const [closedDeals, setClosedDeals] = useState(null);
@@ -68,11 +80,56 @@ function SalesReports() {
     setStatusOpen(true);
   };
 
+  const applySalesFilter = (data, filter, customFrom, customTo) => {
+    if (!data || filter === 'all') return data;
+    const now = new Date();
+    const startOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
+    const startOfQuarter = (d) => new Date(d.getFullYear(), Math.floor(d.getMonth()/3)*3, 1);
+    const startOfYear = (d) => new Date(d.getFullYear(), 0, 1);
+    let from = null, to = null;
+    if (filter === '7d') { from = new Date(now - 7*86400000); }
+    else if (filter === '30d') { from = new Date(now - 30*86400000); }
+    else if (filter === '90d') { from = new Date(now - 90*86400000); }
+    else if (filter === 'this_month') { from = startOfMonth(now); }
+    else if (filter === 'last_month') { from = startOfMonth(new Date(now.getFullYear(), now.getMonth()-1, 1)); to = startOfMonth(now); }
+    else if (filter === 'this_quarter') { from = startOfQuarter(now); }
+    else if (filter === 'last_quarter') { from = startOfQuarter(new Date(now.getFullYear(), now.getMonth()-3, 1)); to = startOfQuarter(now); }
+    else if (filter === 'this_year') { from = startOfYear(now); }
+    else if (filter === 'last_year') { from = startOfYear(new Date(now.getFullYear()-1, 0, 1)); to = startOfYear(now); }
+    else if (filter === 'custom') {
+      from = customFrom ? new Date(new Date(customFrom).setHours(0,0,0,0)) : null;
+      to = customTo ? new Date(new Date(customTo).setHours(23,59,59,999)) : null;
+    }
+    if (!from && !to) return data;
+    // Filter rows by closed_at or created_at
+    const filterRows = (rows, dateField) => rows.filter(r => {
+      const d = r[dateField] ? new Date(r[dateField]) : null;
+      if (!d) return filter === 'all';
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    });
+    // For country/customers summary - filter the rows array
+    if (data.rows) {
+      const filtered = filterRows(data.rows, 'last_activity');
+      const grandTotal = filtered.reduce((s, r) => s + (r.total || 0), 0);
+      const grandDeals = filtered.reduce((s, r) => s + (r.deals || 0), 0);
+      const total = filtered.reduce((s, r) => s + (r.total || 0), 0);
+      return {
+        ...data,
+        rows: filtered.map(r => ({ ...r, percent: total > 0 ? Math.round((r.total / total) * 100) : 0 })),
+        grandTotal,
+        grandDeals,
+      };
+    }
+    return data;
+  };
+
   const toggleProductsReport = async () => {
     if (productsOpen) { setProductsOpen(false); return; }
-    if (!productsData) {
+    if (!productsAllData) {
       setProductsLoading(true);
-      try { const res = await axios.get('/api/quotes/products-summary'); setProductsData(res.data); }
+      try { const res = await axios.get('/api/quotes/products-summary'); setProductsAllData(res.data); setProductsData(res.data); }
       catch(e) { console.error(e); }
       setProductsLoading(false);
     }
@@ -81,9 +138,9 @@ function SalesReports() {
 
   const toggleCustomersReport = async () => {
     if (customersOpen) { setCustomersOpen(false); return; }
-    if (!customersData) {
+    if (!customersAllData) {
       setCustomersLoading(true);
-      try { const res = await axios.get('/api/quotes/customers-summary'); setCustomersData(res.data); }
+      try { const res = await axios.get('/api/quotes/customers-summary'); setCustomersAllData(res.data); setCustomersData(res.data); }
       catch(e) { console.error(e); }
       setCustomersLoading(false);
     }
@@ -113,9 +170,9 @@ function SalesReports() {
 
   const toggleCountryReport = async () => {
     if (countryOpen) { setCountryOpen(false); return; }
-    if (!countryData) {
+    if (!countryAllData) {
       setCountryLoading(true);
-      try { const res = await axios.get('/api/quotes/country-summary'); setCountryData(res.data); }
+      try { const res = await axios.get('/api/quotes/country-summary'); setCountryAllData(res.data); setCountryData(res.data); }
       catch(e) { console.error(e); }
       setCountryLoading(false);
     }
@@ -179,6 +236,41 @@ function SalesReports() {
     percent: r => r.percent || 0,
   };
   const countryGetters = { country: r => r.country || '', deals: r => r.deals, total: r => r.total, currency: r => (r.currencies[0] || ''), percent: r => r.percent };
+
+  const FilterBar = ({ activeFilter, onFilter, color, customFrom, customTo, onCustomFrom, onCustomTo }) => (
+    <>
+      <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #f0f0f0', background: '#f8f9fa', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+        <span style={{ fontWeight: 600, color: '#555', fontSize: '0.88rem' }}>📅</span>
+        {[
+          { key: 'all', label: t('filter_all') || 'All' },
+          { key: '7d', label: t('filter_7d') || 'Last 7 days' },
+          { key: '30d', label: t('filter_30d') || 'Last 30 days' },
+          { key: '90d', label: t('filter_90d') || 'Last 90 days' },
+          { key: 'this_month', label: t('filter_this_month') || 'This month' },
+          { key: 'last_month', label: t('filter_last_month') || 'Last month' },
+          { key: 'this_quarter', label: t('filter_this_quarter') || 'This quarter' },
+          { key: 'last_quarter', label: t('filter_last_quarter') || 'Last quarter' },
+          { key: 'this_year', label: t('filter_this_year') || 'This year' },
+          { key: 'last_year', label: t('filter_last_year') || 'Last year' },
+          { key: 'custom', label: t('filter_custom') || 'Custom' },
+        ].map(opt => (
+          <button key={opt.key} onClick={() => onFilter(opt.key)} style={{
+            padding: '0.3rem 0.75rem', fontSize: '0.82rem', fontWeight: 600, borderRadius: '20px', border: 'none', cursor: 'pointer',
+            background: activeFilter === opt.key ? color : '#e9ecef',
+            color: activeFilter === opt.key ? 'white' : '#495057',
+          }}>{opt.label}</button>
+        ))}
+      </div>
+      {activeFilter === 'custom' && (
+        <div style={{ padding: '0.6rem 1rem', borderBottom: '1px solid #f0f0f0', background: '#fff', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <label style={{ fontSize: '0.85rem', color: '#555', fontWeight: 600 }}>{t('from') || 'From'}:</label>
+          <input type="date" value={customFrom} onChange={e => onCustomFrom(e.target.value)} style={{ border: '1px solid #ced4da', borderRadius: '4px', padding: '0.3rem 0.5rem', fontSize: '0.85rem' }} />
+          <label style={{ fontSize: '0.85rem', color: '#555', fontWeight: 600 }}>{t('to') || 'To'}:</label>
+          <input type="date" value={customTo} onChange={e => onCustomTo(e.target.value)} style={{ border: '1px solid #ced4da', borderRadius: '4px', padding: '0.3rem 0.5rem', fontSize: '0.85rem' }} />
+        </div>
+      )}
+    </>
+  );
 
   const AccordionBtn = ({ open, onClick, color, children }) => (
     <button onClick={onClick} style={{
@@ -307,6 +399,17 @@ function SalesReports() {
           🌍 {t('sales_by_country') || 'מכירות לפי מדינה'}
         </AccordionBtn>
         <AccordionBody open={countryOpen} loading={countryLoading}>
+          {countryData && (
+            <>
+              <FilterBar
+                activeFilter={countryFilter}
+                onFilter={f => { setCountryFilter(f); setCountryData(applySalesFilter(countryAllData, f, countryCustomFrom, countryCustomTo)); }}
+                color="#28a745"
+                customFrom={countryCustomFrom}
+                customTo={countryCustomTo}
+                onCustomFrom={v => { setCountryCustomFrom(v); setCountryData(applySalesFilter(countryAllData, 'custom', v, countryCustomTo)); }}
+                onCustomTo={v => { setCountryCustomTo(v); setCountryData(applySalesFilter(countryAllData, 'custom', countryCustomFrom, v)); }}
+              />
           {countryData && countryData.rows.length === 0 && (
             <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>אין נתונים</div>
           )}
@@ -634,10 +737,10 @@ function SalesReports() {
               </button>
             </div>
           )}
+            </>
+          )}
         </AccordionBody>
       </div>
-
-      {/* דוח 3 - מוצרים נמכרים */}
       <div style={{ marginBottom: '1rem' }}>
         <AccordionBtn open={productsOpen} onClick={toggleProductsReport} color={{ base: '#17a2b8', dark: '#117a8b' }}>
           📦 {t('product_sales_analysis') || 'ניתוח מכירות מוצרים'}
@@ -645,6 +748,15 @@ function SalesReports() {
         <AccordionBody open={productsOpen} loading={productsLoading}>
           {productsData && (
             <>
+              <FilterBar
+                activeFilter={productsFilter}
+                onFilter={f => { setProductsFilter(f); setProductsData(applySalesFilter(productsAllData, f, productsCustomFrom, productsCustomTo)); }}
+                color="#17a2b8"
+                customFrom={productsCustomFrom}
+                customTo={productsCustomTo}
+                onCustomFrom={v => { setProductsCustomFrom(v); setProductsData(applySalesFilter(productsAllData, 'custom', v, productsCustomTo)); }}
+                onCustomTo={v => { setProductsCustomTo(v); setProductsData(applySalesFilter(productsAllData, 'custom', productsCustomFrom, v)); }}
+              />
               <div style={{ padding: '0.6rem 1rem', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <span style={{ color: '#666', fontSize: '0.85rem' }}>🔍</span>
                 <input
@@ -1008,6 +1120,15 @@ function SalesReports() {
         <AccordionBody open={customersOpen} loading={customersLoading}>
           {customersData && (
             <>
+              <FilterBar
+                activeFilter={customersFilter}
+                onFilter={f => { setCustomersFilter(f); setCustomersData(applySalesFilter(customersAllData, f, customersCustomFrom, customersCustomTo)); }}
+                color="#6f42c1"
+                customFrom={customersCustomFrom}
+                customTo={customersCustomTo}
+                onCustomFrom={v => { setCustomersCustomFrom(v); setCustomersData(applySalesFilter(customersAllData, 'custom', v, customersCustomTo)); }}
+                onCustomTo={v => { setCustomersCustomTo(v); setCustomersData(applySalesFilter(customersAllData, 'custom', customersCustomFrom, v)); }}
+              />
               <div style={{ padding: '0.6rem 1rem', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <span style={{ color: '#666', fontSize: '0.85rem' }}>🔍</span>
                 <input
