@@ -2382,7 +2382,7 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
       }
       if (rows.length > 0) {
         const ids = rows.map(r => r.id);
-        await client.query(`DELETE FROM customers WHERE id NOT IN (${ids.map((_,i)=>`${i+1}`).join(',')})`, ids);
+        await client.query(`DELETE FROM customers WHERE id NOT IN (${ids.map((_,i)=>`$${i+1}`).join(',')})`, ids);
       }
     }
 
@@ -2456,7 +2456,7 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
       }
       if (rows.length > 0) {
         const ids = rows.map(r => r.id);
-        await client.query(`DELETE FROM suppliers WHERE id NOT IN (${ids.map((_,i)=>`${i+1}`).join(',')})`, ids);
+        await client.query(`DELETE FROM suppliers WHERE id NOT IN (${ids.map((_,i)=>`$${i+1}`).join(',')})`, ids);
       }
     }
 
@@ -2486,7 +2486,7 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
       }
       if (rows.length > 0) {
         const ids = rows.map(r => r.id);
-        await client.query(`DELETE FROM manufacturers WHERE id NOT IN (${ids.map((_,i)=>`${i+1}`).join(',')})`, ids);
+        await client.query(`DELETE FROM manufacturers WHERE id NOT IN (${ids.map((_,i)=>`$${i+1}`).join(',')})`, ids);
       }
       await client.query(`SELECT setval('manufacturers_id_seq', COALESCE((SELECT MAX(id) FROM manufacturers), 0) + 1, false)`).catch(() => {});
     }
