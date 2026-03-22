@@ -51,24 +51,37 @@ function Suppliers() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-  const [contacts, setContacts] = useState([{ name: '', phone: '' }]);
+  const [contacts, setContacts] = useState([{ name: '', phones: [''], email: '', show_in_table: true }]);
 
-  const addContact = () => { if (contacts.length < 3) setContacts([...contacts, { name: '', phone: '', email: '' }]); };
-  const removeContact = (i) => { const n = contacts.filter((_, idx) => idx !== i); setContacts(n.length > 0 ? n : [{ name: '', phone: '', email: '' }]); };
+  const addContact = () => { setContacts([...contacts, { name: '', phones: [''], email: '', show_in_table: false }]); };
+  const removeContact = (i) => { const n = contacts.filter((_, idx) => idx !== i); setContacts(n.length > 0 ? n : [{ name: '', phones: [''], email: '', show_in_table: true }]); };
   const updateContact = (i, field, value) => { const n = [...contacts]; n[i] = { ...n[i], [field]: value }; setContacts(n); };
+  const addPhone = (i) => { if ((contacts[i].phones || []).length < 3) { const n = [...contacts]; n[i] = { ...n[i], phones: [...(n[i].phones || ['']), ''] }; setContacts(n); } };
+  const removePhone = (i, pi) => { const n = [...contacts]; const newPhones = n[i].phones.filter((_, idx) => idx !== pi); n[i] = { ...n[i], phones: newPhones.length > 0 ? newPhones : [''] }; setContacts(n); };
+  const updatePhone = (i, pi, value) => { const n = [...contacts]; const newPhones = [...(n[i].phones || [''])]; newPhones[pi] = value; n[i] = { ...n[i], phones: newPhones }; setContacts(n); };
 
   const parseContacts = (contactStr, phoneStr) => {
-    try { const p = JSON.parse(contactStr); if (Array.isArray(p)) return p; } catch (e) {}
+    try {
+      const p = JSON.parse(contactStr);
+      if (Array.isArray(p)) {
+        return p.map(c => ({
+          name: c.name || '',
+          phones: Array.isArray(c.phones) ? c.phones : (c.phone ? [c.phone] : ['']),
+          email: c.email || '',
+          show_in_table: c.show_in_table !== undefined ? c.show_in_table : true
+        }));
+      }
+    } catch (e) {}
     const names = contactStr ? contactStr.split(';').map(s => s.trim()) : [''];
     const phones = phoneStr ? phoneStr.split(';').map(s => s.trim()) : [''];
-    return names.map((name, i) => ({ name, phone: phones[i] || '', email: '' })).filter(c => c.name || c.phone);
+    return names.map((name, i) => ({ name, phones: phones[i] ? [phones[i]] : [''], email: '', show_in_table: i === 0 })).filter(c => c.name || c.phones[0]);
   };
 
   const serializeContacts = (list) => {
-    const valid = list.filter(c => c.name.trim() || c.phone.trim() || c.email?.trim());
+    const valid = list.filter(c => c.name.trim() || (c.phones && c.phones.some(p => p.trim())) || c.email?.trim());
     return {
       contact_person: JSON.stringify(valid),
-      phone: valid.map(c => c.phone).filter(Boolean).join('; '),
+      phone: valid.map(c => (c.phones || []).filter(Boolean).join(', ')).filter(Boolean).join('; '),
       email: valid.map(c => c.email).filter(Boolean).join('; ')
     };
   };
@@ -167,7 +180,7 @@ function Suppliers() {
   const handleEdit = (supplier) => {
     setEditingSupplier(supplier);
     const parsed = parseContacts(supplier.contact_person || '', supplier.phone || '');
-    setContacts(parsed.length > 0 ? parsed.map(c => ({ name: c.name || '', phone: c.phone || '', email: c.email || '' })) : [{ name: '', phone: '', email: '' }]);
+    setContacts(parsed.length > 0 ? parsed.map(c => ({ name: c.name || '', phones: Array.isArray(c.phones) ? c.phones : (c.phone ? [c.phone] : ['']), email: c.email || '', show_in_table: c.show_in_table !== undefined ? c.show_in_table : true })) : [{ name: '', phones: [''], email: '', show_in_table: true }]);
     setFormData({
       name: supplier.name,
       address: supplier.address || '',
@@ -335,12 +348,16 @@ function Suppliers() {
                       try {
                         const p = JSON.parse(supplier.contact_person);
                         if (Array.isArray(p) && p.length > 0) {
+                          const visible = p.filter(c => c.show_in_table);
+                          if (visible.length === 0) return <span style={{ color: '#aaa', fontSize: '0.85rem' }}>—</span>;
                           return (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                              {p.map((c, i) => (
+                              {visible.map((c, i) => (
                                 <div key={i} style={{ fontSize: '0.85rem', lineHeight: '1.4' }}>
                                   {c.name && <div style={{ fontWeight: 500 }}>👤 {c.name}</div>}
-                                  {c.phone && <div style={{ color: '#555' }}>📞 {c.phone}</div>}
+                                  {(Array.isArray(c.phones) ? c.phones : (c.phone ? [c.phone] : [])).filter(Boolean).map((p, pi) => (
+                                    <div key={pi} style={{ color: '#555' }}>📞 {p}</div>
+                                  ))}
                                   {c.email && <div style={{ color: '#555' }}>✉️ {c.email}</div>}
                                 </div>
                               ))}
@@ -415,19 +432,44 @@ function Suppliers() {
               <div className="form-group">
                 <label className="form-label">{t('contact_person')}</label>
                 {contacts.map((contact, index) => (
-                  <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '0.75rem', background: '#f8f9fa', padding: '0.75rem', borderRadius: '6px', border: '1px solid #e9ecef' }}>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                      <input type="text" className="form-input" value={contact.name} onChange={(e) => updateContact(index, 'name', e.target.value)} placeholder={`${t('contact_person')} ${index + 1}`} style={{ flex: 2 }} />
-                      <input type="tel" className="form-input" value={contact.phone} onChange={(e) => updateContact(index, 'phone', e.target.value)} placeholder={t('phone')} style={{ flex: 2 }} />
-                      {index === contacts.length - 1 && contacts.length < 3 ? (
-                        <button type="button" onClick={addContact} className="btn btn-success" style={{ minWidth: '40px', padding: '0.5rem' }}>+</button>
-                      ) : index > 0 ? (
-                        <button type="button" onClick={() => removeContact(index)} className="btn btn-danger" style={{ minWidth: '40px', padding: '0.5rem' }}>×</button>
-                      ) : <div style={{ minWidth: '40px' }} />}
+                  <div key={index} style={{ marginBottom: '0.75rem', background: '#f8f9fa', padding: '0.75rem', borderRadius: '6px', border: '1px solid #e9ecef' }}>
+                    {/* שם + כפתור הסרת איש קשר */}
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.4rem' }}>
+                      <input type="text" className="form-input" value={contact.name} onChange={(e) => updateContact(index, 'name', e.target.value)} placeholder={`${t('contact_person')} ${index + 1}`} style={{ flex: 1 }} />
+                      {index > 0 && (
+                        <button type="button" onClick={() => removeContact(index)} className="btn btn-danger" style={{ minWidth: '36px', padding: '0.4rem' }} title="הסר איש קשר">×</button>
+                      )}
                     </div>
-                    <input type="email" className="form-input" value={contact.email || ''} onChange={(e) => updateContact(index, 'email', e.target.value)} placeholder={t('email')} />
+                    {/* טלפונים */}
+                    {(contact.phones && contact.phones.length > 0 ? contact.phones : ['']).map((phone, pi) => (
+                      <div key={pi} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.3rem' }}>
+                        <input type="tel" className="form-input" value={phone} onChange={(e) => updatePhone(index, pi, e.target.value)} placeholder={t('phone')} style={{ flex: 1 }} />
+                        <div style={{ display: 'flex', gap: '0.25rem' }}>
+                          {pi > 0 && (
+                            <button type="button" onClick={() => removePhone(index, pi)} className="btn btn-danger" style={{ minWidth: '36px', padding: '0.4rem' }} title="הסר טלפון">−</button>
+                          )}
+                          {pi === (contact.phones || ['']).length - 1 && (contact.phones || ['']).length < 3 && (
+                            <button type="button" onClick={() => addPhone(index)} className="btn btn-success" style={{ minWidth: '36px', padding: '0.4rem' }} title="הוסף טלפון">+</button>
+                          )}
+                          {pi === 0 && (contact.phones || ['']).length === 1 && (
+                            <div style={{ minWidth: '36px' }} />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {/* אימייל */}
+                    <input type="email" className="form-input" value={contact.email || ''} onChange={(e) => updateContact(index, 'email', e.target.value)} placeholder={t('email')} style={{ marginTop: '0.2rem' }} />
+                    {/* הצג בטבלה */}
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.5rem', fontSize: '0.85rem', cursor: 'pointer', color: '#374151' }}>
+                      <input type="checkbox" checked={!!contact.show_in_table} onChange={(e) => updateContact(index, 'show_in_table', e.target.checked)} />
+                      {t('show_in_table') || 'הצג בטבלה'}
+                    </label>
                   </div>
                 ))}
+                {/* כפתור הוספת איש קשר */}
+                <button type="button" onClick={addContact} className="btn btn-secondary" style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                  + {t('add_contact') || 'הוסף איש קשר'}
+                </button>
               </div>
 
               <div className="form-row">
