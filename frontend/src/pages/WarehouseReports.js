@@ -4,6 +4,7 @@ import { useLanguage } from '../utils/LanguageContext';
 
 function WarehouseReports() {
   const { t, language } = useLanguage();
+  const isMobile = window.innerWidth <= 768;
 
   // Preload logo
   const [logoBase64Cache, setLogoBase64Cache] = useState('');
@@ -308,6 +309,7 @@ function WarehouseReports() {
                   </div>
                   <RefreshBtn onClick={async () => { setInventoryLoading(true); try { const r = await axios.get('/api/products'); setInventoryData(r.data); } catch (e) {} setInventoryLoading(false); }} />
                 </div>
+                <div style={{ display: isMobile ? 'none' : 'block' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
                   <thead>
                     <tr style={{ background: '#f8f9fa' }}>
@@ -349,6 +351,35 @@ function WarehouseReports() {
                     </tr>
                   </tfoot>
                 </table>
+                </div>
+                {/* Mobile Cards */}
+                <div style={{ display: isMobile ? 'flex' : 'none', flexDirection: 'column', gap: '0.75rem', padding: '0.75rem' }}>
+                  {paginated.map(p => {
+                    const isLow = (p.quantity || 0) <= (p.min_quantity || 0);
+                    return (
+                      <div key={p.id} style={{ background: 'white', border: `1px solid ${isLow ? '#f5c6cb' : '#e2e8f0'}`, borderRadius: '10px', padding: '1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                          <span style={{ fontSize: '0.8rem', color: '#888' }}>{p.sku || '-'}</span>
+                          {isLow
+                            ? <span style={{ background: '#f8d7da', color: '#721c24', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>⚠️ {t('low_stock') || 'נמוך'}</span>
+                            : <span style={{ background: '#d4edda', color: '#155724', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>✅ {t('ok') || 'תקין'}</span>}
+                        </div>
+                        <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#1e293b', marginBottom: '0.25rem' }}>📦 {getProductName(p)}</div>
+                        {p.category_name && <div style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '0.4rem' }}>🏷️ {p.category_name}</div>}
+                        <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                          <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: '0.75rem', color: '#888' }}>{t('quantity') || 'כמות'}</div>
+                            <span style={{ background: isLow ? '#f8d7da' : '#d4edda', color: isLow ? '#721c24' : '#155724', padding: '2px 12px', borderRadius: '12px', fontWeight: 700, fontSize: '0.9rem' }}>{fmt(p.quantity)}</span>
+                          </div>
+                          <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: '0.75rem', color: '#888' }}>{t('min_quantity') || 'מינימום'}</div>
+                            <span style={{ color: '#666', fontWeight: 600, fontSize: '0.9rem' }}>{fmt(p.min_quantity || 0)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
                 {/* Pagination Bar */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', padding: '0.75rem 1rem', borderTop: '1px solid #e2e8f0' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: '#555' }}>
@@ -438,6 +469,7 @@ function WarehouseReports() {
                     setMovementsLoading(false);
                   }} />
                 </div>
+                <div style={{ display: isMobile ? 'none' : 'block' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
                   <thead>
                     <tr style={{ background: '#f8f9fa' }}>
@@ -475,6 +507,26 @@ function WarehouseReports() {
                     </tr>
                   </tfoot>
                 </table>
+                </div>
+                {/* Mobile Cards */}
+                <div style={{ display: isMobile ? 'flex' : 'none', flexDirection: 'column', gap: '0.75rem', padding: '0.75rem' }}>
+                  {sorted.length === 0
+                    ? <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>{t('no_data') || 'אין נתונים'}</div>
+                    : sorted.map(r => (
+                      <div key={`${r.type}-${r.id}`} style={{ background: 'white', border: `1px solid ${r.type === 'inbound' ? '#b8daff' : '#f5c6cb'}`, borderRadius: '10px', padding: '1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                          <span style={{ fontSize: '0.82rem', color: '#64748b' }}>{r.date ? new Date(r.date).toLocaleDateString() : '-'}</span>
+                          {r.type === 'inbound'
+                            ? <span style={{ background: '#cce5ff', color: '#004085', padding: '2px 8px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: 600 }}>⬇️ {t('inbound') || 'קבלה'}</span>
+                            : <span style={{ background: '#f8d7da', color: '#721c24', padding: '2px 8px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: 600 }}>⬆️ {t('outbound') || 'משלוח'}</span>}
+                        </div>
+                        <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#1e293b', marginBottom: '0.25rem' }}>
+                          {r.type === 'inbound' ? '🏭' : '👤'} {r.party}
+                        </div>
+                        {r.notes && <div style={{ fontSize: '0.82rem', color: '#64748b' }}>📝 {r.notes}</div>}
+                      </div>
+                    ))}
+                </div>
                 <div style={{ padding: '1rem', borderTop: '1px solid #dee2e6', display: 'flex', justifyContent: 'flex-end' }}>
                   <PrintBtn onClick={() => {
                     const rows = sorted.map(r => `<tr><td>${r.date ? new Date(r.date).toLocaleDateString() : '-'}</td><td style="text-align:center;">${r.type === 'inbound' ? '⬇️ Inbound' : '⬆️ Outbound'}</td><td>${r.party}</td><td>${r.notes || '-'}</td></tr>`).join('');
@@ -513,6 +565,8 @@ function WarehouseReports() {
                 {lowStockData.length === 0
                   ? <div style={{ padding: '2rem', textAlign: 'center', color: '#155724', fontWeight: 600 }}>✅ {t('all_stock_ok') || 'כל המוצרים תקינים!'}</div>
                   : (
+                    <>
+                    <div style={{ display: isMobile ? 'none' : 'block' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
                       <thead>
                         <tr style={{ background: '#f8f9fa' }}>
@@ -547,6 +601,30 @@ function WarehouseReports() {
                         </tr>
                       </tfoot>
                     </table>
+                    </div>
+                    {/* Mobile Cards */}
+                    <div style={{ display: isMobile ? 'flex' : 'none', flexDirection: 'column', gap: '0.75rem', padding: '0.75rem' }}>
+                      {sorted.map(p => (
+                        <div key={p.id} style={{ background: 'white', border: '1px solid #f5c6cb', borderRadius: '10px', padding: '1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                            <span style={{ fontSize: '0.8rem', color: '#888' }}>{p.sku || '-'}</span>
+                            <span style={{ background: '#721c24', color: 'white', padding: '2px 8px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: 700 }}>-{fmt(p.shortage)} {t('shortage') || 'חסר'}</span>
+                          </div>
+                          <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#721c24', marginBottom: '0.5rem' }}>⚠️ {p.name_display}</div>
+                          <div style={{ display: 'flex', gap: '1.5rem' }}>
+                            <div>
+                              <div style={{ fontSize: '0.75rem', color: '#888' }}>{t('quantity') || 'כמות'}</div>
+                              <span style={{ background: '#f8d7da', color: '#721c24', padding: '2px 10px', borderRadius: '12px', fontWeight: 700, fontSize: '0.9rem' }}>{fmt(p.quantity)}</span>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: '0.75rem', color: '#888' }}>{t('min_quantity') || 'מינימום'}</div>
+                              <span style={{ color: '#666', fontWeight: 600, fontSize: '0.9rem' }}>{fmt(p.min_quantity || 0)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    </>
                   )}
                 <div style={{ padding: '1rem', borderTop: '1px solid #dee2e6', display: 'flex', justifyContent: 'flex-end' }}>
                   <PrintBtn onClick={() => {
@@ -595,6 +673,8 @@ function WarehouseReports() {
                 {sorted.length === 0
                   ? <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>{t('no_data') || 'אין נתונים'}</div>
                   : (
+                    <>
+                    <div style={{ display: isMobile ? 'none' : 'block' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
                       <thead>
                         <tr style={{ background: '#f8f9fa' }}>
@@ -622,6 +702,26 @@ function WarehouseReports() {
                         </tr>
                       </tfoot>
                     </table>
+                    </div>
+                    {/* Mobile Cards */}
+                    <div style={{ display: isMobile ? 'flex' : 'none', flexDirection: 'column', gap: '0.75rem', padding: '0.75rem' }}>
+                      {sorted.map(r => (
+                        <div key={r.supplier_name} style={{ background: 'white', border: '1px solid #d1c4e9', borderRadius: '10px', padding: '1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+                          <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#1e293b', marginBottom: '0.5rem' }}>🏭 {r.supplier_name}</div>
+                          <div style={{ display: 'flex', gap: '1.5rem' }}>
+                            <div>
+                              <div style={{ fontSize: '0.75rem', color: '#888' }}>{t('total_receipts') || 'קבלות'}</div>
+                              <span style={{ background: '#ede7f6', color: '#4527a0', padding: '2px 10px', borderRadius: '12px', fontWeight: 700, fontSize: '0.9rem' }}>{r.total_receipts}</span>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: '0.75rem', color: '#888' }}>{t('last_receipt') || 'קבלה אחרונה'}</div>
+                              <span style={{ color: '#666', fontWeight: 600, fontSize: '0.85rem' }}>{r.last_date ? new Date(r.last_date).toLocaleDateString() : '-'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    </>
                   )}
                 <div style={{ padding: '1rem', borderTop: '1px solid #dee2e6', display: 'flex', justifyContent: 'flex-end' }}>
                   <PrintBtn onClick={() => {
