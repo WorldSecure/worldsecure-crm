@@ -625,4 +625,5 @@ file: 'File',
   ticket_deleted: 'Ticket deleted',
   show_in_table: 'Show in table',
   add_contact: 'Add contact',
+  support_reports: 'Support Reports',
 };

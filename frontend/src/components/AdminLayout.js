@@ -46,6 +46,12 @@ function AdminLayout() {
                 {t('sales_reports') || 'Sales Reports'}
               </Link>
             )}
+            {!isCloud && (
+              <Link to="/admin/support-reports" className={isActive('/admin/support-reports')}>
+                <span className="sidebar-icon">📞</span>
+                {t('support_reports') || 'Support Reports'}
+              </Link>
+            )}
             <Link to="/admin/activity-log" className={isActive('/admin/activity-log')}>
               <span className="sidebar-icon">📝</span>
               {t('activity_log')}

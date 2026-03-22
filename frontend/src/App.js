@@ -17,6 +17,7 @@ import Outbound from './pages/Outbound';
 import Sales from './pages/Sales';
 import Reports from './pages/Reports';
 import SalesReports from './pages/SalesReports';
+import SupportReports from './pages/SupportReports';
 import Settings from './pages/Settings';
 import ActivityLog from './pages/ActivityLog';
 import Users from './pages/Users';
@@ -311,6 +312,9 @@ function AppRoutes() {
             )}
             {window.location.hostname !== 'app.world-secure.com' && (
               <Route path="sales-reports" element={<SalesReports />} />
+            )}
+            {window.location.hostname !== 'app.world-secure.com' && (
+              <Route path="support-reports" element={<SupportReports />} />
             )}
             <Route path="activity-log" element={<ActivityLog />} />
           </Route>

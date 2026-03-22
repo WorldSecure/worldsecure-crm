@@ -585,4 +585,5 @@ file: 'Arquivo',
   ticket_deleted: 'Ticket excluído',
   show_in_table: 'Exibir na tabela',
   add_contact: 'Adicionar contato',
+  support_reports: 'Relatórios de Suporte',
 };

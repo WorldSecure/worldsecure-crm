@@ -608,4 +608,5 @@ file: 'קובץ',
   ticket_deleted: 'הקריאה נמחקה',
   show_in_table: 'הצג בטבלה',
   add_contact: 'הוסף איש קשר',
+  support_reports: 'דוחות תמיכה',
 };
