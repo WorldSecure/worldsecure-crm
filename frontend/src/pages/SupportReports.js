@@ -4,6 +4,7 @@ import { useLanguage } from '../utils/LanguageContext';
 
 function SupportReports() {
   const { t, language } = useLanguage();
+  const isMobile = window.innerWidth <= 768;
 
   // Preload logo as base64
   const [logoBase64Cache, setLogoBase64Cache] = useState('');
@@ -468,6 +469,7 @@ function SupportReports() {
               {statusData.length === 0 ? (
                 <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>{t('no_open_cases') || 'No open cases'}</div>
               ) : (
+                <div style={{ display: isMobile ? 'none' : 'block' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
                   <thead>
                     <tr style={{ background: '#f8f9fa' }}>
@@ -504,6 +506,28 @@ function SupportReports() {
                     })}
                   </tbody>
                 </table>
+                </div>
+                <div style={{ display: isMobile ? 'flex' : 'none', flexDirection: 'column', gap: '0.75rem', padding: '0.75rem' }}>
+                  {doSort(statusData, statusSort.field, statusSort.dir, statusGetters).map(tk => {
+                    const sc = statusColors[tk.status] || { bg: '#ccc', text: '#333', label: tk.status };
+                    const pc = priorityColors[tk.priority] || { bg: '#eee', text: '#333', label: tk.priority };
+                    return (
+                      <div key={tk.id} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                          <span style={{ fontWeight: 700, color: '#2196F3', fontSize: '0.9rem' }}>{tk.ticket_number || `#${tk.id}`}</span>
+                          <span style={{ background: sc.bg, color: sc.text, padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>{sc.label}</span>
+                        </div>
+                        <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#1e293b', marginBottom: '0.25rem' }}>👤 {tk.customer_name || '-'}</div>
+                        {tk.subject && <div style={{ fontSize: '0.85rem', color: '#555', marginBottom: '0.4rem' }}>📋 {tk.subject}</div>}
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.4rem' }}>
+                          <span style={{ background: pc.bg, color: pc.text, padding: '2px 8px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: 600 }}>{pc.label}</span>
+                          {tk.owner_name && <span style={{ fontSize: '0.82rem', color: '#666' }}>👨‍💼 {tk.owner_name}</span>}
+                          {tk.created_at && <span style={{ fontSize: '0.78rem', color: '#888' }}>📅 {new Date(tk.created_at).toLocaleDateString()}</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
               {statusData && statusData.length > 0 && (
                 <div style={{ padding: '1rem', borderTop: '1px solid #dee2e6', display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
@@ -688,6 +712,7 @@ function SupportReports() {
               {closedData.length === 0 ? (
                 <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>{t('no_closed_cases') || 'No closed cases'}</div>
               ) : (
+                <div style={{ display: isMobile ? 'none' : 'block' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
                   <thead>
                     <tr style={{ background: '#f8f9fa' }}>
@@ -731,6 +756,32 @@ function SupportReports() {
                     })}
                   </tbody>
                 </table>
+                </div>
+                <div style={{ display: isMobile ? 'flex' : 'none', flexDirection: 'column', gap: '0.75rem', padding: '0.75rem' }}>
+                  {doSort(closedData, closedSort.field, closedSort.dir, { ...closedGetters, open_days: r => r.created_at && r.updated_at ? Math.round((new Date(r.updated_at) - new Date(r.created_at)) / 86400000) : 0 }).map(tk => {
+                    const sc = statusColors[tk.status] || { bg: '#ccc', text: '#333', label: tk.status };
+                    const pc = priorityColors[tk.priority] || { bg: '#eee', text: '#333', label: tk.priority };
+                    const openDays = tk.created_at && tk.updated_at ? Math.round((new Date(tk.updated_at) - new Date(tk.created_at)) / 86400000) : null;
+                    const daysColor = openDays === null ? '#888' : openDays <= 3 ? '#155724' : openDays <= 7 ? '#856404' : '#721c24';
+                    const daysBg = openDays === null ? '#eee' : openDays <= 3 ? '#d4edda' : openDays <= 7 ? '#fff3cd' : '#f8d7da';
+                    return (
+                      <div key={tk.id} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                          <span style={{ fontWeight: 700, color: '#2196F3', fontSize: '0.9rem' }}>{tk.ticket_number || `#${tk.id}`}</span>
+                          <span style={{ background: sc.bg, color: sc.text, padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>{sc.label}</span>
+                        </div>
+                        <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#1e293b', marginBottom: '0.25rem' }}>👤 {tk.customer_name || '-'}</div>
+                        {tk.subject && <div style={{ fontSize: '0.85rem', color: '#555', marginBottom: '0.4rem' }}>📋 {tk.subject}</div>}
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.4rem', alignItems: 'center' }}>
+                          <span style={{ background: pc.bg, color: pc.text, padding: '2px 8px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: 600 }}>{pc.label}</span>
+                          {tk.owner_name && <span style={{ fontSize: '0.82rem', color: '#666' }}>👨‍💼 {tk.owner_name}</span>}
+                          {openDays !== null && <span style={{ background: daysBg, color: daysColor, padding: '2px 8px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: 700 }}>{openDays}d</span>}
+                          {tk.updated_at && <span style={{ fontSize: '0.78rem', color: '#888' }}>✅ {new Date(tk.updated_at).toLocaleDateString()}</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
               {closedData && closedData.length > 0 && (
                 <div style={{ padding: '1rem', borderTop: '1px solid #dee2e6', display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
@@ -904,6 +955,7 @@ function SupportReports() {
               {countryData.length === 0 ? (
                 <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>{t('no_data') || 'No data'}</div>
               ) : (
+                <div style={{ display: isMobile ? 'none' : 'block' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
                   <thead>
                     <tr style={{ background: '#f8f9fa' }}>
@@ -947,6 +999,29 @@ function SupportReports() {
                     </tr>
                   </tfoot>
                 </table>
+                </div>
+                <div style={{ display: isMobile ? 'flex' : 'none', flexDirection: 'column', gap: '0.75rem', padding: '0.75rem' }}>
+                  {doSort(countryData, countrySort.field, countrySort.dir, countryGetters).map(row => (
+                    <div key={row.customer_name} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#1e293b', marginBottom: '0.6rem' }}>👤 {row.customer_name}</div>
+                      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.72rem', color: '#888' }}>{t('total_cases')||'Total'}</div>
+                          <span style={{ background: '#e3f2fd', color: '#1565c0', padding: '2px 10px', borderRadius: '12px', fontWeight: 700, fontSize: '0.88rem' }}>{row.total_cases}</span>
+                        </div>
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.72rem', color: '#888' }}>{t('open')||'Open'}</div>
+                          {row.open > 0 ? <span style={{ background: '#fff3cd', color: '#856404', padding: '2px 8px', borderRadius: '12px', fontWeight: 600, fontSize: '0.88rem' }}>{row.open}</span> : <span style={{ color: '#aaa' }}>—</span>}
+                        </div>
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.72rem', color: '#888' }}>{t('closed')||'Closed'}</div>
+                          {row.closed > 0 ? <span style={{ background: '#d4edda', color: '#155724', padding: '2px 8px', borderRadius: '12px', fontWeight: 600, fontSize: '0.88rem' }}>{row.closed}</span> : <span style={{ color: '#aaa' }}>—</span>}
+                        </div>
+                        {row.avg_days !== null && <div style={{ textAlign: 'center' }}><div style={{ fontSize: '0.72rem', color: '#888' }}>{t('avg_open_days')||'Avg'}</div><span style={{ background: row.avg_days <= 3 ? '#d4edda' : row.avg_days <= 7 ? '#fff3cd' : '#f8d7da', color: row.avg_days <= 3 ? '#155724' : row.avg_days <= 7 ? '#856404' : '#721c24', padding: '2px 8px', borderRadius: '12px', fontWeight: 700, fontSize: '0.88rem' }}>{row.avg_days}d</span></div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
               {countryData && countryData.length > 0 && (
                 <div style={{ padding: '1rem', borderTop: '1px solid #dee2e6', display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
@@ -1110,6 +1185,7 @@ function SupportReports() {
               {productsData.length === 0 ? (
                 <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>{t('no_data') || 'No data'}</div>
               ) : (
+                <div style={{ display: isMobile ? 'none' : 'block' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
                   <thead>
                     <tr style={{ background: '#f8f9fa' }}>
@@ -1158,6 +1234,24 @@ function SupportReports() {
                     </tr>
                   </tfoot>
                 </table>
+                </div>
+                <div style={{ display: isMobile ? 'flex' : 'none', flexDirection: 'column', gap: '0.75rem', padding: '0.75rem' }}>
+                  {(() => {
+                    const q = productsSearch.toLowerCase();
+                    const filtered = q ? productsData.filter(r => r.product_name.toLowerCase().includes(q)) : productsData;
+                    return doSort(filtered, productsSort.field, productsSort.dir, productsGetters).map(row => (
+                      <div key={row.product_name} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+                        <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#1e293b', marginBottom: '0.6rem' }}>📦 {row.product_name}</div>
+                        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                          <div style={{ textAlign: 'center' }}><div style={{ fontSize: '0.72rem', color: '#888' }}>{t('total_cases')||'Total'}</div><span style={{ background: '#fff3e0', color: '#e65100', padding: '2px 10px', borderRadius: '12px', fontWeight: 700, fontSize: '0.88rem' }}>{row.total_cases}</span></div>
+                          <div style={{ textAlign: 'center' }}><div style={{ fontSize: '0.72rem', color: '#888' }}>{t('open')||'Open'}</div>{row.open > 0 ? <span style={{ background: '#fff3cd', color: '#856404', padding: '2px 8px', borderRadius: '12px', fontWeight: 600, fontSize: '0.88rem' }}>{row.open}</span> : <span style={{ color: '#aaa' }}>—</span>}</div>
+                          <div style={{ textAlign: 'center' }}><div style={{ fontSize: '0.72rem', color: '#888' }}>{t('closed')||'Closed'}</div>{row.closed > 0 ? <span style={{ background: '#d4edda', color: '#155724', padding: '2px 8px', borderRadius: '12px', fontWeight: 600, fontSize: '0.88rem' }}>{row.closed}</span> : <span style={{ color: '#aaa' }}>—</span>}</div>
+                          {row.avg_days !== null && <div style={{ textAlign: 'center' }}><div style={{ fontSize: '0.72rem', color: '#888' }}>{t('avg_open_days')||'Avg'}</div><span style={{ background: row.avg_days <= 3 ? '#d4edda' : row.avg_days <= 7 ? '#fff3cd' : '#f8d7da', color: row.avg_days <= 3 ? '#155724' : row.avg_days <= 7 ? '#856404' : '#721c24', padding: '2px 8px', borderRadius: '12px', fontWeight: 700, fontSize: '0.88rem' }}>{row.avg_days}d</span></div>}
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
               )}
               {productsData && productsData.length > 0 && (
                 <div style={{ padding: '1rem', borderTop: '1px solid #dee2e6', display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
@@ -1322,6 +1416,7 @@ function SupportReports() {
               {customersData.length === 0 ? (
                 <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>{t('no_data') || 'No data'}</div>
               ) : (
+                <div style={{ display: isMobile ? 'none' : 'block' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
                   <thead>
                     <tr style={{ background: '#f8f9fa' }}>
@@ -1380,6 +1475,27 @@ function SupportReports() {
                     </tr>
                   </tfoot>
                 </table>
+                </div>
+                <div style={{ display: isMobile ? 'flex' : 'none', flexDirection: 'column', gap: '0.75rem', padding: '0.75rem' }}>
+                  {(() => {
+                    const q = customersSearch.toLowerCase();
+                    const filtered = q ? customersData.filter(r => r.owner_name.toLowerCase().includes(q)) : customersData;
+                    return doSort(filtered, customersSort.field, customersSort.dir, customersGetters).map(row => (
+                      <div key={row.owner_name} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                          <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#1e293b' }}>🧑‍💼 {row.owner_name}</div>
+                          <span style={{ fontSize: '0.82rem', color: '#555' }}>Workload: <strong>{row.workload_pct}%</strong></span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                          <div style={{ textAlign: 'center' }}><div style={{ fontSize: '0.72rem', color: '#888' }}>{t('total_cases')||'Total'}</div><span style={{ background: '#ede7f6', color: '#4527a0', padding: '2px 10px', borderRadius: '12px', fontWeight: 700, fontSize: '0.88rem' }}>{row.total_cases}</span></div>
+                          <div style={{ textAlign: 'center' }}><div style={{ fontSize: '0.72rem', color: '#888' }}>{t('open')||'Open'}</div>{row.open > 0 ? <span style={{ background: '#fff3cd', color: '#856404', padding: '2px 8px', borderRadius: '12px', fontWeight: 600, fontSize: '0.88rem' }}>{row.open}</span> : <span style={{ color: '#aaa' }}>—</span>}</div>
+                          <div style={{ textAlign: 'center' }}><div style={{ fontSize: '0.72rem', color: '#888' }}>{t('closed')||'Closed'}</div>{row.closed > 0 ? <span style={{ background: '#d4edda', color: '#155724', padding: '2px 8px', borderRadius: '12px', fontWeight: 600, fontSize: '0.88rem' }}>{row.closed}</span> : <span style={{ color: '#aaa' }}>—</span>}</div>
+                          {row.avg_days !== null && <div style={{ textAlign: 'center' }}><div style={{ fontSize: '0.72rem', color: '#888' }}>{t('avg_open_days')||'Avg'}</div><span style={{ background: row.avg_days <= 3 ? '#d4edda' : row.avg_days <= 7 ? '#fff3cd' : '#f8d7da', color: row.avg_days <= 3 ? '#155724' : row.avg_days <= 7 ? '#856404' : '#721c24', padding: '2px 8px', borderRadius: '12px', fontWeight: 700, fontSize: '0.88rem' }}>{row.avg_days}d</span></div>}
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
               )}
               {customersData && customersData.length > 0 && (
                 <div style={{ padding: '1rem', borderTop: '1px solid #dee2e6', display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
