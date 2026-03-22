@@ -31,6 +31,8 @@ function WarehouseReports() {
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [inventorySort, setInventorySort] = useState({ field: 'name', dir: 'asc' });
   const [inventorySearch, setInventorySearch] = useState('');
+  const [inventoryPageSize, setInventoryPageSize] = useState(10);
+  const [inventoryCurrentPage, setInventoryCurrentPage] = useState(1);
 
   // ── State: דוח 2 - תנועות ──
   const [movementsOpen, setMovementsOpen] = useState(false);
@@ -292,13 +294,15 @@ function WarehouseReports() {
             const q = inventorySearch.toLowerCase();
             const filtered = q ? inventoryData.filter(p => getProductName(p).toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q)) : inventoryData;
             const sorted = doSort(filtered, inventorySort.field, inventorySort.dir, inventoryGetters);
-            const handleSort = f => setInventorySort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' }));
+            const handleSort = f => { setInventorySort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' })); setInventoryCurrentPage(1); };
+            const totalPages = inventoryPageSize === 'all' ? 1 : Math.ceil(sorted.length / inventoryPageSize);
+            const paginated = inventoryPageSize === 'all' ? sorted : sorted.slice((inventoryCurrentPage - 1) * inventoryPageSize, inventoryCurrentPage * inventoryPageSize);
             return (
               <>
                 <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={{ color: '#666', fontSize: '0.85rem' }}>🔍</span>
-                    <input type="text" placeholder={t('search') || 'חיפוש...'} value={inventorySearch} onChange={e => setInventorySearch(e.target.value)}
+                    <input type="text" placeholder={t('search') || 'חיפוש...'} value={inventorySearch} onChange={e => { setInventorySearch(e.target.value); setInventoryCurrentPage(1); }}
                       style={{ border: '1px solid #ddd', borderRadius: '6px', padding: '0.3rem 0.6rem', fontSize: '0.85rem', outline: 'none', width: '200px' }} />
                     <span style={{ color: '#666', fontSize: '0.85rem' }}>{t('products') || 'מוצרים'}: <strong>{filtered.length}</strong></span>
                   </div>
@@ -316,7 +320,7 @@ function WarehouseReports() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sorted.map((p, i) => {
+                    {paginated.map((p, i) => {
                       const isLow = (p.quantity || 0) <= (p.min_quantity || 0);
                       return (
                         <tr key={p.id} style={{ borderBottom: '1px solid #f0f0f0', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
@@ -345,7 +349,33 @@ function WarehouseReports() {
                     </tr>
                   </tfoot>
                 </table>
-                <div style={{ padding: '1rem', borderTop: '1px solid #dee2e6', display: 'flex', justifyContent: 'flex-end' }}>
+                {/* Pagination Bar */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', padding: '0.75rem 1rem', borderTop: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: '#555' }}>
+                    <span>{sorted.length} {t('products') || 'מוצרים'}</span>
+                    <span>|</span>
+                    <label>{t('per_page') || 'פר עמוד'}:</label>
+                    <select value={inventoryPageSize} onChange={e => { setInventoryPageSize(e.target.value === 'all' ? 'all' : parseInt(e.target.value)); setInventoryCurrentPage(1); }}
+                      style={{ padding: '0.2rem 0.4rem', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '0.85rem' }}>
+                      {[10, 15, 20, 50].map(n => <option key={n} value={n}>{n}</option>)}
+                      <option value="all">{t('all') || 'הכל'}</option>
+                    </select>
+                  </div>
+                  {inventoryPageSize !== 'all' && totalPages > 1 && (
+                    <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                      <button onClick={() => setInventoryCurrentPage(1)} disabled={inventoryCurrentPage === 1}
+                        style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: inventoryCurrentPage === 1 ? '#f3f4f6' : '#fff', cursor: inventoryCurrentPage === 1 ? 'default' : 'pointer' }}>«</button>
+                      <button onClick={() => setInventoryCurrentPage(p => Math.max(1, p - 1))} disabled={inventoryCurrentPage === 1}
+                        style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: inventoryCurrentPage === 1 ? '#f3f4f6' : '#fff', cursor: inventoryCurrentPage === 1 ? 'default' : 'pointer' }}>‹</button>
+                      <span style={{ fontSize: '0.85rem', padding: '0 0.3rem' }}>{inventoryCurrentPage} / {totalPages}</span>
+                      <button onClick={() => setInventoryCurrentPage(p => Math.min(totalPages, p + 1))} disabled={inventoryCurrentPage === totalPages}
+                        style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: inventoryCurrentPage === totalPages ? '#f3f4f6' : '#fff', cursor: inventoryCurrentPage === totalPages ? 'default' : 'pointer' }}>›</button>
+                      <button onClick={() => setInventoryCurrentPage(totalPages)} disabled={inventoryCurrentPage === totalPages}
+                        style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: inventoryCurrentPage === totalPages ? '#f3f4f6' : '#fff', cursor: inventoryCurrentPage === totalPages ? 'default' : 'pointer' }}>»</button>
+                    </div>
+                  )}
+                </div>
+                <div style={{ padding: '0.75rem 1rem', borderTop: '1px solid #dee2e6', display: 'flex', justifyContent: 'flex-end' }}>
                   <PrintBtn onClick={() => {
                     const rows = sorted.map(p => {
                       const isLow = (p.quantity || 0) <= (p.min_quantity || 0);
