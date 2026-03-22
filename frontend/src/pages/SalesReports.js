@@ -457,9 +457,35 @@ function SalesReports() {
                           font-size: 0.8rem;
                           page-break-inside: avoid;
                         }
+                      .button-container {
+      text-align: center;
+      margin-bottom: 20px;
+      padding: 15px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #dee2e6;
+    }
+    .btn-print-doc, .btn-close-doc {
+      padding: 12px 24px;
+      margin: 0 8px;
+      font-size: 16px;
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+      font-weight: 600;
+    }
+    .btn-print-doc { background: #3498db; color: white; }
+    .btn-print-doc:hover { background: #2980b9; }
+    .btn-close-doc { background: #95a5a6; color: white; }
+    .btn-close-doc:hover { background: #7f8c8d; }
+    @media print { .button-container { display: none !important; } }
                       </style>
                     </head>
                     <body>
+
+                        <div class="button-container">
+                          <button class="btn-print-doc" onclick="window.print()">&#128424; Print / Save as PDF</button>
+                          <button class="btn-close-doc" onclick="window.close()">&#10005; Close</button>
+                        </div>
                       <div class="header">
                         ${logoBase64 
                           ? `<img src="${logoBase64}" alt="Company Logo" class="logo">` 
@@ -517,7 +543,7 @@ function SalesReports() {
                     </body>
                     </html>
                   `;
-                  const printWindow = window.open('', '', 'width=800,height=600');
+                  const printWindow = window.open('', '_blank');
                   printWindow.document.write(printContent);
                   printWindow.document.close();
                   
@@ -532,14 +558,6 @@ function SalesReports() {
                       }, 50);
                     });
                   }
-                  
-                  // Auto-close window after print dialog closes
-                  printWindow.print();
-                  
-                  // Close window after printing (or cancel)
-                  setTimeout(() => {
-                    printWindow.close();
-                  }, 100);
                 }}
                 style={{
                   background: '#007bff',
@@ -807,9 +825,35 @@ function SalesReports() {
                               margin-top: auto;
                               page-break-inside: avoid;
                             }
+                          .button-container {
+      text-align: center;
+      margin-bottom: 20px;
+      padding: 15px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #dee2e6;
+    }
+    .btn-print-doc, .btn-close-doc {
+      padding: 12px 24px;
+      margin: 0 8px;
+      font-size: 16px;
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+      font-weight: 600;
+    }
+    .btn-print-doc { background: #3498db; color: white; }
+    .btn-print-doc:hover { background: #2980b9; }
+    .btn-close-doc { background: #95a5a6; color: white; }
+    .btn-close-doc:hover { background: #7f8c8d; }
+    @media print { .button-container { display: none !important; } }
                           </style>
                         </head>
                         <body>
+
+                        <div class="button-container">
+                          <button class="btn-print-doc" onclick="window.print()">&#128424; Print / Save as PDF</button>
+                          <button class="btn-close-doc" onclick="window.close()">&#10005; Close</button>
+                        </div>
                       <div class="header">
                             ${logoBase64 
                               ? `<img src="${logoBase64}" alt="Company Logo" class="logo">` 
@@ -866,17 +910,9 @@ function SalesReports() {
                         </html>
                       `;
                       
-                      const printWindow = window.open('', '', 'width=800,height=600');
+                      const printWindow = window.open('', '_blank');
                       printWindow.document.write(printContent);
                       printWindow.document.close();
-                      
-                      // Auto-close window after print dialog closes
-                      printWindow.print();
-                      
-                      // Close window after printing (or cancel)
-                      setTimeout(() => {
-                        printWindow.close();
-                      }, 100);
                     }}
                     style={{
                       background: '#007bff',
@@ -1161,9 +1197,35 @@ function SalesReports() {
                               margin-top: auto;
                               page-break-inside: avoid;
                             }
+                          .button-container {
+      text-align: center;
+      margin-bottom: 20px;
+      padding: 15px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #dee2e6;
+    }
+    .btn-print-doc, .btn-close-doc {
+      padding: 12px 24px;
+      margin: 0 8px;
+      font-size: 16px;
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+      font-weight: 600;
+    }
+    .btn-print-doc { background: #3498db; color: white; }
+    .btn-print-doc:hover { background: #2980b9; }
+    .btn-close-doc { background: #95a5a6; color: white; }
+    .btn-close-doc:hover { background: #7f8c8d; }
+    @media print { .button-container { display: none !important; } }
                           </style>
                         </head>
                         <body>
+
+                        <div class="button-container">
+                          <button class="btn-print-doc" onclick="window.print()">&#128424; Print / Save as PDF</button>
+                          <button class="btn-close-doc" onclick="window.close()">&#10005; Close</button>
+                        </div>
                       <div class="header">
                             ${logoBase64 
                               ? `<img src="${logoBase64}" alt="Company Logo" class="logo">` 
@@ -1223,17 +1285,9 @@ function SalesReports() {
                         </html>
                       `;
                       
-                      const printWindow = window.open('', '', 'width=800,height=600');
+                      const printWindow = window.open('', '_blank');
                       printWindow.document.write(printContent);
                       printWindow.document.close();
-                      
-                      // Auto-close window after print dialog closes
-                      printWindow.print();
-                      
-                      // Close window after printing (or cancel)
-                      setTimeout(() => {
-                        printWindow.close();
-                      }, 100);
                     }}
                     style={{
                       background: '#007bff',
@@ -1514,6 +1568,14 @@ function SalesReports() {
                         <title>${translations.dealProfit} - ${profitData.quote.customer_name}</title>
                         <style>
                           @media print { @page { margin: 1cm; } }
+            body { padding-top: 75px !important; font-family: Arial, sans-serif; }
+            @media print { body { padding-top: 0 !important; } }
+            .btn-print { background: #007bff; color: white; }
+            .btn-print:hover { background: #0056b3; }
+            .btn-close-win { background: #6c757d; color: white; }
+            .btn-close-win:hover { background: #545b62; }
+            body { padding-top: 75px !important; font-family: Arial, sans-serif; }
+            @media print { body { padding-top: 0 !important; } }
                           body { font-family: Arial, sans-serif; padding: 20px; direction: ${dir}; margin: 0; }
                           .header {
                             display: flex; justify-content: space-between; align-items: center;
@@ -1532,9 +1594,35 @@ function SalesReports() {
                                          padding: 20px; border-radius: 8px; margin-top: 20px; }
                           .footer { margin-top: 30px; padding-top: 20px; border-top: 2px solid #dee2e6; 
                                    text-align: center; color: #999; font-size: 0.85rem; }
+                        .button-container {
+      text-align: center;
+      margin-bottom: 20px;
+      padding: 15px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #dee2e6;
+    }
+    .btn-print-doc, .btn-close-doc {
+      padding: 12px 24px;
+      margin: 0 8px;
+      font-size: 16px;
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+      font-weight: 600;
+    }
+    .btn-print-doc { background: #3498db; color: white; }
+    .btn-print-doc:hover { background: #2980b9; }
+    .btn-close-doc { background: #95a5a6; color: white; }
+    .btn-close-doc:hover { background: #7f8c8d; }
+    @media print { .button-container { display: none !important; } }
                         </style>
                       </head>
                       <body>
+
+                        <div class="button-container">
+                          <button class="btn-print-doc" onclick="window.print()">&#128424; Print / Save as PDF</button>
+                          <button class="btn-close-doc" onclick="window.close()">&#10005; Close</button>
+                        </div>
                       <div class="header">
                           ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" class="logo">` : `<div class="logo-placeholder">🌐 WorldSecure</div>`}
                           <div class="company-info">
@@ -1615,11 +1703,9 @@ function SalesReports() {
                       </html>
                     `;
                     
-                    const printWindow = window.open('', '', 'width=800,height=600');
+                    const printWindow = window.open('', '_blank');
                     printWindow.document.write(printContent);
                     printWindow.document.close();
-                    printWindow.print();
-                    setTimeout(() => printWindow.close(), 100);
                   }}
                   style={{
                     background: '#007bff',
