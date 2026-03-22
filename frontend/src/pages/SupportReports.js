@@ -37,6 +37,10 @@ function SupportReports() {
   const [closedData, setClosedData] = useState(null);
   const [closedLoading, setClosedLoading] = useState(false);
   const [closedSort, setClosedSort] = useState({ field: 'ticket_number', dir: 'asc' });
+  const [closedFilter, setClosedFilter] = useState('all');
+  const [closedCustomFrom, setClosedCustomFrom] = useState('');
+  const [closedCustomTo, setClosedCustomTo] = useState('');
+  const [closedAllData, setClosedAllData] = useState(null);
 
   const [countryOpen, setCountryOpen] = useState(false);
   const [countryData, setCountryData] = useState(null);
@@ -80,10 +84,44 @@ function SupportReports() {
     setClosedLoading(true);
     try {
       const res = await axios.get('/api/support-tickets');
-      setClosedData(res.data.filter(t => ['closed', 'cancelled'].includes(t.status)));
+      const all = res.data.filter(t => ['closed', 'cancelled'].includes(t.status));
+      setClosedAllData(all);
+      setClosedData(applyClosedFilter(all, closedFilter, closedCustomFrom, closedCustomTo));
     } catch(e) { console.error(e); }
     setClosedLoading(false);
     setClosedOpen(true);
+  };
+
+  const applyClosedFilter = (data, filter, customFrom, customTo) => {
+    if (!data) return [];
+    const now = new Date();
+    const startOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
+    const startOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
+    const startOfQuarter = (d) => new Date(d.getFullYear(), Math.floor(d.getMonth()/3)*3, 1);
+    const startOfYear = (d) => new Date(d.getFullYear(), 0, 1);
+
+    let from = null, to = null;
+    if (filter === '7d') { from = new Date(now - 7*86400000); }
+    else if (filter === '30d') { from = new Date(now - 30*86400000); }
+    else if (filter === '90d') { from = new Date(now - 90*86400000); }
+    else if (filter === 'this_month') { from = startOfMonth(now); }
+    else if (filter === 'last_month') { from = startOfMonth(new Date(now.getFullYear(), now.getMonth()-1, 1)); to = startOfMonth(now); }
+    else if (filter === 'this_quarter') { from = startOfQuarter(now); }
+    else if (filter === 'last_quarter') { from = startOfQuarter(new Date(now.getFullYear(), now.getMonth()-3, 1)); to = startOfQuarter(now); }
+    else if (filter === 'this_year') { from = startOfYear(now); }
+    else if (filter === 'last_year') { from = startOfYear(new Date(now.getFullYear()-1, 0, 1)); to = startOfYear(now); }
+    else if (filter === 'custom') {
+      from = customFrom ? startOfDay(new Date(customFrom)) : null;
+      to = customTo ? new Date(new Date(customTo).setHours(23,59,59,999)) : null;
+    }
+
+    return data.filter(tk => {
+      const d = tk.updated_at ? new Date(tk.updated_at) : null;
+      if (!d) return filter === 'all';
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    });
   };
 
   const toggleProductsReport = async () => {
@@ -408,14 +446,63 @@ function SupportReports() {
         <AccordionBody open={closedOpen} loading={closedLoading}>
           {closedData && (
             <>
+              {/* Filter Bar */}
+              <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #f0f0f0', background: '#f8f9fa', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+                <span style={{ fontWeight: 600, color: '#555', fontSize: '0.88rem', marginInlineEnd: '0.25rem' }}>📅</span>
+                {[
+                  { key: 'all', label: t('filter_all') || 'All' },
+                  { key: '7d', label: t('filter_7d') || 'Last 7 days' },
+                  { key: '30d', label: t('filter_30d') || 'Last 30 days' },
+                  { key: '90d', label: t('filter_90d') || 'Last 90 days' },
+                  { key: 'this_month', label: t('filter_this_month') || 'This month' },
+                  { key: 'last_month', label: t('filter_last_month') || 'Last month' },
+                  { key: 'this_quarter', label: t('filter_this_quarter') || 'This quarter' },
+                  { key: 'last_quarter', label: t('filter_last_quarter') || 'Last quarter' },
+                  { key: 'this_year', label: t('filter_this_year') || 'This year' },
+                  { key: 'last_year', label: t('filter_last_year') || 'Last year' },
+                  { key: 'custom', label: t('filter_custom') || 'Custom' },
+                ].map(opt => (
+                  <button key={opt.key} onClick={() => {
+                    setClosedFilter(opt.key);
+                    setClosedData(applyClosedFilter(closedAllData, opt.key, closedCustomFrom, closedCustomTo));
+                  }} style={{
+                    padding: '0.3rem 0.75rem', fontSize: '0.82rem', fontWeight: 600, borderRadius: '20px', border: 'none', cursor: 'pointer',
+                    background: closedFilter === opt.key ? '#6c757d' : '#e9ecef',
+                    color: closedFilter === opt.key ? 'white' : '#495057',
+                    transition: 'all 0.15s'
+                  }}>{opt.label}</button>
+                ))}
+              </div>
+
+              {/* Custom date range */}
+              {closedFilter === 'custom' && (
+                <div style={{ padding: '0.6rem 1rem', borderBottom: '1px solid #f0f0f0', background: '#fff', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <label style={{ fontSize: '0.85rem', color: '#555', fontWeight: 600 }}>{t('from') || 'From'}:</label>
+                  <input type="date" value={closedCustomFrom} onChange={e => {
+                    setClosedCustomFrom(e.target.value);
+                    setClosedData(applyClosedFilter(closedAllData, 'custom', e.target.value, closedCustomTo));
+                  }} style={{ border: '1px solid #ced4da', borderRadius: '4px', padding: '0.3rem 0.5rem', fontSize: '0.85rem' }} />
+                  <label style={{ fontSize: '0.85rem', color: '#555', fontWeight: 600 }}>{t('to') || 'To'}:</label>
+                  <input type="date" value={closedCustomTo} onChange={e => {
+                    setClosedCustomTo(e.target.value);
+                    setClosedData(applyClosedFilter(closedAllData, 'custom', closedCustomFrom, e.target.value));
+                  }} style={{ border: '1px solid #ced4da', borderRadius: '4px', padding: '0.3rem 0.5rem', fontSize: '0.85rem' }} />
+                </div>
+              )}
+
+              {/* Count + Refresh */}
               <div style={{ padding: '0.75rem 1rem', color: '#666', fontSize: '0.88rem', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>{t('closed_cases') || 'פניות סגורות'}: <strong>{closedData.length}</strong></span>
+                <span>{t('closed_cases') || 'פניות סגורות'}: <strong>{closedData.length}</strong>
+                  {closedAllData && closedFilter !== 'all' && <span style={{ color: '#999', fontWeight: 400 }}> / {closedAllData.length} {t('total') || 'total'}</span>}
+                </span>
                 <button
                   onClick={async () => {
                     setClosedLoading(true);
                     try {
                       const res = await axios.get('/api/support-tickets');
-                      setClosedData(res.data.filter(t => ['closed', 'cancelled'].includes(t.status)));
+                      const all = res.data.filter(t => ['closed', 'cancelled'].includes(t.status));
+                      setClosedAllData(all);
+                      setClosedData(applyClosedFilter(all, closedFilter, closedCustomFrom, closedCustomTo));
                     } catch(err) { console.error(err); }
                     setClosedLoading(false);
                   }}
