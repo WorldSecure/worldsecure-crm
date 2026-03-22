@@ -441,10 +441,10 @@ function SupportReports() {
         <h2>📊 {t('support_reports') || 'דוחות מכירות'}</h2>
       </div>
 
-      {/* דוח 1 - Support Status Report */}
+      {/* דוח 1 - Support Open Cases Report */}
       <div style={{ marginBottom: '1rem' }}>
         <AccordionBtn open={statusOpen} onClick={toggleStatusReport} color={{ base: '#007bff', dark: '#0056b3' }}>
-          📞 {t('support_status_report') || 'Support Status Report'}
+          📞 {t('support_open_cases_report') || 'Support Open Cases Report'}
         </AccordionBtn>
         <AccordionBody open={statusOpen} loading={statusLoading}>
           {statusData && (
@@ -525,7 +525,7 @@ function SupportReports() {
                           <td>${tk.updated_at ? new Date(tk.updated_at).toLocaleDateString() : '-'}</td>
                         </tr>
                       `).join('');
-                      const printContent = `<html dir="${dir}"><head><meta charset="utf-8"><title>Support Status Report</title>
+                      const printContent = `<html dir="${dir}"><head><meta charset="utf-8"><title>Support Open Cases Report</title>
                         <style>
                           @media print { @page { margin: 1cm; } }
             body { padding-top: 75px !important; font-family: Arial, sans-serif; }
@@ -579,7 +579,7 @@ function SupportReports() {
                           ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" class="logo">` : `<div class="logo-placeholder">🌐 WorldSecure</div>`}
                           <div class="company-info"><strong>WorldSecure</strong><div>${new Date().toLocaleDateString(language === 'he' ? 'he-IL' : language === 'pt' ? 'pt-PT' : 'en-US')}</div></div>
                         </div>
-                        <h1>📞 Support Status Report</h1>
+                        <h1>📞 Support Open Cases Report</h1>
                         <div class="report-meta">Open Cases: <strong>${sorted.length}</strong></div>
                         <table><thead><tr>
                           <th>Ticket #</th><th>Customer</th><th>Subject</th><th>Priority</th>
