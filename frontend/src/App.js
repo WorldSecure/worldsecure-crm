@@ -315,9 +315,7 @@ function AppRoutes() {
             {window.location.hostname !== 'app.world-secure.com' && (
               <Route path="sales-reports" element={<SalesReports />} />
             )}
-            {window.location.hostname !== 'app.world-secure.com' && (
-              <Route path="support-reports" element={<SupportReports />} />
-            )}
+            <Route path="support-reports" element={<SupportReports />} />
             <Route path="activity-log" element={<ActivityLog />} />
           </Route>
 
