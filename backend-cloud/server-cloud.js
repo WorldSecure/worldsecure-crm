@@ -340,8 +340,9 @@ const adminOnly = (req, res, next) => {
 app.post('/api/customers', authenticateToken, adminOnly, async (req, res) => {
   const { name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes } = req.body;
   try {
+    await query('ALTER TABLE customers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()').catch(() => {});
     const r = await query(
-      'INSERT INTO customers (name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',
+      'INSERT INTO customers (name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW()) RETURNING *',
       [name, contact_person||null, address||null, phone||null, email||null, tax_id||null, country||null, is_sensitive ? true : false, notes||null]
     );
     res.json(r.rows[0]);
@@ -351,8 +352,9 @@ app.post('/api/customers', authenticateToken, adminOnly, async (req, res) => {
 app.put('/api/customers/:id', authenticateToken, adminOnly, async (req, res) => {
   const { name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes } = req.body;
   try {
+    await query('ALTER TABLE customers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()').catch(() => {});
     await query(
-      'UPDATE customers SET name=$1, contact_person=$2, address=$3, phone=$4, email=$5, tax_id=$6, country=$7, is_sensitive=$8, notes=$9 WHERE id=$10',
+      'UPDATE customers SET name=$1, contact_person=$2, address=$3, phone=$4, email=$5, tax_id=$6, country=$7, is_sensitive=$8, notes=$9, updated_at=NOW() WHERE id=$10',
       [name, contact_person||null, address||null, phone||null, email||null, tax_id||null, country||null, is_sensitive ? true : false, notes||null, req.params.id]
     );
     res.json({ message: 'Customer updated' });
@@ -413,8 +415,9 @@ app.delete('/api/products/:id', authenticateToken, adminOnly, async (req, res) =
 app.post('/api/suppliers', authenticateToken, adminOnly, async (req, res) => {
   const { name, address, phone, email, tax_id, notes, country, contact_person } = req.body;
   try {
+    await query('ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()').catch(() => {});
     const r = await query(
-      'INSERT INTO suppliers (name, address, phone, email, tax_id, notes, country, contact_person) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
+      'INSERT INTO suppliers (name, address, phone, email, tax_id, notes, country, contact_person, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW()) RETURNING *',
       [name, address||null, phone||null, email||null, tax_id||null, notes||null, country||null, contact_person||null]
     );
     res.json(r.rows[0]);
@@ -424,8 +427,9 @@ app.post('/api/suppliers', authenticateToken, adminOnly, async (req, res) => {
 app.put('/api/suppliers/:id', authenticateToken, adminOnly, async (req, res) => {
   const { name, address, phone, email, tax_id, notes, country, contact_person } = req.body;
   try {
+    await query('ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()').catch(() => {});
     await query(
-      'UPDATE suppliers SET name=$1, address=$2, phone=$3, email=$4, tax_id=$5, notes=$6, country=$7, contact_person=$8 WHERE id=$9',
+      'UPDATE suppliers SET name=$1, address=$2, phone=$3, email=$4, tax_id=$5, notes=$6, country=$7, contact_person=$8, updated_at=NOW() WHERE id=$9',
       [name, address||null, phone||null, email||null, tax_id||null, notes||null, country||null, contact_person||null, req.params.id]
     );
     res.json({ message: 'Supplier updated' });
@@ -455,8 +459,9 @@ app.get('/api/manufacturers', authenticateToken, async (req, res) => {
 app.post('/api/manufacturers', authenticateToken, adminOnly, async (req, res) => {
   const { name, address, phone, email, tax_id, notes, country, contact_person } = req.body;
   try {
+    await query('ALTER TABLE manufacturers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()').catch(() => {});
     const r = await query(
-      'INSERT INTO manufacturers (name, address, phone, email, tax_id, notes, country, contact_person) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
+      'INSERT INTO manufacturers (name, address, phone, email, tax_id, notes, country, contact_person, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW()) RETURNING *',
       [name, address||null, phone||null, email||null, tax_id||null, notes||null, country||null, contact_person||null]
     );
     res.json(r.rows[0]);
@@ -466,8 +471,9 @@ app.post('/api/manufacturers', authenticateToken, adminOnly, async (req, res) =>
 app.put('/api/manufacturers/:id', authenticateToken, adminOnly, async (req, res) => {
   const { name, address, phone, email, tax_id, notes, country, contact_person } = req.body;
   try {
+    await query('ALTER TABLE manufacturers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()').catch(() => {});
     await query(
-      'UPDATE manufacturers SET name=$1, address=$2, phone=$3, email=$4, tax_id=$5, notes=$6, country=$7, contact_person=$8 WHERE id=$9',
+      'UPDATE manufacturers SET name=$1, address=$2, phone=$3, email=$4, tax_id=$5, notes=$6, country=$7, contact_person=$8, updated_at=NOW() WHERE id=$9',
       [name, address||null, phone||null, email||null, tax_id||null, notes||null, country||null, contact_person||null, req.params.id]
     );
     res.json({ message: 'Manufacturer updated' });
@@ -2355,19 +2361,28 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
     }
 
     if (entity === 'customers') {
+      await client.query('ALTER TABLE customers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ').catch(() => {});
       for (const r of rows) {
         await client.query(`
-          INSERT INTO customers (id, name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes, created_at)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+          INSERT INTO customers (id, name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes, created_at, updated_at)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
           ON CONFLICT (id) DO UPDATE SET
-            name=$2, contact_person=$3, address=$4, phone=$5, email=$6,
-            tax_id=$7, country=$8, is_sensitive=$9, notes=$10`,
-          [r.id, r.name, r.contact_person, r.address, r.phone, r.email,
-           r.tax_id, r.country, r.is_sensitive ? true : false, r.notes, r.created_at]);
+            name         = CASE WHEN $12::text IS NOT NULL AND ($12::timestamptz >= COALESCE(customers.updated_at,'1970-01-01')) THEN $2  ELSE customers.name END,
+            contact_person=CASE WHEN $12::text IS NOT NULL AND ($12::timestamptz >= COALESCE(customers.updated_at,'1970-01-01')) THEN $3  ELSE customers.contact_person END,
+            address      = CASE WHEN $12::text IS NOT NULL AND ($12::timestamptz >= COALESCE(customers.updated_at,'1970-01-01')) THEN $4  ELSE customers.address END,
+            phone        = CASE WHEN $12::text IS NOT NULL AND ($12::timestamptz >= COALESCE(customers.updated_at,'1970-01-01')) THEN $5  ELSE customers.phone END,
+            email        = CASE WHEN $12::text IS NOT NULL AND ($12::timestamptz >= COALESCE(customers.updated_at,'1970-01-01')) THEN $6  ELSE customers.email END,
+            tax_id       = CASE WHEN $12::text IS NOT NULL AND ($12::timestamptz >= COALESCE(customers.updated_at,'1970-01-01')) THEN $7  ELSE customers.tax_id END,
+            country      = CASE WHEN $12::text IS NOT NULL AND ($12::timestamptz >= COALESCE(customers.updated_at,'1970-01-01')) THEN $8  ELSE customers.country END,
+            is_sensitive = CASE WHEN $12::text IS NOT NULL AND ($12::timestamptz >= COALESCE(customers.updated_at,'1970-01-01')) THEN $9  ELSE customers.is_sensitive END,
+            notes        = CASE WHEN $12::text IS NOT NULL AND ($12::timestamptz >= COALESCE(customers.updated_at,'1970-01-01')) THEN $10 ELSE customers.notes END,
+            updated_at   = CASE WHEN $12::text IS NOT NULL AND ($12::timestamptz >= COALESCE(customers.updated_at,'1970-01-01')) THEN $12::timestamptz ELSE customers.updated_at END`,
+          [r.id, r.name, r.contact_person||null, r.address||null, r.phone||null, r.email||null,
+           r.tax_id||null, r.country||null, r.is_sensitive ? true : false, r.notes||null, r.created_at, r.updated_at||null]);
       }
       if (rows.length > 0) {
         const ids = rows.map(r => r.id);
-        await client.query(`DELETE FROM customers WHERE id NOT IN (${ids.map((_,i)=>`$${i+1}`).join(',')})`, ids);
+        await client.query(`DELETE FROM customers WHERE id NOT IN (${ids.map((_,i)=>`${i+1}`).join(',')})`, ids);
       }
     }
 
@@ -2421,19 +2436,27 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
     }
 
     if (entity === 'suppliers') {
+      await client.query('ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ').catch(() => {});
       for (const r of rows) {
         await client.query(`
-          INSERT INTO suppliers (id, name, address, phone, email, tax_id, country, contact_person, notes, created_at)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+          INSERT INTO suppliers (id, name, address, phone, email, tax_id, country, contact_person, notes, created_at, updated_at)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
           ON CONFLICT (id) DO UPDATE SET
-            name=$2, address=$3, phone=$4, email=$5,
-            tax_id=$6, country=$7, contact_person=$8, notes=$9`,
-          [r.id, r.name, r.address, r.phone, r.email,
-           r.tax_id, r.country, r.contact_person, r.notes, r.created_at]);
+            name         = CASE WHEN $11::text IS NOT NULL AND ($11::timestamptz >= COALESCE(suppliers.updated_at,'1970-01-01')) THEN $2  ELSE suppliers.name END,
+            address      = CASE WHEN $11::text IS NOT NULL AND ($11::timestamptz >= COALESCE(suppliers.updated_at,'1970-01-01')) THEN $3  ELSE suppliers.address END,
+            phone        = CASE WHEN $11::text IS NOT NULL AND ($11::timestamptz >= COALESCE(suppliers.updated_at,'1970-01-01')) THEN $4  ELSE suppliers.phone END,
+            email        = CASE WHEN $11::text IS NOT NULL AND ($11::timestamptz >= COALESCE(suppliers.updated_at,'1970-01-01')) THEN $5  ELSE suppliers.email END,
+            tax_id       = CASE WHEN $11::text IS NOT NULL AND ($11::timestamptz >= COALESCE(suppliers.updated_at,'1970-01-01')) THEN $6  ELSE suppliers.tax_id END,
+            country      = CASE WHEN $11::text IS NOT NULL AND ($11::timestamptz >= COALESCE(suppliers.updated_at,'1970-01-01')) THEN $7  ELSE suppliers.country END,
+            contact_person=CASE WHEN $11::text IS NOT NULL AND ($11::timestamptz >= COALESCE(suppliers.updated_at,'1970-01-01')) THEN $8  ELSE suppliers.contact_person END,
+            notes        = CASE WHEN $11::text IS NOT NULL AND ($11::timestamptz >= COALESCE(suppliers.updated_at,'1970-01-01')) THEN $9  ELSE suppliers.notes END,
+            updated_at   = CASE WHEN $11::text IS NOT NULL AND ($11::timestamptz >= COALESCE(suppliers.updated_at,'1970-01-01')) THEN $11::timestamptz ELSE suppliers.updated_at END`,
+          [r.id, r.name, r.address||null, r.phone||null, r.email||null,
+           r.tax_id||null, r.country||null, r.contact_person||null, r.notes||null, r.created_at, r.updated_at||null]);
       }
       if (rows.length > 0) {
         const ids = rows.map(r => r.id);
-        await client.query(`DELETE FROM suppliers WHERE id NOT IN (${ids.map((_,i)=>`$${i+1}`).join(',')})`, ids);
+        await client.query(`DELETE FROM suppliers WHERE id NOT IN (${ids.map((_,i)=>`${i+1}`).join(',')})`, ids);
       }
     }
 
@@ -2441,23 +2464,30 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
       await client.query(`CREATE TABLE IF NOT EXISTS manufacturers (
         id SERIAL PRIMARY KEY, name TEXT NOT NULL, address TEXT, phone TEXT,
         email TEXT, tax_id TEXT, country TEXT, notes TEXT, contact_person TEXT,
-        created_at TIMESTAMPTZ DEFAULT NOW()
+        created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ
       )`).catch(() => {});
+      await client.query('ALTER TABLE manufacturers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ').catch(() => {});
       for (const r of rows) {
         await client.query(`
-          INSERT INTO manufacturers (id, name, address, phone, email, tax_id, country, contact_person, notes, created_at)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+          INSERT INTO manufacturers (id, name, address, phone, email, tax_id, country, contact_person, notes, created_at, updated_at)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
           ON CONFLICT (id) DO UPDATE SET
-            name=$2, address=$3, phone=$4, email=$5,
-            tax_id=$6, country=$7, contact_person=$8, notes=$9`,
+            name         = CASE WHEN $11::text IS NOT NULL AND ($11::timestamptz >= COALESCE(manufacturers.updated_at,'1970-01-01')) THEN $2  ELSE manufacturers.name END,
+            address      = CASE WHEN $11::text IS NOT NULL AND ($11::timestamptz >= COALESCE(manufacturers.updated_at,'1970-01-01')) THEN $3  ELSE manufacturers.address END,
+            phone        = CASE WHEN $11::text IS NOT NULL AND ($11::timestamptz >= COALESCE(manufacturers.updated_at,'1970-01-01')) THEN $4  ELSE manufacturers.phone END,
+            email        = CASE WHEN $11::text IS NOT NULL AND ($11::timestamptz >= COALESCE(manufacturers.updated_at,'1970-01-01')) THEN $5  ELSE manufacturers.email END,
+            tax_id       = CASE WHEN $11::text IS NOT NULL AND ($11::timestamptz >= COALESCE(manufacturers.updated_at,'1970-01-01')) THEN $6  ELSE manufacturers.tax_id END,
+            country      = CASE WHEN $11::text IS NOT NULL AND ($11::timestamptz >= COALESCE(manufacturers.updated_at,'1970-01-01')) THEN $7  ELSE manufacturers.country END,
+            contact_person=CASE WHEN $11::text IS NOT NULL AND ($11::timestamptz >= COALESCE(manufacturers.updated_at,'1970-01-01')) THEN $8  ELSE manufacturers.contact_person END,
+            notes        = CASE WHEN $11::text IS NOT NULL AND ($11::timestamptz >= COALESCE(manufacturers.updated_at,'1970-01-01')) THEN $9  ELSE manufacturers.notes END,
+            updated_at   = CASE WHEN $11::text IS NOT NULL AND ($11::timestamptz >= COALESCE(manufacturers.updated_at,'1970-01-01')) THEN $11::timestamptz ELSE manufacturers.updated_at END`,
           [r.id, r.name, r.address||null, r.phone||null, r.email||null,
-           r.tax_id||null, r.country||null, r.contact_person||null, r.notes||null, r.created_at]);
+           r.tax_id||null, r.country||null, r.contact_person||null, r.notes||null, r.created_at, r.updated_at||null]);
       }
       if (rows.length > 0) {
         const ids = rows.map(r => r.id);
-        await client.query(`DELETE FROM manufacturers WHERE id NOT IN (${ids.map((_,i)=>`$${i+1}`).join(',')})`, ids);
+        await client.query(`DELETE FROM manufacturers WHERE id NOT IN (${ids.map((_,i)=>`${i+1}`).join(',')})`, ids);
       }
-      // אפס sequence
       await client.query(`SELECT setval('manufacturers_id_seq', COALESCE((SELECT MAX(id) FROM manufacturers), 0) + 1, false)`).catch(() => {});
     }
 

@@ -126,10 +126,10 @@ async function syncLocalToCloud() {
     await syncQrToCloud();
     await syncEntityToCloud('categories',    'SELECT id, name, name_he, name_pt, description, updated_at FROM categories');
     await syncEntityToCloud('subcategories', 'SELECT id, category_id, name, name_he, name_pt, updated_at FROM subcategories');
-    await syncEntityToCloud('customers',  'SELECT * FROM customers');
+    await syncEntityToCloud('customers',  'SELECT id, name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes, created_at, updated_at FROM customers');
     await syncEntityToCloud('products',   'SELECT id, sku, name, name_he, name_pt, description, category_id, subcategory_id, supplier_id, manufacturer_id, price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at FROM products');
-    await syncEntityToCloud('suppliers',  'SELECT * FROM suppliers');
-    await syncEntityToCloud('manufacturers', 'SELECT * FROM manufacturers');
+    await syncEntityToCloud('suppliers',  'SELECT id, name, address, phone, email, tax_id, country, contact_person, notes, created_at, updated_at FROM suppliers');
+    await syncEntityToCloud('manufacturers', 'SELECT id, name, address, phone, email, tax_id, country, contact_person, notes, created_at, updated_at FROM manufacturers');
     await syncEmailSignaturesToCloud();
     await syncInboundToCloud();
     await syncOutboundToCloud();
@@ -316,60 +316,90 @@ async function syncProductsFromCloud() {
 async function syncCustomersFromCloud() {
   const result = await apiRequest('GET', '/api/customers');
   if (result.status !== 200) { log(`  ⚠ pull customers: ${JSON.stringify(result.body)}`); return; }
-  const customers = result.body || [];
+  const rows = result.body || [];
+  await sqliteRun('ALTER TABLE customers ADD COLUMN updated_at TEXT').catch(() => {});
+  const normalizeTs = (v) => v ? String(v).replace(' ', 'T').slice(0, 19) : '';
   let count = 0;
-  for (const c of customers) {
-    await sqliteRun(`
-      INSERT OR REPLACE INTO customers
-        (id, name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes)
-      VALUES (?,?,?,?,?,?,?,?,?,?)`,
-      [c.id, c.name, c.contact_person||null, c.address||null, c.phone||null,
-       c.email||null, c.tax_id||null, c.country||null, c.is_sensitive ? 1 : 0, c.notes||null]
-    ).catch(() => {});
-    count++;
+  for (const r of rows) {
+    const existing = await sqliteGet('SELECT id, updated_at FROM customers WHERE id=?', [r.id]).catch(() => null);
+    const cloudTs = normalizeTs(r.updated_at);
+    const localTs = normalizeTs(existing?.updated_at);
+    if (!existing) {
+      await sqliteRun(
+        'INSERT OR IGNORE INTO customers (id,name,contact_person,address,phone,email,tax_id,country,is_sensitive,notes,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+        [r.id,r.name,r.contact_person||null,r.address||null,r.phone||null,r.email||null,r.tax_id||null,r.country||null,r.is_sensitive?1:0,r.notes||null,r.updated_at||null]
+      ).catch(() => {});
+      count++;
+    } else if (cloudTs && cloudTs > localTs) {
+      await sqliteRun(
+        'UPDATE customers SET name=?,contact_person=?,address=?,phone=?,email=?,tax_id=?,country=?,is_sensitive=?,notes=?,updated_at=? WHERE id=?',
+        [r.name,r.contact_person||null,r.address||null,r.phone||null,r.email||null,r.tax_id||null,r.country||null,r.is_sensitive?1:0,r.notes||null,r.updated_at||null,r.id]
+      ).catch(() => {});
+      count++;
+    }
   }
-  if (count > 0) log(`  ↳ customers from cloud: ${count} synced`);
+  if (count > 0) log(`  ↳ customers from cloud: ${count} updated`);
 }
 
 async function syncSuppliersFromCloud() {
   const result = await apiRequest('GET', '/api/suppliers');
   if (result.status !== 200) { log(`  ⚠ pull suppliers: ${JSON.stringify(result.body)}`); return; }
-  const suppliers = result.body || [];
+  const rows = result.body || [];
+  await sqliteRun('ALTER TABLE suppliers ADD COLUMN updated_at TEXT').catch(() => {});
+  const normalizeTs = (v) => v ? String(v).replace(' ', 'T').slice(0, 19) : '';
   let count = 0;
-  for (const s of suppliers) {
-    await sqliteRun(`
-      INSERT OR REPLACE INTO suppliers
-        (id, name, contact_person, address, phone, email, tax_id, country, notes)
-      VALUES (?,?,?,?,?,?,?,?,?)`,
-      [s.id, s.name, s.contact_person||null, s.address||null, s.phone||null,
-       s.email||null, s.tax_id||null, s.country||null, s.notes||null]
-    ).catch(() => {});
-    count++;
+  for (const r of rows) {
+    const existing = await sqliteGet('SELECT id, updated_at FROM suppliers WHERE id=?', [r.id]).catch(() => null);
+    const cloudTs = normalizeTs(r.updated_at);
+    const localTs = normalizeTs(existing?.updated_at);
+    if (!existing) {
+      await sqliteRun(
+        'INSERT OR IGNORE INTO suppliers (id,name,contact_person,address,phone,email,tax_id,country,notes,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
+        [r.id,r.name,r.contact_person||null,r.address||null,r.phone||null,r.email||null,r.tax_id||null,r.country||null,r.notes||null,r.updated_at||null]
+      ).catch(() => {});
+      count++;
+    } else if (cloudTs && cloudTs > localTs) {
+      await sqliteRun(
+        'UPDATE suppliers SET name=?,contact_person=?,address=?,phone=?,email=?,tax_id=?,country=?,notes=?,updated_at=? WHERE id=?',
+        [r.name,r.contact_person||null,r.address||null,r.phone||null,r.email||null,r.tax_id||null,r.country||null,r.notes||null,r.updated_at||null,r.id]
+      ).catch(() => {});
+      count++;
+    }
   }
-  if (count > 0) log(`  ↳ suppliers from cloud: ${count} synced`);
+  if (count > 0) log(`  ↳ suppliers from cloud: ${count} updated`);
 }
 
 async function syncManufacturersFromCloud() {
   const result = await apiRequest('GET', '/api/manufacturers');
   if (result.status !== 200) { log(`  ⚠ pull manufacturers: ${JSON.stringify(result.body)}`); return; }
-  const manufacturers = result.body || [];
+  const rows = result.body || [];
   await sqliteRun(`CREATE TABLE IF NOT EXISTS manufacturers (
     id INTEGER PRIMARY KEY, name TEXT NOT NULL, address TEXT, phone TEXT,
     email TEXT, tax_id TEXT, country TEXT, notes TEXT, contact_person TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at TEXT
   )`).catch(() => {});
+  await sqliteRun('ALTER TABLE manufacturers ADD COLUMN updated_at TEXT').catch(() => {});
+  const normalizeTs = (v) => v ? String(v).replace(' ', 'T').slice(0, 19) : '';
   let count = 0;
-  for (const s of manufacturers) {
-    await sqliteRun(`
-      INSERT OR REPLACE INTO manufacturers
-        (id, name, contact_person, address, phone, email, tax_id, country, notes)
-      VALUES (?,?,?,?,?,?,?,?,?)`,
-      [s.id, s.name, s.contact_person||null, s.address||null, s.phone||null,
-       s.email||null, s.tax_id||null, s.country||null, s.notes||null]
-    ).catch(() => {});
-    count++;
+  for (const r of rows) {
+    const existing = await sqliteGet('SELECT id, updated_at FROM manufacturers WHERE id=?', [r.id]).catch(() => null);
+    const cloudTs = normalizeTs(r.updated_at);
+    const localTs = normalizeTs(existing?.updated_at);
+    if (!existing) {
+      await sqliteRun(
+        'INSERT OR IGNORE INTO manufacturers (id,name,contact_person,address,phone,email,tax_id,country,notes,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
+        [r.id,r.name,r.contact_person||null,r.address||null,r.phone||null,r.email||null,r.tax_id||null,r.country||null,r.notes||null,r.updated_at||null]
+      ).catch(() => {});
+      count++;
+    } else if (cloudTs && cloudTs > localTs) {
+      await sqliteRun(
+        'UPDATE manufacturers SET name=?,contact_person=?,address=?,phone=?,email=?,tax_id=?,country=?,notes=?,updated_at=? WHERE id=?',
+        [r.name,r.contact_person||null,r.address||null,r.phone||null,r.email||null,r.tax_id||null,r.country||null,r.notes||null,r.updated_at||null,r.id]
+      ).catch(() => {});
+      count++;
+    }
   }
-  if (count > 0) log(`  ↳ manufacturers from cloud: ${count} synced`);
+  if (count > 0) log(`  ↳ manufacturers from cloud: ${count} updated`);
 }
 
 async function syncCloudToLocal() {

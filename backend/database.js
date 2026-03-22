@@ -50,7 +50,6 @@ db.serialize(() => {
   // הוסף עמודות תרגום לקטגוריות לפני ה-INSERT
   db.run(`ALTER TABLE categories ADD COLUMN name_he TEXT`, () => {});
   db.run(`ALTER TABLE categories ADD COLUMN name_pt TEXT`, () => {});
-  db.run(`ALTER TABLE categories ADD COLUMN updated_at TEXT`, () => {});
 
   // Insert WorldSecure default categories (in order)
   const categories = [
@@ -180,6 +179,7 @@ db.serialize(() => {
   
   // Add contact_person column to existing suppliers table if it doesn't exist
   db.run(`ALTER TABLE suppliers ADD COLUMN contact_person TEXT`, () => {});
+  db.run(`ALTER TABLE suppliers ADD COLUMN updated_at TEXT`, () => {});
 
   // Manufacturers table
   db.run(`CREATE TABLE IF NOT EXISTS manufacturers (
@@ -194,6 +194,7 @@ db.serialize(() => {
     contact_person TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+  db.run(`ALTER TABLE manufacturers ADD COLUMN updated_at TEXT`, () => {});
 
   // Customers table
   db.run(`CREATE TABLE IF NOT EXISTS customers (
@@ -216,6 +217,7 @@ db.serialize(() => {
   db.run(`ALTER TABLE customers ADD COLUMN is_sensitive BOOLEAN DEFAULT 0`, () => {});
   // Add contact_person column to existing customers table if it doesn't exist
   db.run(`ALTER TABLE customers ADD COLUMN contact_person TEXT`, () => {});
+  db.run(`ALTER TABLE customers ADD COLUMN updated_at TEXT`, () => {});
 
   // Inbound transactions (receiving from suppliers)
   db.run(`CREATE TABLE IF NOT EXISTS inbound_transactions (

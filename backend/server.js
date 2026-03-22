@@ -912,14 +912,11 @@ app.get('/api/suppliers', authenticateToken, (req, res) => {
 
 app.post('/api/suppliers', authenticateToken, (req, res) => {
   const { name, address, phone, email, tax_id, notes, country, contact_person } = req.body;
-  
   db.run(
-    'INSERT INTO suppliers (name, address, phone, email, tax_id, notes, country, contact_person) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    `INSERT INTO suppliers (name, address, phone, email, tax_id, notes, country, contact_person, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
     [name, address, phone, email, tax_id, notes, country, contact_person],
     function(err) {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
+      if (err) return res.status(500).json({ error: err.message });
       logActivity(req.user.id, 'CREATE_SUPPLIER', 'supplier', this.lastID, { name });
       res.json({ id: this.lastID, ...req.body });
     }
@@ -929,14 +926,11 @@ app.post('/api/suppliers', authenticateToken, (req, res) => {
 app.put('/api/suppliers/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
   const { name, address, phone, email, tax_id, notes, country, contact_person } = req.body;
-  
   db.run(
-    'UPDATE suppliers SET name = ?, address = ?, phone = ?, email = ?, tax_id = ?, notes = ?, country = ?, contact_person = ? WHERE id = ?',
+    `UPDATE suppliers SET name=?, address=?, phone=?, email=?, tax_id=?, notes=?, country=?, contact_person=?, updated_at=datetime('now') WHERE id=?`,
     [name, address, phone, email, tax_id, notes, country, contact_person, id],
     (err) => {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
+      if (err) return res.status(500).json({ error: err.message });
       logActivity(req.user.id, 'UPDATE_SUPPLIER', 'supplier', id, req.body);
       res.json({ message: 'Supplier updated' });
     }
@@ -967,7 +961,7 @@ app.get('/api/manufacturers', authenticateToken, (req, res) => {
 app.post('/api/manufacturers', authenticateToken, (req, res) => {
   const { name, address, phone, email, tax_id, notes, country, contact_person } = req.body;
   db.run(
-    'INSERT INTO manufacturers (name, address, phone, email, tax_id, notes, country, contact_person) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    `INSERT INTO manufacturers (name, address, phone, email, tax_id, notes, country, contact_person, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
     [name, address, phone, email, tax_id, notes, country, contact_person],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
@@ -981,7 +975,7 @@ app.put('/api/manufacturers/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
   const { name, address, phone, email, tax_id, notes, country, contact_person } = req.body;
   db.run(
-    'UPDATE manufacturers SET name = ?, address = ?, phone = ?, email = ?, tax_id = ?, notes = ?, country = ?, contact_person = ? WHERE id = ?',
+    `UPDATE manufacturers SET name=?, address=?, phone=?, email=?, tax_id=?, notes=?, country=?, contact_person=?, updated_at=datetime('now') WHERE id=?`,
     [name, address, phone, email, tax_id, notes, country, contact_person, id],
     (err) => {
       if (err) return res.status(500).json({ error: err.message });
@@ -1013,14 +1007,11 @@ app.get('/api/customers', authenticateToken, (req, res) => {
 
 app.post('/api/customers', authenticateToken, (req, res) => {
   const { name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes } = req.body;
-  
   db.run(
-    'INSERT INTO customers (name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    `INSERT INTO customers (name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
     [name, contact_person, address, phone, email, tax_id, country, is_sensitive || 0, notes],
     function(err) {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
+      if (err) return res.status(500).json({ error: err.message });
       logActivity(req.user.id, 'CREATE_CUSTOMER', 'customer', this.lastID, { name });
       res.json({ id: this.lastID, ...req.body });
     }
@@ -1030,14 +1021,11 @@ app.post('/api/customers', authenticateToken, (req, res) => {
 app.put('/api/customers/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
   const { name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes } = req.body;
-  
   db.run(
-    'UPDATE customers SET name = ?, contact_person = ?, address = ?, phone = ?, email = ?, tax_id = ?, country = ?, is_sensitive = ?, notes = ? WHERE id = ?',
+    `UPDATE customers SET name=?, contact_person=?, address=?, phone=?, email=?, tax_id=?, country=?, is_sensitive=?, notes=?, updated_at=datetime('now') WHERE id=?`,
     [name, contact_person, address, phone, email, tax_id, country, is_sensitive || 0, notes, id],
     (err) => {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
+      if (err) return res.status(500).json({ error: err.message });
       logActivity(req.user.id, 'UPDATE_CUSTOMER', 'customer', id, req.body);
       res.json({ message: 'Customer updated' });
     }
