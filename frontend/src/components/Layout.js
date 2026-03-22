@@ -76,6 +76,11 @@ function Layout() {
                   {t('outbound')}
                 </Link>
                 
+                <Link to="/warehouse-reports" className={isActive('/warehouse-reports')}>
+                  <span className="sidebar-icon">📊</span>
+                  {t('warehouse_reports') || 'דוחות מחסן'}
+                </Link>
+                
 
 
               </>

@@ -18,6 +18,7 @@ import Sales from './pages/Sales';
 import Reports from './pages/Reports';
 import SalesReports from './pages/SalesReports';
 import SupportReports from './pages/SupportReports';
+import WarehouseReports from './pages/WarehouseReports';
 import Settings from './pages/Settings';
 import ActivityLog from './pages/ActivityLog';
 import Users from './pages/Users';
@@ -236,7 +237,7 @@ function AppRoutes() {
   const { token } = useAuth();
   
   const getActiveTab = () => {
-    if (location.pathname === '/' || location.pathname.startsWith('/dashboard') || location.pathname.startsWith('/products') || location.pathname.startsWith('/suppliers') || location.pathname.startsWith('/customers') || location.pathname.startsWith('/inbound') || location.pathname.startsWith('/outbound') || location.pathname.startsWith('/reports') || location.pathname.startsWith('/settings') || location.pathname.startsWith('/users') || location.pathname.startsWith('/activity-log')) return 'warehouse';
+    if (location.pathname === '/' || location.pathname.startsWith('/dashboard') || location.pathname.startsWith('/products') || location.pathname.startsWith('/suppliers') || location.pathname.startsWith('/customers') || location.pathname.startsWith('/inbound') || location.pathname.startsWith('/outbound') || location.pathname.startsWith('/reports') || location.pathname.startsWith('/warehouse-reports') || location.pathname.startsWith('/settings') || location.pathname.startsWith('/users') || location.pathname.startsWith('/activity-log')) return 'warehouse';
     if (location.pathname.startsWith('/sales-portal')) return 'sales';
     if (location.pathname.startsWith('/support')) return 'support';
     if (location.pathname.startsWith('/admin')) return 'admin';
@@ -268,6 +269,7 @@ function AppRoutes() {
             <Route path="inbound" element={<Inbound />} />
             <Route path="outbound" element={<Outbound />} />
             <Route path="reports" element={<Reports />} />
+            <Route path="warehouse-reports" element={<WarehouseReports />} />
             <Route path="settings" element={<AdminRoute><Settings /></AdminRoute>} />
             <Route path="users" element={<Users />} />
             <Route path="activity-log" element={<AdminRoute><ActivityLog /></AdminRoute>} />
