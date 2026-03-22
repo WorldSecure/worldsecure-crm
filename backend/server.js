@@ -583,7 +583,7 @@ app.post('/api/categories', authenticateToken, (req, res) => {
   const { name, name_he, name_pt, description } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
   db.run(
-    'INSERT INTO categories (name, name_he, name_pt, description) VALUES (?, ?, ?, ?)',
+    `INSERT INTO categories (name, name_he, name_pt, description, updated_at) VALUES (?, ?, ?, ?, datetime('now'))`,
     [name, name_he||null, name_pt||null, description||null],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
@@ -597,7 +597,7 @@ app.put('/api/categories/:id', authenticateToken, (req, res) => {
   const { name, name_he, name_pt, description } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
   db.run(
-    'UPDATE categories SET name=?, name_he=?, name_pt=?, description=? WHERE id=?',
+    `UPDATE categories SET name=?, name_he=?, name_pt=?, description=?, updated_at=datetime('now') WHERE id=?`,
     [name, name_he||null, name_pt||null, description||null, req.params.id],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
@@ -628,8 +628,10 @@ db.run(`CREATE TABLE IF NOT EXISTS subcategories (
   name TEXT NOT NULL,
   name_he TEXT,
   name_pt TEXT,
+  updated_at TEXT,
   FOREIGN KEY (category_id) REFERENCES categories(id)
 )`, () => {});
+db.run(`ALTER TABLE subcategories ADD COLUMN updated_at TEXT`, () => {});
 
 app.get('/api/subcategories', authenticateToken, (req, res) => {
   const { category_id } = req.query;
@@ -647,7 +649,7 @@ app.post('/api/subcategories', authenticateToken, (req, res) => {
   const { category_id, name, name_he, name_pt } = req.body;
   if (!category_id || !name) return res.status(400).json({ error: 'category_id and name required' });
   db.run(
-    'INSERT INTO subcategories (category_id, name, name_he, name_pt) VALUES (?,?,?,?)',
+    `INSERT INTO subcategories (category_id, name, name_he, name_pt, updated_at) VALUES (?,?,?,?,datetime('now'))`,
     [category_id, name, name_he||null, name_pt||null],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
@@ -660,7 +662,7 @@ app.put('/api/subcategories/:id', authenticateToken, (req, res) => {
   const { name, name_he, name_pt } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
   db.run(
-    'UPDATE subcategories SET name=?, name_he=?, name_pt=? WHERE id=?',
+    `UPDATE subcategories SET name=?, name_he=?, name_pt=?, updated_at=datetime('now') WHERE id=?`,
     [name, name_he||null, name_pt||null, req.params.id],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });

@@ -124,8 +124,8 @@ async function syncLocalToCloud() {
   try {
     await syncUsersToCloud();
     await syncQrToCloud();
-    await syncEntityToCloud('categories',    'SELECT * FROM categories');
-    await syncEntityToCloud('subcategories', 'SELECT * FROM subcategories');
+    await syncEntityToCloud('categories',    'SELECT id, name, name_he, name_pt, description, updated_at FROM categories');
+    await syncEntityToCloud('subcategories', 'SELECT id, category_id, name, name_he, name_pt, updated_at FROM subcategories');
     await syncEntityToCloud('customers',  'SELECT * FROM customers');
     await syncEntityToCloud('products',   'SELECT id, sku, name, name_he, name_pt, description, category_id, subcategory_id, supplier_id, manufacturer_id, price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at FROM products');
     await syncEntityToCloud('suppliers',  'SELECT * FROM suppliers');
@@ -256,7 +256,7 @@ async function syncProductsFromCloud() {
   let count = 0;
   for (const p of products) {
     const existing = await sqliteGet(
-      'SELECT quantity, quantity_updated_at, meta_updated_at FROM products WHERE id=?', [p.id]
+      'SELECT quantity, quantity_updated_at, meta_updated_at, subcategory_id, supplier_id, manufacturer_id FROM products WHERE id=?', [p.id]
     ).catch(() => null);
 
     // לוגיקת כמות — מי עדכן אחרון
@@ -293,8 +293,12 @@ async function syncProductsFromCloud() {
           quantity=?, quantity_updated_at=?
         WHERE id=?`,
         [p.sku, p.name, p.name_he||null, p.name_pt||null, p.description||null,
-         p.category_id||null, p.subcategory_id||null, p.price||null, p.currency||'ILS', p.unit||'unit',
-         p.min_quantity||0, p.meta_updated_at||null, p.supplier_id||null, p.manufacturer_id||null,
+         p.category_id||null,
+         (p.subcategory_id != null ? p.subcategory_id : (existing?.subcategory_id ?? null)),
+         p.price||null, p.currency||'ILS', p.unit||'unit',
+         p.min_quantity||0, p.meta_updated_at||null,
+         (p.supplier_id != null ? p.supplier_id : (existing?.supplier_id ?? null)),
+         (p.manufacturer_id != null ? p.manufacturer_id : (existing?.manufacturer_id ?? null)),
          finalQty, finalQtyTs, p.id]
       ).catch(() => {});
     } else {
@@ -397,18 +401,30 @@ async function syncCategoriesFromCloud() {
   const result = await apiRequest('GET', '/api/sync/pull/categories');
   if (result.status !== 200) { log(`  ⚠ pull categories: ${JSON.stringify(result.body)}`); return; }
   const rows = result.body || [];
+  // migration
+  await sqliteRun('ALTER TABLE categories ADD COLUMN updated_at TEXT').catch(() => {});
+  const normalizeTs = (v) => v ? String(v).replace(' ', 'T').slice(0, 19) : '';
   let count = 0;
   for (const r of rows) {
-    const existing = await sqliteGet('SELECT id FROM categories WHERE id=?', [r.id]).catch(() => null);
+    const existing = await sqliteGet('SELECT id, updated_at FROM categories WHERE id=?', [r.id]).catch(() => null);
+    const cloudTs = normalizeTs(r.updated_at);
+    const localTs = normalizeTs(existing?.updated_at);
+    // ענן חדש יותר (או לא קיים מקומית) → עדכן
     if (!existing) {
       await sqliteRun(
-        'INSERT OR IGNORE INTO categories (id, name, name_he, name_pt, description) VALUES (?,?,?,?,?)',
-        [r.id, r.name, r.name_he||null, r.name_pt||null, r.description||null]
+        'INSERT OR IGNORE INTO categories (id, name, name_he, name_pt, description, updated_at) VALUES (?,?,?,?,?,?)',
+        [r.id, r.name, r.name_he||null, r.name_pt||null, r.description||null, r.updated_at||null]
+      ).catch(() => {});
+      count++;
+    } else if (cloudTs && cloudTs > localTs) {
+      await sqliteRun(
+        'UPDATE categories SET name=?, name_he=?, name_pt=?, description=?, updated_at=? WHERE id=?',
+        [r.name, r.name_he||null, r.name_pt||null, r.description||null, r.updated_at||null, r.id]
       ).catch(() => {});
       count++;
     }
   }
-  if (count > 0) log(`  ↳ categories from cloud: ${count} new`);
+  if (count > 0) log(`  ↳ categories from cloud: ${count} updated`);
 }
 
 async function syncSubcategoriesFromCloud() {
@@ -421,20 +437,31 @@ async function syncSubcategoriesFromCloud() {
     category_id INTEGER NOT NULL,
     name TEXT NOT NULL,
     name_he TEXT,
-    name_pt TEXT
+    name_pt TEXT,
+    updated_at TEXT
   )`).catch(() => {});
+  await sqliteRun('ALTER TABLE subcategories ADD COLUMN updated_at TEXT').catch(() => {});
+  const normalizeTs = (v) => v ? String(v).replace(' ', 'T').slice(0, 19) : '';
   let count = 0;
   for (const r of rows) {
-    const existing = await sqliteGet('SELECT id FROM subcategories WHERE id=?', [r.id]).catch(() => null);
+    const existing = await sqliteGet('SELECT id, updated_at FROM subcategories WHERE id=?', [r.id]).catch(() => null);
+    const cloudTs = normalizeTs(r.updated_at);
+    const localTs = normalizeTs(existing?.updated_at);
     if (!existing) {
       await sqliteRun(
-        'INSERT OR IGNORE INTO subcategories (id, category_id, name, name_he, name_pt) VALUES (?,?,?,?,?)',
-        [r.id, r.category_id, r.name, r.name_he||null, r.name_pt||null]
+        'INSERT OR IGNORE INTO subcategories (id, category_id, name, name_he, name_pt, updated_at) VALUES (?,?,?,?,?,?)',
+        [r.id, r.category_id, r.name, r.name_he||null, r.name_pt||null, r.updated_at||null]
+      ).catch(() => {});
+      count++;
+    } else if (cloudTs && cloudTs > localTs) {
+      await sqliteRun(
+        'UPDATE subcategories SET category_id=?, name=?, name_he=?, name_pt=?, updated_at=? WHERE id=?',
+        [r.category_id, r.name, r.name_he||null, r.name_pt||null, r.updated_at||null, r.id]
       ).catch(() => {});
       count++;
     }
   }
-  if (count > 0) log(`  ↳ subcategories from cloud: ${count} new`);
+  if (count > 0) log(`  ↳ subcategories from cloud: ${count} updated`);
 }
 
 // ── Inbound מהענן ─────────────────────────────────────────────────────────────

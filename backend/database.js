@@ -50,6 +50,7 @@ db.serialize(() => {
   // הוסף עמודות תרגום לקטגוריות לפני ה-INSERT
   db.run(`ALTER TABLE categories ADD COLUMN name_he TEXT`, () => {});
   db.run(`ALTER TABLE categories ADD COLUMN name_pt TEXT`, () => {});
+  db.run(`ALTER TABLE categories ADD COLUMN updated_at TEXT`, () => {});
 
   // Insert WorldSecure default categories (in order)
   const categories = [

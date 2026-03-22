@@ -249,8 +249,9 @@ app.post('/api/categories', authenticateToken, async (req, res) => {
   try {
     await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_he TEXT').catch(() => {});
     await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_pt TEXT').catch(() => {});
+    await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()').catch(() => {});
     const r = await query(
-      'INSERT INTO categories (name, name_he, name_pt, description) VALUES ($1,$2,$3,$4) RETURNING *',
+      'INSERT INTO categories (name, name_he, name_pt, description, updated_at) VALUES ($1,$2,$3,$4,NOW()) RETURNING *',
       [name, name_he||null, name_pt||null, description||null]
     );
     res.json(r.rows[0]);
@@ -263,8 +264,9 @@ app.put('/api/categories/:id', authenticateToken, async (req, res) => {
   try {
     await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_he TEXT').catch(() => {});
     await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_pt TEXT').catch(() => {});
+    await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()').catch(() => {});
     await query(
-      'UPDATE categories SET name=$1, name_he=$2, name_pt=$3, description=$4 WHERE id=$5',
+      'UPDATE categories SET name=$1, name_he=$2, name_pt=$3, description=$4, updated_at=NOW() WHERE id=$5',
       [name, name_he||null, name_pt||null, description||null, req.params.id]
     );
     res.json({ message: 'updated' });
@@ -301,8 +303,9 @@ app.post('/api/subcategories', authenticateToken, async (req, res) => {
   const { category_id, name, name_he, name_pt } = req.body;
   if (!category_id || !name) return res.status(400).json({ error: 'category_id and name required' });
   try {
+    await query('ALTER TABLE subcategories ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()').catch(() => {});
     const r = await query(
-      'INSERT INTO subcategories (category_id, name, name_he, name_pt) VALUES ($1,$2,$3,$4) RETURNING *',
+      'INSERT INTO subcategories (category_id, name, name_he, name_pt, updated_at) VALUES ($1,$2,$3,$4,NOW()) RETURNING *',
       [category_id, name, name_he||null, name_pt||null]
     );
     res.json(r.rows[0]);
@@ -313,7 +316,8 @@ app.put('/api/subcategories/:id', authenticateToken, async (req, res) => {
   const { name, name_he, name_pt } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
   try {
-    await query('UPDATE subcategories SET name=$1, name_he=$2, name_pt=$3 WHERE id=$4',
+    await query('ALTER TABLE subcategories ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()').catch(() => {});
+    await query('UPDATE subcategories SET name=$1, name_he=$2, name_pt=$3, updated_at=NOW() WHERE id=$4',
       [name, name_he||null, name_pt||null, req.params.id]);
     res.json({ message: 'updated' });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -2307,15 +2311,19 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
     if (entity === 'categories') {
       await client.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_he TEXT').catch(() => {});
       await client.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_pt TEXT').catch(() => {});
+      await client.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ').catch(() => {});
       for (const r of rows) {
         await client.query(`
-          INSERT INTO categories (id, name, name_he, name_pt, description)
-          VALUES ($1,$2,$3,$4,$5)
+          INSERT INTO categories (id, name, name_he, name_pt, description, updated_at)
+          VALUES ($1,$2,$3,$4,$5,$6)
           ON CONFLICT (id) DO UPDATE SET
-            name=$2, name_he=$3, name_pt=$4, description=$5`,
-          [r.id, r.name, r.name_he||null, r.name_pt||null, r.description||null]);
+            name        = CASE WHEN $6::text IS NOT NULL AND ($6::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $2 ELSE categories.name END,
+            name_he     = CASE WHEN $6::text IS NOT NULL AND ($6::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $3 ELSE categories.name_he END,
+            name_pt     = CASE WHEN $6::text IS NOT NULL AND ($6::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $4 ELSE categories.name_pt END,
+            description = CASE WHEN $6::text IS NOT NULL AND ($6::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $5 ELSE categories.description END,
+            updated_at  = CASE WHEN $6::text IS NOT NULL AND ($6::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $6::timestamptz ELSE categories.updated_at END`,
+          [r.id, r.name, r.name_he||null, r.name_pt||null, r.description||null, r.updated_at||null]);
       }
-      // אין DELETE – categories מנוהלות משני הכיוונים, לא דורסים מחיקות ענן
       // אפס את ה-sequence
       await client.query(`SELECT setval('categories_id_seq', COALESCE((SELECT MAX(id) FROM categories), 0) + 1, false)`).catch(() => {});
     }
@@ -2324,20 +2332,25 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
       await client.query(`CREATE TABLE IF NOT EXISTS subcategories (
         id SERIAL PRIMARY KEY, category_id INTEGER NOT NULL,
         name TEXT NOT NULL, name_he TEXT, name_pt TEXT,
+        updated_at TIMESTAMPTZ,
         FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
       )`).catch(() => {});
       await client.query('ALTER TABLE subcategories ADD COLUMN IF NOT EXISTS name_he TEXT').catch(() => {});
       await client.query('ALTER TABLE subcategories ADD COLUMN IF NOT EXISTS name_pt TEXT').catch(() => {});
+      await client.query('ALTER TABLE subcategories ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ').catch(() => {});
       for (const r of rows) {
         await client.query(`
-          INSERT INTO subcategories (id, category_id, name, name_he, name_pt)
-          VALUES ($1,$2,$3,$4,$5)
+          INSERT INTO subcategories (id, category_id, name, name_he, name_pt, updated_at)
+          VALUES ($1,$2,$3,$4,$5,$6)
           ON CONFLICT (id) DO UPDATE SET
-            category_id=$2, name=$3, name_he=$4, name_pt=$5`,
-          [r.id, r.category_id, r.name, r.name_he||null, r.name_pt||null]);
+            category_id = CASE WHEN $6::text IS NOT NULL AND ($6::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $2 ELSE subcategories.category_id END,
+            name        = CASE WHEN $6::text IS NOT NULL AND ($6::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $3 ELSE subcategories.name END,
+            name_he     = CASE WHEN $6::text IS NOT NULL AND ($6::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $4 ELSE subcategories.name_he END,
+            name_pt     = CASE WHEN $6::text IS NOT NULL AND ($6::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $5 ELSE subcategories.name_pt END,
+            updated_at  = CASE WHEN $6::text IS NOT NULL AND ($6::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $6::timestamptz ELSE subcategories.updated_at END`,
+          [r.id, r.category_id, r.name, r.name_he||null, r.name_pt||null, r.updated_at||null]);
       }
-      // אין DELETE – subcategories מנוהלות משני הכיוונים, לא דורסים מחיקות ענן
-      // אפס את ה-sequence כדי למנוע duplicate key בהוספה עתידית
+      // אפס את ה-sequence
       await client.query(`SELECT setval('subcategories_id_seq', COALESCE((SELECT MAX(id) FROM subcategories), 0) + 1, false)`).catch(() => {});
     }
 
