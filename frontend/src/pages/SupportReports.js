@@ -54,8 +54,12 @@ function SupportReports() {
   const [productsOpen, setProductsOpen] = useState(false);
   const [productsData, setProductsData] = useState(null);
   const [productsLoading, setProductsLoading] = useState(false);
-  const [productsSort, setProductsSort] = useState({ field: 'total_qty', dir: 'desc' });
+  const [productsSort, setProductsSort] = useState({ field: 'total_cases', dir: 'desc' });
   const [productsSearch, setProductsSearch] = useState('');
+  const [productsFilter, setProductsFilter] = useState('all');
+  const [productsCustomFrom, setProductsCustomFrom] = useState('');
+  const [productsCustomTo, setProductsCustomTo] = useState('');
+  const [productsAllData, setProductsAllData] = useState(null);
 
   const [customersOpen, setCustomersOpen] = useState(false);
   const [customersData, setCustomersData] = useState(null);
@@ -128,14 +132,64 @@ function SupportReports() {
     });
   };
 
+  const applyProductsFilter = (data, filter, customFrom, customTo) => {
+    if (!data || filter === 'all') return data;
+    const now = new Date();
+    const startOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
+    const startOfQuarter = (d) => new Date(d.getFullYear(), Math.floor(d.getMonth()/3)*3, 1);
+    const startOfYear = (d) => new Date(d.getFullYear(), 0, 1);
+    let from = null, to = null;
+    if (filter === '7d') { from = new Date(now - 7*86400000); }
+    else if (filter === '30d') { from = new Date(now - 30*86400000); }
+    else if (filter === '90d') { from = new Date(now - 90*86400000); }
+    else if (filter === 'this_month') { from = startOfMonth(now); }
+    else if (filter === 'last_month') { from = startOfMonth(new Date(now.getFullYear(), now.getMonth()-1, 1)); to = startOfMonth(now); }
+    else if (filter === 'this_quarter') { from = startOfQuarter(now); }
+    else if (filter === 'last_quarter') { from = startOfQuarter(new Date(now.getFullYear(), now.getMonth()-3, 1)); to = startOfQuarter(now); }
+    else if (filter === 'this_year') { from = startOfYear(now); }
+    else if (filter === 'last_year') { from = startOfYear(new Date(now.getFullYear()-1, 0, 1)); to = startOfYear(now); }
+    else if (filter === 'custom') {
+      from = customFrom ? new Date(new Date(customFrom).setHours(0,0,0,0)) : null;
+      to = customTo ? new Date(new Date(customTo).setHours(23,59,59,999)) : null;
+    }
+    return data.filter(tk => {
+      const d = tk.created_at ? new Date(tk.created_at) : null;
+      if (!d) return false;
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    });
+  };
+
+  const buildProductStats = (tickets) => {
+    const map = {};
+    tickets.forEach(tk => {
+      const name = tk.product_name || 'Unknown';
+      if (!map[name]) map[name] = { product_name: name, total_cases: 0, open: 0, closed: 0, totalDays: 0, closedCount: 0 };
+      map[name].total_cases++;
+      if (['closed','cancelled'].includes(tk.status)) {
+        map[name].closed++;
+        if (tk.created_at && tk.updated_at) {
+          const days = Math.round((new Date(tk.updated_at) - new Date(tk.created_at)) / 86400000);
+          map[name].totalDays += days;
+          map[name].closedCount++;
+        }
+      } else {
+        map[name].open++;
+      }
+    });
+    return Object.values(map).map(r => ({ ...r, avg_days: r.closedCount > 0 ? Math.round(r.totalDays / r.closedCount) : null }));
+  };
+
   const toggleProductsReport = async () => {
     if (productsOpen) { setProductsOpen(false); return; }
-    if (!productsData) {
-      setProductsLoading(true);
-      try { const res = await axios.get('/api/quotes/products-summary'); setProductsData(res.data); }
-      catch(e) { console.error(e); }
-      setProductsLoading(false);
-    }
+    setProductsLoading(true);
+    try {
+      const res = await axios.get('/api/support-tickets');
+      setProductsAllData(res.data);
+      setProductsData(buildProductStats(applyProductsFilter(res.data, productsFilter, productsCustomFrom, productsCustomTo)));
+    } catch(e) { console.error(e); }
+    setProductsLoading(false);
     setProductsOpen(true);
   };
 
@@ -306,10 +360,11 @@ function SupportReports() {
     low: { bg: '#d4edda', text: '#155724', label: '🟢 Low' },
   };
   const productsGetters = {
-    name: r => r.name || '',
-    total_qty: r => r.total_qty || 0,
-    deal_count: r => r.deal_count || 0,
-    category: r => r.category_name || ''
+    product_name: r => r.product_name || '',
+    total_cases: r => r.total_cases || 0,
+    open: r => r.open || 0,
+    closed: r => r.closed || 0,
+    avg_days: r => r.avg_days || 0,
   };
   const handleProductsSort = (f) => setProductsSort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' }));
   const handleCustomersSort = (f) => setCustomersSort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' }));
@@ -957,359 +1012,211 @@ function SupportReports() {
         </AccordionBody>
       </div>
 
-      {/* דוח 3 - מוצרים נמכרים */}
+      {/* דוח 3 - Product Cases Analysis */}
       <div style={{ marginBottom: '1rem' }}>
-        <AccordionBtn open={productsOpen} onClick={toggleProductsReport} color={{ base: '#17a2b8', dark: '#117a8b' }}>
-          📦 {t('product_sales_analysis') || 'ניתוח מכירות מוצרים'}
+        <AccordionBtn open={productsOpen} onClick={toggleProductsReport} color={{ base: '#fd7e14', dark: '#dc6502' }}>
+          📦 {t('product_cases_analysis') || 'Product Cases Analysis'}
         </AccordionBtn>
         <AccordionBody open={productsOpen} loading={productsLoading}>
           {productsData && (
             <>
-              <div style={{ padding: '0.6rem 1rem', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ color: '#666', fontSize: '0.85rem' }}>🔍</span>
-                <input
-                  type="text"
-                  placeholder={t('search') || 'חיפוש...'}
-                  value={productsSearch}
-                  onChange={e => setProductsSearch(e.target.value)}
-                  style={{ border: '1px solid #ddd', borderRadius: '6px', padding: '0.3rem 0.6rem', fontSize: '0.85rem', outline: 'none', width: '200px' }}
-                />
+              {/* Filter Bar */}
+              <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #f0f0f0', background: '#f8f9fa', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+                <span style={{ fontWeight: 600, color: '#555', fontSize: '0.88rem' }}>📅</span>
+                {[
+                  { key: 'all', label: t('filter_all') || 'All' },
+                  { key: '7d', label: t('filter_7d') || 'Last 7 days' },
+                  { key: '30d', label: t('filter_30d') || 'Last 30 days' },
+                  { key: '90d', label: t('filter_90d') || 'Last 90 days' },
+                  { key: 'this_month', label: t('filter_this_month') || 'This month' },
+                  { key: 'last_month', label: t('filter_last_month') || 'Last month' },
+                  { key: 'this_quarter', label: t('filter_this_quarter') || 'This quarter' },
+                  { key: 'last_quarter', label: t('filter_last_quarter') || 'Last quarter' },
+                  { key: 'this_year', label: t('filter_this_year') || 'This year' },
+                  { key: 'last_year', label: t('filter_last_year') || 'Last year' },
+                  { key: 'custom', label: t('filter_custom') || 'Custom' },
+                ].map(opt => (
+                  <button key={opt.key} onClick={() => {
+                    setProductsFilter(opt.key);
+                    setProductsData(buildProductStats(applyProductsFilter(productsAllData, opt.key, productsCustomFrom, productsCustomTo)));
+                  }} style={{
+                    padding: '0.3rem 0.75rem', fontSize: '0.82rem', fontWeight: 600, borderRadius: '20px', border: 'none', cursor: 'pointer',
+                    background: productsFilter === opt.key ? '#fd7e14' : '#e9ecef',
+                    color: productsFilter === opt.key ? 'white' : '#495057',
+                  }}>{opt.label}</button>
+                ))}
               </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', tableLayout: 'fixed' }}>
-                <colgroup>
-                  <col />
-                  <col style={{ width: '110px' }} />
-                  <col style={{ width: '110px' }} />
-                  <col style={{ width: '160px' }} />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <SortTh field="name" sortState={productsSort} onSort={handleProductsSort}>{t('product') || 'מוצר'}</SortTh>
-                    <SortTh field="total_qty" sortState={productsSort} onSort={handleProductsSort} style={{ textAlign: 'center' }}>{t('quantity') || 'כמות'}</SortTh>
-                    <SortTh field="deal_count" sortState={productsSort} onSort={handleProductsSort} style={{ textAlign: 'center' }}>{t('deals') || 'עסקאות'}</SortTh>
-                    <SortTh field="category" sortState={productsSort} onSort={handleProductsSort}>{t('category') || 'קטגוריה'}</SortTh>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(() => {
-                    const q = productsSearch.toLowerCase();
-                    const filtered = q
-                      ? productsData.rows.filter(r => (r.name || '').toLowerCase().includes(q) || (r.category_name || '').toLowerCase().includes(q))
-                      : productsData.rows;
-                    const sorted = doSort(filtered, productsSort.field, productsSort.dir, productsGetters);
-                    const totalQty = filtered.reduce((s, r) => s + (r.total_qty || 0), 0);
-                    const totalDeals = filtered.reduce((s, r) => s + (r.deal_count || 0), 0);
-                    return <>
-                      {sorted.map((row, i) => (
-                        <tr key={row.id} style={{ borderBottom: '1px solid #f0f0f0', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
-                          <td style={{ padding: '0.6rem 1rem', fontWeight: 500 }}>{row.name}</td>
+              {productsFilter === 'custom' && (
+                <div style={{ padding: '0.6rem 1rem', borderBottom: '1px solid #f0f0f0', background: '#fff', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <label style={{ fontSize: '0.85rem', color: '#555', fontWeight: 600 }}>{t('from') || 'From'}:</label>
+                  <input type="date" value={productsCustomFrom} onChange={e => { setProductsCustomFrom(e.target.value); setProductsData(buildProductStats(applyProductsFilter(productsAllData, 'custom', e.target.value, productsCustomTo))); }} style={{ border: '1px solid #ced4da', borderRadius: '4px', padding: '0.3rem 0.5rem', fontSize: '0.85rem' }} />
+                  <label style={{ fontSize: '0.85rem', color: '#555', fontWeight: 600 }}>{t('to') || 'To'}:</label>
+                  <input type="date" value={productsCustomTo} onChange={e => { setProductsCustomTo(e.target.value); setProductsData(buildProductStats(applyProductsFilter(productsAllData, 'custom', productsCustomFrom, e.target.value))); }} style={{ border: '1px solid #ced4da', borderRadius: '4px', padding: '0.3rem 0.5rem', fontSize: '0.85rem' }} />
+                </div>
+              )}
+              {/* Search + Count + Refresh */}
+              <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ color: '#666', fontSize: '0.85rem' }}>🔍</span>
+                  <input type="text" placeholder={t('search') || 'Search...'} value={productsSearch} onChange={e => setProductsSearch(e.target.value)}
+                    style={{ border: '1px solid #ddd', borderRadius: '6px', padding: '0.3rem 0.6rem', fontSize: '0.85rem', outline: 'none', width: '200px' }} />
+                  <span style={{ color: '#666', fontSize: '0.88rem' }}>{t('products') || 'Products'}: <strong>{productsData.filter(r => !productsSearch || r.product_name.toLowerCase().includes(productsSearch.toLowerCase())).length}</strong></span>
+                </div>
+                <button onClick={async () => {
+                  setProductsLoading(true);
+                  try {
+                    const res = await axios.get('/api/support-tickets');
+                    setProductsAllData(res.data);
+                    setProductsData(buildProductStats(applyProductsFilter(res.data, productsFilter, productsCustomFrom, productsCustomTo)));
+                  } catch(e) { console.error(e); }
+                  setProductsLoading(false);
+                }} style={{ background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem 0.8rem', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}>
+                  🔄 {t('refresh') || 'רענן'}
+                </button>
+              </div>
+              {productsData.length === 0 ? (
+                <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>{t('no_data') || 'No data'}</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
+                  <thead>
+                    <tr style={{ background: '#f8f9fa' }}>
+                      <SortTh field="product_name" sortState={productsSort} onSort={handleProductsSort}>{t('product') || 'מוצר'}</SortTh>
+                      <SortTh field="total_cases" sortState={productsSort} onSort={handleProductsSort} style={{ width: '110px', textAlign: 'center' }}>{t('total_cases') || 'Total Cases'}</SortTh>
+                      <SortTh field="open" sortState={productsSort} onSort={handleProductsSort} style={{ width: '90px', textAlign: 'center' }}>{t('open') || 'Open'}</SortTh>
+                      <SortTh field="closed" sortState={productsSort} onSort={handleProductsSort} style={{ width: '90px', textAlign: 'center' }}>{t('closed') || 'Closed'}</SortTh>
+                      <SortTh field="avg_days" sortState={productsSort} onSort={handleProductsSort} style={{ width: '130px', textAlign: 'center' }}>{t('avg_open_days') || 'Avg. Open Days'}</SortTh>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const q = productsSearch.toLowerCase();
+                      const filtered = q ? productsData.filter(r => r.product_name.toLowerCase().includes(q)) : productsData;
+                      const sorted = doSort(filtered, productsSort.field, productsSort.dir, productsGetters);
+                      return sorted.map((row, i) => (
+                        <tr key={row.product_name} style={{ borderBottom: '1px solid #f0f0f0', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                          <td style={{ padding: '0.6rem 1rem', fontWeight: 500 }}>📦 {row.product_name}</td>
                           <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
-                            <span style={{ background: '#e3f2fd', color: '#1565c0', padding: '2px 10px', borderRadius: '12px', fontWeight: 600, fontSize: '0.85rem' }}>{fmt(row.total_qty)}</span>
+                            <span style={{ background: '#fff3e0', color: '#e65100', padding: '2px 10px', borderRadius: '12px', fontWeight: 700, fontSize: '0.85rem' }}>{row.total_cases}</span>
                           </td>
-                          <td style={{ padding: '0.6rem 1rem', textAlign: 'center', color: '#555' }}>{row.deal_count}</td>
-                          <td style={{ padding: '0.6rem 1rem', color: '#666', fontSize: '0.85rem' }}>
-                            <span style={{ background: '#e9ecef', padding: '2px 8px', borderRadius: '10px' }}>{row.category_name || '-'}</span>
+                          <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
+                            {row.open > 0 ? <span style={{ background: '#fff3cd', color: '#856404', padding: '2px 8px', borderRadius: '12px', fontWeight: 600, fontSize: '0.85rem' }}>{row.open}</span> : <span style={{ color: '#aaa' }}>—</span>}
+                          </td>
+                          <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
+                            {row.closed > 0 ? <span style={{ background: '#d4edda', color: '#155724', padding: '2px 8px', borderRadius: '12px', fontWeight: 600, fontSize: '0.85rem' }}>{row.closed}</span> : <span style={{ color: '#aaa' }}>—</span>}
+                          </td>
+                          <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
+                            {row.avg_days !== null
+                              ? <span style={{ background: row.avg_days <= 3 ? '#d4edda' : row.avg_days <= 7 ? '#fff3cd' : '#f8d7da', color: row.avg_days <= 3 ? '#155724' : row.avg_days <= 7 ? '#856404' : '#721c24', padding: '2px 10px', borderRadius: '12px', fontWeight: 700, fontSize: '0.85rem' }}>{row.avg_days}d</span>
+                              : <span style={{ color: '#aaa' }}>—</span>}
                           </td>
                         </tr>
-                      ))}
-                      <tr style={{ background: '#e0f7fa', fontWeight: 700, borderTop: '2px solid #17a2b8' }}>
-                        <td style={{ padding: '0.65rem 1rem', color: '#0c5460' }}>{t('total') || 'סה"כ'} ({sorted.length})</td>
-                        <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#0c5460' }}>{fmt(totalQty)}</td>
-                        <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#0c5460' }}>{totalDeals}</td>
-                        <td></td>
-                      </tr>
-                    </>;
-                  })()}
-                </tbody>
-              </table>
-              {productsData.rows.length === 0 && (
-                <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>אין נתונים</div>
+                      ));
+                    })()}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ background: '#fff3e0', fontWeight: 700, borderTop: '2px solid #fd7e14' }}>
+                      <td style={{ padding: '0.65rem 1rem', color: '#e65100' }}>{t('total') || 'Total'}</td>
+                      <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#e65100' }}>{productsData.reduce((s,r) => s+r.total_cases, 0)}</td>
+                      <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#856404' }}>{productsData.reduce((s,r) => s+r.open, 0)}</td>
+                      <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#155724' }}>{productsData.reduce((s,r) => s+r.closed, 0)}</td>
+                      <td style={{ padding: '0.65rem 1rem', textAlign: 'center' }}>
+                        {(() => { const c = productsData.filter(r => r.avg_days !== null); return c.length > 0 ? Math.round(c.reduce((s,r) => s+r.avg_days, 0)/c.length) + 'd' : '—'; })()}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
               )}
-              {productsData.rows.length > 0 && (
+              {productsData && productsData.length > 0 && (
                 <div style={{ padding: '1rem', borderTop: '1px solid #dee2e6', display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
                   <button
                     onClick={async () => {
-                      // Determine direction based on language
                       const dir = language === 'he' ? 'rtl' : 'ltr';
                       const textAlign = language === 'he' ? 'right' : 'left';
-                      
-                      // Load logo as base64
-                      let logoBase64 = '';
-                      try {
-                        const response = await fetch('/logo.png', { cache: 'force-cache' });
-                        const blob = await response.blob();
-                        logoBase64 = await new Promise((resolve) => {
-                          const reader = new FileReader();
-                          reader.onloadend = () => resolve(reader.result);
-                          reader.readAsDataURL(blob);
-                        });
-                      } catch (err) {
-                        console.log('Logo not found, skipping');
-                      }
-                      
-                      // Prepare data
+                      const logoBase64 = logoBase64Cache;
                       const q = productsSearch.toLowerCase();
-                      const filtered = q
-                        ? productsData.rows.filter(r => (r.name || '').toLowerCase().includes(q) || (r.category_name || '').toLowerCase().includes(q))
-                        : productsData.rows;
+                      const filtered = q ? productsData.filter(r => r.product_name.toLowerCase().includes(q)) : productsData;
                       const sorted = doSort(filtered, productsSort.field, productsSort.dir, productsGetters);
-                      const totalQty = filtered.reduce((s, r) => s + (r.total_qty || 0), 0);
-                      const totalDeals = filtered.reduce((s, r) => s + (r.deal_count || 0), 0);
-                      
-                      // Create printable content
-                      const printContent = `
-                        <html dir="${dir}">
-                        <head>
-                          <meta charset="utf-8">
-                          <title>Product Sales Analysis Report</title>
-                          <style>
-                            @media print {
-                              @page { 
-                                margin: 1.5cm 1cm;
-                              }
-                            }
-                            body { 
-                              font-family: Arial, sans-serif; 
-                              padding: 20px; 
-                              direction: ${dir}; 
-                              margin: 0;
-                            }
-                            .header {
-                              display: flex;
-                              justify-content: space-between;
-                              align-items: center;
-                              padding: 20px 0;
-                              border-bottom: 3px solid #17a2b8;
-                              margin-bottom: 30px;
-                            }
-                            .logo {
-                              width: 150px;
-                              height: auto;
-                              ${!logoBase64 ? 'display: none;' : ''}
-                            }
-                            .logo-placeholder {
-                              font-size: 2.5rem;
-                              color: #17a2b8;
-                              font-weight: 700;
-                            }
-                            .company-info {
-                              text-align: ${textAlign === 'right' ? 'left' : 'right'};
-                              color: #666;
-                              font-size: 0.9rem;
-                            }
-                            .company-info strong {
-                              display: block;
-                              color: #17a2b8;
-                              font-size: 1.8rem;
-                              font-weight: 700;
-                              margin-bottom: 5px;
-                            }
-                            h1 { 
-                              text-align: center; 
-                              color: #17a2b8; 
-                              margin: 20px 0;
-                              font-size: 1.8rem;
-                            }
-                            .report-meta {
-                              text-align: center;
-                              color: #666;
-                              font-size: 0.9rem;
-                              margin-bottom: 20px;
-                            }
-                            table { 
-                              width: 100%; 
-                              border-collapse: collapse; 
-                              margin-top: 20px; 
-                              direction: ${dir}; 
-                            }
-                            th, td { 
-                              border: 1px solid #dee2e6; 
-                              padding: 12px; 
-                              text-align: ${textAlign}; 
-                            }
-                            th { 
-                              background: #f8f9fa; 
-                              font-weight: 600; 
-                              color: #333;
-                            }
-                            tfoot { 
-                              background: #e0f7fa; 
-                              font-weight: 700; 
-                            }
-                            .footer {
-                              text-align: center;
-                              padding: 15px;
-                              font-size: 0.8rem;
-                              color: #999;
-                              border-top: 1px solid #ddd;
-                              margin-top: auto;
-                              page-break-inside: avoid;
-                            }
-                          .button-container {
-      text-align: center;
-      margin-bottom: 20px;
-      padding: 15px;
-      background: #f8f9fa;
-      border-bottom: 1px solid #dee2e6;
-    }
-    .btn-print-doc, .btn-close-doc {
-      padding: 12px 24px;
-      margin: 0 8px;
-      font-size: 16px;
-      cursor: pointer;
-      border: none;
-      border-radius: 5px;
-      font-weight: 600;
-    }
-    .btn-print-doc { background: #3498db; color: white; }
-    .btn-print-doc:hover { background: #2980b9; }
-    .btn-close-doc { background: #95a5a6; color: white; }
-    .btn-close-doc:hover { background: #7f8c8d; }
-    @media print { .button-container { display: none !important; } }
-                          </style>
-                        </head>
-                        <body>
-
+                      const rows = sorted.map(row => `
+                        <tr>
+                          <td>${row.product_name}</td>
+                          <td style="text-align:center;">${row.total_cases}</td>
+                          <td style="text-align:center;">${row.open}</td>
+                          <td style="text-align:center;">${row.closed}</td>
+                          <td style="text-align:center;">${row.avg_days !== null ? row.avg_days + 'd' : '—'}</td>
+                        </tr>`).join('');
+                      const printContent = `<html dir="${dir}"><head><meta charset="utf-8"><title>Product Cases Analysis</title>
+                        <style>
+                          @media print { @page { margin: 1cm; } }
+                          body { font-family: Arial, sans-serif; padding: 20px; direction: ${dir}; margin: 0; }
+                          .header { display: flex; justify-content: space-between; align-items: center; padding: 20px 0; border-bottom: 3px solid #fd7e14; margin-bottom: 30px; }
+                          .logo { width: 150px; height: auto; }
+                          .company-info { color: #666; font-size: 0.9rem; }
+                          .company-info strong { display: block; color: #fd7e14; font-size: 1.8rem; font-weight: 700; margin-bottom: 5px; }
+                          h1 { text-align: center; color: #fd7e14; margin: 20px 0; font-size: 1.8rem; }
+                          .report-meta { text-align: center; color: #666; font-size: 0.9rem; margin-bottom: 20px; }
+                          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                          th, td { border: 1px solid #dee2e6; padding: 10px; text-align: ${textAlign}; font-size: 0.85rem; }
+                          th { background: #f8f9fa; font-weight: 600; color: #333; }
+                          tfoot { background: #fff3e0; font-weight: 700; }
+                          .footer { margin-top: 30px; padding: 20px 0 0; border-top: 1px solid #dee2e6; text-align: center; color: #999; font-size: 0.8rem; }
+                          .button-container { text-align: center; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-bottom: 1px solid #dee2e6; }
+                          .btn-print-doc, .btn-close-doc { padding: 12px 24px; margin: 0 8px; font-size: 16px; cursor: pointer; border: none; border-radius: 5px; font-weight: 600; }
+                          .btn-print-doc { background: #3498db; color: white; }
+                          .btn-close-doc { background: #95a5a6; color: white; }
+                          @media print { .button-container { display: none !important; } }
+                        </style></head><body>
                         <div class="button-container">
                           <button class="btn-print-doc" onclick="window.print()">&#128424; Print / Save as PDF</button>
                           <button class="btn-close-doc" onclick="window.close()">&#10005; Close</button>
                         </div>
-                      <div class="header">
-                            ${logoBase64 
-                              ? `<img src="${logoBase64}" alt="Company Logo" class="logo">` 
-                              : `<div class="logo-placeholder">🌐 WorldSecure</div>`
-                            }
-                            <div class="company-info">
-                              <strong>WorldSecure</strong>
-                              <div>${new Date().toLocaleDateString(language === 'he' ? 'he-IL' : language === 'pt' ? 'pt-PT' : 'en-US')}</div>
-                            </div>
-                          </div>
-                          
-                          <h1>📦 ${t('product_sales_analysis') || 'ניתוח מכירות מוצרים'}</h1>
-                          
-                          <div class="report-meta">
-                            ${t('total') || 'סה"כ'}: <strong>${sorted.length}</strong> ${t('products') || 'מוצרים'} | 
-                            ${t('quantity') || 'כמות'}: <strong>${fmt(totalQty)}</strong> | 
-                            ${t('deals') || 'עסקאות'}: <strong>${totalDeals}</strong>
-                          </div>
-                          
-                          <table>
-                            <thead>
-                              <tr>
-                                <th>${t('product') || 'מוצר'}</th>
-                                <th>${t('quantity') || 'כמות'}</th>
-                                <th>${t('deals') || 'עסקאות'}</th>
-                                <th>${t('category') || 'קטגוריה'}</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              ${sorted.map(row => `
-                                <tr>
-                                  <td>${row.name}</td>
-                                  <td>${fmt(row.total_qty)}</td>
-                                  <td>${row.deal_count}</td>
-                                  <td>${row.category_name || '-'}</td>
-                                </tr>
-                              `).join('')}
-                            </tbody>
-                            <tfoot>
-                              <tr>
-                                <td><strong>${t('total') || 'סה"כ'} (${sorted.length})</strong></td>
-                                <td><strong>${fmt(totalQty)}</strong></td>
-                                <td><strong>${totalDeals}</strong></td>
-                                <td></td>
-                              </tr>
-                            </tfoot>
-                          </table>
-                          
-                          <div class="footer">
-                            Generated by WorldSecure CRM • ${new Date().toLocaleString(language === 'he' ? 'he-IL' : language === 'pt' ? 'pt-PT' : 'en-US')}
-                          
-                      </div>
-                    </body>
-                        </html>
-                      `;
-                      
+                        <div class="header">
+                          ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" class="logo">` : `<div style="font-size:2rem;color:#fd7e14;font-weight:700;">🌐 WorldSecure</div>`}
+                          <div class="company-info"><strong>WorldSecure</strong><div>${new Date().toLocaleDateString(language === 'he' ? 'he-IL' : language === 'pt' ? 'pt-PT' : 'en-US')}</div></div>
+                        </div>
+                        <h1>📦 ${t('product_cases_analysis') || 'Product Cases Analysis'}</h1>
+                        <div class="report-meta">${t('products') || 'Products'}: <strong>${sorted.length}</strong> | ${t('total_cases') || 'Total Cases'}: <strong>${sorted.reduce((s,r) => s+r.total_cases, 0)}</strong></div>
+                        <table><thead><tr>
+                          <th>${t('product') || 'Product'}</th>
+                          <th>${t('total_cases') || 'Total Cases'}</th>
+                          <th>${t('open') || 'Open'}</th>
+                          <th>${t('closed') || 'Closed'}</th>
+                          <th>${t('avg_open_days') || 'Avg. Open Days'}</th>
+                        </tr></thead><tbody>${rows}</tbody>
+                        <tfoot><tr>
+                          <td><strong>${t('total') || 'Total'}</strong></td>
+                          <td style="text-align:center;"><strong>${sorted.reduce((s,r) => s+r.total_cases,0)}</strong></td>
+                          <td style="text-align:center;"><strong>${sorted.reduce((s,r) => s+r.open,0)}</strong></td>
+                          <td style="text-align:center;"><strong>${sorted.reduce((s,r) => s+r.closed,0)}</strong></td>
+                          <td style="text-align:center;"></td>
+                        </tr></tfoot></table>
+                        <div class="footer">Generated by WorldSecure CRM • ${new Date().toLocaleString(language === 'he' ? 'he-IL' : language === 'pt' ? 'pt-PT' : 'en-US')}</div>
+                        </body></html>`;
                       const printWindow = window.open('', '_blank');
                       printWindow.document.write(printContent);
                       printWindow.document.close();
                     }}
-                    style={{
-                      background: '#007bff',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '6px',
-                      padding: '0.5rem 1rem',
-                      fontSize: '0.9rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem'
-                    }}
+                    style={{ background: '#007bff', color: 'white', border: 'none', borderRadius: '6px', padding: '0.5rem 1rem', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
                   >
                     🖨️ {t('print_pdf') || 'Print / Save as PDF'}
                   </button>
                   <button
                     onClick={async () => {
-                      // Dynamic import of SheetJS
                       const XLSX = await import('xlsx');
-                      
-                      // Prepare data
                       const q = productsSearch.toLowerCase();
-                      const filtered = q
-                        ? productsData.rows.filter(r => (r.name || '').toLowerCase().includes(q) || (r.category_name || '').toLowerCase().includes(q))
-                        : productsData.rows;
+                      const filtered = q ? productsData.filter(r => r.product_name.toLowerCase().includes(q)) : productsData;
                       const sorted = doSort(filtered, productsSort.field, productsSort.dir, productsGetters);
-                      const totalQty = filtered.reduce((s, r) => s + (r.total_qty || 0), 0);
-                      const totalDeals = filtered.reduce((s, r) => s + (r.deal_count || 0), 0);
-                      
                       const data = [
-                        // Headers
-                        [t('product') || 'מוצר', t('quantity') || 'כמות', t('deals') || 'עסקאות', t('category') || 'קטגוריה'],
-                        // Data rows
-                        ...sorted.map(row => [
-                          row.name,
-                          row.total_qty,
-                          row.deal_count,
-                          row.category_name || '-'
-                        ]),
-                        // Total row
-                        [t('total') || 'סה"כ' + ` (${sorted.length})`, totalQty, totalDeals, '']
+                        [t('product') || 'Product', t('total_cases') || 'Total Cases', t('open') || 'Open', t('closed') || 'Closed', t('avg_open_days') || 'Avg. Open Days'],
+                        ...sorted.map(r => [r.product_name, r.total_cases, r.open, r.closed, r.avg_days !== null ? r.avg_days : '']),
+                        [t('total') || 'Total', sorted.reduce((s,r) => s+r.total_cases,0), sorted.reduce((s,r) => s+r.open,0), sorted.reduce((s,r) => s+r.closed,0), '']
                       ];
-                      
-                      // Create worksheet
                       const ws = XLSX.utils.aoa_to_sheet(data);
-                      
-                      // Set column widths
-                      ws['!cols'] = [
-                        { wch: 30 }, // Product
-                        { wch: 12 }, // Quantity
-                        { wch: 12 }, // Deals
-                        { wch: 20 }  // Category
-                      ];
-                      
-                      // Create workbook
+                      ws['!cols'] = [{ wch: 30 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 15 }];
                       const wb = XLSX.utils.book_new();
-                      XLSX.utils.book_append_sheet(wb, ws, 'Product Sales Analysis');
-                      
-                      // Download
-                      const fileName = `product_sales_analysis_${new Date().toISOString().split('T')[0]}.xlsx`;
-                      XLSX.writeFile(wb, fileName);
+                      XLSX.utils.book_append_sheet(wb, ws, 'Product Cases');
+                      XLSX.writeFile(wb, `product_cases_${new Date().toISOString().split('T')[0]}.xlsx`);
                     }}
-                    style={{
-                      background: '#28a745',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '6px',
-                      padding: '0.5rem 1rem',
-                      fontSize: '0.9rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem'
-                    }}
+                    style={{ background: '#28a745', color: 'white', border: 'none', borderRadius: '6px', padding: '0.5rem 1rem', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
                   >
                     📊 {t('save_excel') || 'שמור כאקסל'}
                   </button>
