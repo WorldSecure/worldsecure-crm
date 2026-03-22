@@ -64,8 +64,12 @@ function SupportReports() {
   const [customersOpen, setCustomersOpen] = useState(false);
   const [customersData, setCustomersData] = useState(null);
   const [customersLoading, setCustomersLoading] = useState(false);
-  const [customersSort, setCustomersSort] = useState({ field: 'total', dir: 'desc' });
+  const [customersSort, setCustomersSort] = useState({ field: 'total_cases', dir: 'desc' });
   const [customersSearch, setCustomersSearch] = useState('');
+  const [customersFilter, setCustomersFilter] = useState('all');
+  const [customersCustomFrom, setCustomersCustomFrom] = useState('');
+  const [customersCustomTo, setCustomersCustomTo] = useState('');
+  const [customersAllData, setCustomersAllData] = useState(null);
 
   const [profitOpen, setProfitOpen] = useState(false);
   const [closedDeals, setClosedDeals] = useState(null);
@@ -193,14 +197,69 @@ function SupportReports() {
     setProductsOpen(true);
   };
 
+  const applyCustomersFilter = (data, filter, customFrom, customTo) => {
+    if (!data || filter === 'all') return data;
+    const now = new Date();
+    const startOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
+    const startOfQuarter = (d) => new Date(d.getFullYear(), Math.floor(d.getMonth()/3)*3, 1);
+    const startOfYear = (d) => new Date(d.getFullYear(), 0, 1);
+    let from = null, to = null;
+    if (filter === '7d') { from = new Date(now - 7*86400000); }
+    else if (filter === '30d') { from = new Date(now - 30*86400000); }
+    else if (filter === '90d') { from = new Date(now - 90*86400000); }
+    else if (filter === 'this_month') { from = startOfMonth(now); }
+    else if (filter === 'last_month') { from = startOfMonth(new Date(now.getFullYear(), now.getMonth()-1, 1)); to = startOfMonth(now); }
+    else if (filter === 'this_quarter') { from = startOfQuarter(now); }
+    else if (filter === 'last_quarter') { from = startOfQuarter(new Date(now.getFullYear(), now.getMonth()-3, 1)); to = startOfQuarter(now); }
+    else if (filter === 'this_year') { from = startOfYear(now); }
+    else if (filter === 'last_year') { from = startOfYear(new Date(now.getFullYear()-1, 0, 1)); to = startOfYear(now); }
+    else if (filter === 'custom') {
+      from = customFrom ? new Date(new Date(customFrom).setHours(0,0,0,0)) : null;
+      to = customTo ? new Date(new Date(customTo).setHours(23,59,59,999)) : null;
+    }
+    return data.filter(tk => {
+      const d = tk.created_at ? new Date(tk.created_at) : null;
+      if (!d) return false;
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    });
+  };
+
+  const buildUserStats = (tickets) => {
+    const map = {};
+    const total = tickets.length;
+    tickets.forEach(tk => {
+      const name = tk.owner_name || 'Unassigned';
+      if (!map[name]) map[name] = { owner_name: name, total_cases: 0, open: 0, closed: 0, totalDays: 0, closedCount: 0 };
+      map[name].total_cases++;
+      if (['closed','cancelled'].includes(tk.status)) {
+        map[name].closed++;
+        if (tk.created_at && tk.updated_at) {
+          const days = Math.round((new Date(tk.updated_at) - new Date(tk.created_at)) / 86400000);
+          map[name].totalDays += days;
+          map[name].closedCount++;
+        }
+      } else {
+        map[name].open++;
+      }
+    });
+    return Object.values(map).map(r => ({
+      ...r,
+      avg_days: r.closedCount > 0 ? Math.round(r.totalDays / r.closedCount) : null,
+      workload_pct: total > 0 ? Math.round((r.total_cases / total) * 100) : 0
+    }));
+  };
+
   const toggleCustomersReport = async () => {
     if (customersOpen) { setCustomersOpen(false); return; }
-    if (!customersData) {
-      setCustomersLoading(true);
-      try { const res = await axios.get('/api/quotes/customers-summary'); setCustomersData(res.data); }
-      catch(e) { console.error(e); }
-      setCustomersLoading(false);
-    }
+    setCustomersLoading(true);
+    try {
+      const res = await axios.get('/api/support-tickets');
+      setCustomersAllData(res.data);
+      setCustomersData(buildUserStats(applyCustomersFilter(res.data, customersFilter, customersCustomFrom, customersCustomTo)));
+    } catch(e) { console.error(e); }
+    setCustomersLoading(false);
     setCustomersOpen(true);
   };
 
@@ -369,11 +428,12 @@ function SupportReports() {
   const handleProductsSort = (f) => setProductsSort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' }));
   const handleCustomersSort = (f) => setCustomersSort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' }));
   const customersGetters = {
-    customer_name: r => r.customer_name || '',
-    deals: r => r.deals || 0,
-    total: r => r.total || 0,
-    country: r => r.country || '',
-    percent: r => r.percent || 0,
+    owner_name: r => r.owner_name || '',
+    total_cases: r => r.total_cases || 0,
+    open: r => r.open || 0,
+    closed: r => r.closed || 0,
+    avg_days: r => r.avg_days || 0,
+    workload_pct: r => r.workload_pct || 0,
   };
 
 
@@ -1227,373 +1287,221 @@ function SupportReports() {
         </AccordionBody>
       </div>
 
-      {/* דוח 4 - ניתוח מכירות לקוחות */}
+      {/* דוח 4 - Users Cases Analysis */}
       <div style={{ marginBottom: '1rem' }}>
         <AccordionBtn open={customersOpen} onClick={toggleCustomersReport} color={{ base: '#6f42c1', dark: '#553098' }}>
-          👥 {t('customer_sales_analysis') || 'ניתוח מכירות לקוחות'}
+          🧑‍💼 {t('users_cases_analysis') || 'Users Cases Analysis'}
         </AccordionBtn>
         <AccordionBody open={customersOpen} loading={customersLoading}>
           {customersData && (
             <>
-              <div style={{ padding: '0.6rem 1rem', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ color: '#666', fontSize: '0.85rem' }}>🔍</span>
-                <input
-                  type="text"
-                  placeholder={t('search') || 'חיפוש...'}
-                  value={customersSearch}
-                  onChange={e => setCustomersSearch(e.target.value)}
-                  style={{ border: '1px solid #ddd', borderRadius: '6px', padding: '0.3rem 0.6rem', fontSize: '0.85rem', outline: 'none', width: '200px' }}
-                />
+              {/* Filter Bar */}
+              <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #f0f0f0', background: '#f8f9fa', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+                <span style={{ fontWeight: 600, color: '#555', fontSize: '0.88rem' }}>📅</span>
+                {[
+                  { key: 'all', label: t('filter_all') || 'All' },
+                  { key: '7d', label: t('filter_7d') || 'Last 7 days' },
+                  { key: '30d', label: t('filter_30d') || 'Last 30 days' },
+                  { key: '90d', label: t('filter_90d') || 'Last 90 days' },
+                  { key: 'this_month', label: t('filter_this_month') || 'This month' },
+                  { key: 'last_month', label: t('filter_last_month') || 'Last month' },
+                  { key: 'this_quarter', label: t('filter_this_quarter') || 'This quarter' },
+                  { key: 'last_quarter', label: t('filter_last_quarter') || 'Last quarter' },
+                  { key: 'this_year', label: t('filter_this_year') || 'This year' },
+                  { key: 'last_year', label: t('filter_last_year') || 'Last year' },
+                  { key: 'custom', label: t('filter_custom') || 'Custom' },
+                ].map(opt => (
+                  <button key={opt.key} onClick={() => {
+                    setCustomersFilter(opt.key);
+                    setCustomersData(buildUserStats(applyCustomersFilter(customersAllData, opt.key, customersCustomFrom, customersCustomTo)));
+                  }} style={{
+                    padding: '0.3rem 0.75rem', fontSize: '0.82rem', fontWeight: 600, borderRadius: '20px', border: 'none', cursor: 'pointer',
+                    background: customersFilter === opt.key ? '#6f42c1' : '#e9ecef',
+                    color: customersFilter === opt.key ? 'white' : '#495057',
+                  }}>{opt.label}</button>
+                ))}
               </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', tableLayout: 'fixed' }}>
-                <colgroup>
-                  <col />
-                  <col style={{ width: '110px' }} />
-                  <col style={{ width: '130px' }} />
-                  <col style={{ width: '110px' }} />
-                  <col style={{ width: '130px' }} />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <SortTh field="customer_name" sortState={customersSort} onSort={handleCustomersSort}>{t('customer') || 'לקוח'}</SortTh>
-                    <SortTh field="deals" sortState={customersSort} onSort={handleCustomersSort} style={{ textAlign: 'center' }}>{t('deals') || 'עסקאות'}</SortTh>
-                    <SortTh field="total" sortState={customersSort} onSort={handleCustomersSort} style={{ textAlign: 'right' }}>{t('sales') || 'מכירות'}</SortTh>
-                    <SortTh field="country" sortState={customersSort} onSort={handleCustomersSort} style={{ textAlign: 'center' }}>{t('country') || 'מדינה'}</SortTh>
-                    <SortTh field="percent" sortState={customersSort} onSort={handleCustomersSort} style={{ textAlign: 'center' }}>%</SortTh>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(() => {
-                    const q = customersSearch.toLowerCase();
-                    const filtered = q
-                      ? customersData.rows.filter(r => (r.customer_name || '').toLowerCase().includes(q) || (r.country || '').toLowerCase().includes(q))
-                      : customersData.rows;
-                    const sorted = doSort(filtered, customersSort.field, customersSort.dir, customersGetters);
-                    const totalAmt = filtered.reduce((s, r) => s + (r.total || 0), 0);
-                    const totalDeals = filtered.reduce((s, r) => s + (r.deals || 0), 0);
-                    return <>
-                      {sorted.map((row, i) => (
-                        <tr key={row.id} style={{ borderBottom: '1px solid #f0f0f0', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
-                          <td style={{ padding: '0.6rem 1rem', fontWeight: 500 }}>👤 {row.customer_name}</td>
+              {customersFilter === 'custom' && (
+                <div style={{ padding: '0.6rem 1rem', borderBottom: '1px solid #f0f0f0', background: '#fff', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <label style={{ fontSize: '0.85rem', color: '#555', fontWeight: 600 }}>{t('from') || 'From'}:</label>
+                  <input type="date" value={customersCustomFrom} onChange={e => { setCustomersCustomFrom(e.target.value); setCustomersData(buildUserStats(applyCustomersFilter(customersAllData, 'custom', e.target.value, customersCustomTo))); }} style={{ border: '1px solid #ced4da', borderRadius: '4px', padding: '0.3rem 0.5rem', fontSize: '0.85rem' }} />
+                  <label style={{ fontSize: '0.85rem', color: '#555', fontWeight: 600 }}>{t('to') || 'To'}:</label>
+                  <input type="date" value={customersCustomTo} onChange={e => { setCustomersCustomTo(e.target.value); setCustomersData(buildUserStats(applyCustomersFilter(customersAllData, 'custom', customersCustomFrom, e.target.value))); }} style={{ border: '1px solid #ced4da', borderRadius: '4px', padding: '0.3rem 0.5rem', fontSize: '0.85rem' }} />
+                </div>
+              )}
+              {/* Count + Refresh */}
+              <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#666', fontSize: '0.88rem' }}>{t('users') || 'Users'}: <strong>{customersData.filter(r => !customersSearch || r.owner_name.toLowerCase().includes(customersSearch.toLowerCase())).length}</strong>
+                  {customersFilter !== 'all' && <span style={{ color: '#999', fontWeight: 400 }}> &nbsp;| {t('total_cases') || 'Total Cases'}: <strong>{customersData.reduce((s,r) => s+r.total_cases, 0)}</strong></span>}
+                </span>
+                <button onClick={async () => {
+                  setCustomersLoading(true);
+                  try {
+                    const res = await axios.get('/api/support-tickets');
+                    setCustomersAllData(res.data);
+                    setCustomersData(buildUserStats(applyCustomersFilter(res.data, customersFilter, customersCustomFrom, customersCustomTo)));
+                  } catch(e) { console.error(e); }
+                  setCustomersLoading(false);
+                }} style={{ background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem 0.8rem', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}>
+                  🔄 {t('refresh') || 'רענן'}
+                </button>
+              </div>
+              {customersData.length === 0 ? (
+                <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>{t('no_data') || 'No data'}</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
+                  <thead>
+                    <tr style={{ background: '#f8f9fa' }}>
+                      <SortTh field="owner_name" sortState={customersSort} onSort={handleCustomersSort}>{t('user') || 'User'}</SortTh>
+                      <SortTh field="total_cases" sortState={customersSort} onSort={handleCustomersSort} style={{ width: '110px', textAlign: 'center' }}>{t('total_cases') || 'Total Cases'}</SortTh>
+                      <SortTh field="open" sortState={customersSort} onSort={handleCustomersSort} style={{ width: '90px', textAlign: 'center' }}>{t('open') || 'Open'}</SortTh>
+                      <SortTh field="closed" sortState={customersSort} onSort={handleCustomersSort} style={{ width: '90px', textAlign: 'center' }}>{t('closed') || 'Closed'}</SortTh>
+                      <SortTh field="avg_days" sortState={customersSort} onSort={handleCustomersSort} style={{ width: '130px', textAlign: 'center' }}>{t('avg_open_days') || 'Avg. Open Days'}</SortTh>
+                      <SortTh field="workload_pct" sortState={customersSort} onSort={handleCustomersSort} style={{ width: '120px', textAlign: 'center' }}>Workload %</SortTh>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const q = customersSearch.toLowerCase();
+                      const filtered = q ? customersData.filter(r => r.owner_name.toLowerCase().includes(q)) : customersData;
+                      const sorted = doSort(filtered, customersSort.field, customersSort.dir, customersGetters);
+                      return sorted.map((row, i) => (
+                        <tr key={row.owner_name} style={{ borderBottom: '1px solid #f0f0f0', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                          <td style={{ padding: '0.6rem 1rem', fontWeight: 600 }}>🧑‍💼 {row.owner_name}</td>
                           <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
-                            <span style={{ background: '#e3f2fd', color: '#1565c0', padding: '2px 10px', borderRadius: '12px', fontWeight: 600, fontSize: '0.85rem' }}>{row.deals}</span>
+                            <span style={{ background: '#ede7f6', color: '#4527a0', padding: '2px 10px', borderRadius: '12px', fontWeight: 700, fontSize: '0.85rem' }}>{row.total_cases}</span>
                           </td>
-                          <td style={{ padding: '0.6rem 1rem', textAlign: 'right', fontWeight: 600 }}>{fmt(row.total)}</td>
-                          <td style={{ padding: '0.6rem 1rem', textAlign: 'center', color: '#666', fontSize: '0.85rem' }}>{row.country}</td>
+                          <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
+                            {row.open > 0 ? <span style={{ background: '#fff3cd', color: '#856404', padding: '2px 8px', borderRadius: '12px', fontWeight: 600, fontSize: '0.85rem' }}>{row.open}</span> : <span style={{ color: '#aaa' }}>—</span>}
+                          </td>
+                          <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
+                            {row.closed > 0 ? <span style={{ background: '#d4edda', color: '#155724', padding: '2px 8px', borderRadius: '12px', fontWeight: 600, fontSize: '0.85rem' }}>{row.closed}</span> : <span style={{ color: '#aaa' }}>—</span>}
+                          </td>
+                          <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
+                            {row.avg_days !== null
+                              ? <span style={{ background: row.avg_days <= 3 ? '#d4edda' : row.avg_days <= 7 ? '#fff3cd' : '#f8d7da', color: row.avg_days <= 3 ? '#155724' : row.avg_days <= 7 ? '#856404' : '#721c24', padding: '2px 10px', borderRadius: '12px', fontWeight: 700, fontSize: '0.85rem' }}>{row.avg_days}d</span>
+                              : <span style={{ color: '#aaa' }}>—</span>}
+                          </td>
                           <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', justifyContent: 'center' }}>
                               <div style={{ flex: 1, height: '6px', background: '#e9ecef', borderRadius: '3px', overflow: 'hidden', maxWidth: '60px' }}>
-                                <div style={{ width: row.percent + '%', height: '100%', background: '#6f42c1', borderRadius: '3px' }}></div>
+                                <div style={{ width: row.workload_pct + '%', height: '100%', background: '#6f42c1', borderRadius: '3px' }}></div>
                               </div>
-                              <span style={{ fontSize: '0.82rem', color: '#555', minWidth: '34px' }}>{row.percent}%</span>
+                              <span style={{ fontSize: '0.82rem', color: '#555', minWidth: '34px' }}>{row.workload_pct}%</span>
                             </div>
                           </td>
                         </tr>
-                      ))}
-                      <tr style={{ background: '#ede7f6', fontWeight: 700, borderTop: '2px solid #6f42c1' }}>
-                        <td style={{ padding: '0.65rem 1rem', color: '#4527a0' }}>{t('total') || 'סה"כ'} ({sorted.length})</td>
-                        <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#4527a0' }}>{totalDeals}</td>
-                        <td style={{ padding: '0.65rem 1rem', textAlign: 'right', color: '#4527a0' }}>{fmt(totalAmt)}</td>
-                        <td></td>
-                        <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#4527a0' }}>100%</td>
-                      </tr>
-                    </>;
-                  })()}
-                </tbody>
-              </table>
-              {customersData.rows.length === 0 && (
-                <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>אין נתונים</div>
+                      ));
+                    })()}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ background: '#ede7f6', fontWeight: 700, borderTop: '2px solid #6f42c1' }}>
+                      <td style={{ padding: '0.65rem 1rem', color: '#4527a0' }}>{t('total') || 'Total'}</td>
+                      <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#4527a0' }}>{customersData.reduce((s,r) => s+r.total_cases, 0)}</td>
+                      <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#856404' }}>{customersData.reduce((s,r) => s+r.open, 0)}</td>
+                      <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#155724' }}>{customersData.reduce((s,r) => s+r.closed, 0)}</td>
+                      <td style={{ padding: '0.65rem 1rem', textAlign: 'center' }}>
+                        {(() => { const c = customersData.filter(r => r.avg_days !== null); return c.length > 0 ? Math.round(c.reduce((s,r) => s+r.avg_days, 0)/c.length) + 'd' : '—'; })()}
+                      </td>
+                      <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#4527a0' }}>100%</td>
+                    </tr>
+                  </tfoot>
+                </table>
               )}
-              {customersData.rows.length > 0 && (
+              {customersData && customersData.length > 0 && (
                 <div style={{ padding: '1rem', borderTop: '1px solid #dee2e6', display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
                   <button
                     onClick={async () => {
-                      // Determine direction based on language
                       const dir = language === 'he' ? 'rtl' : 'ltr';
                       const textAlign = language === 'he' ? 'right' : 'left';
-                      
-                      // Load logo as base64
-                      let logoBase64 = '';
-                      try {
-                        const response = await fetch('/logo.png', { cache: 'force-cache' });
-                        const blob = await response.blob();
-                        logoBase64 = await new Promise((resolve) => {
-                          const reader = new FileReader();
-                          reader.onloadend = () => resolve(reader.result);
-                          reader.readAsDataURL(blob);
-                        });
-                      } catch (err) {
-                        console.log('Logo not found, skipping');
-                      }
-                      
-                      // Prepare data
+                      const logoBase64 = logoBase64Cache;
                       const q = customersSearch.toLowerCase();
-                      const filtered = q
-                        ? customersData.rows.filter(r => (r.customer_name || '').toLowerCase().includes(q) || (r.country || '').toLowerCase().includes(q))
-                        : customersData.rows;
+                      const filtered = q ? customersData.filter(r => r.owner_name.toLowerCase().includes(q)) : customersData;
                       const sorted = doSort(filtered, customersSort.field, customersSort.dir, customersGetters);
-                      const totalAmt = filtered.reduce((s, r) => s + (r.total || 0), 0);
-                      const totalDeals = filtered.reduce((s, r) => s + (r.deals || 0), 0);
-                      
-                      // Create printable content
-                      const printContent = `
-                        <html dir="${dir}">
-                        <head>
-                          <meta charset="utf-8">
-                          <title>Customer Sales Analysis Report</title>
-                          <style>
-                            @media print {
-                              @page { 
-                                margin: 1.5cm 1cm;
-                              }
-                            }
-                            body { 
-                              font-family: Arial, sans-serif; 
-                              padding: 20px; 
-                              direction: ${dir}; 
-                              margin: 0;
-                            }
-                            .header {
-                              display: flex;
-                              justify-content: space-between;
-                              align-items: center;
-                              padding: 20px 0;
-                              border-bottom: 3px solid #6f42c1;
-                              margin-bottom: 30px;
-                            }
-                            .logo {
-                              width: 150px;
-                              height: auto;
-                              ${!logoBase64 ? 'display: none;' : ''}
-                            }
-                            .logo-placeholder {
-                              font-size: 2.5rem;
-                              color: #6f42c1;
-                              font-weight: 700;
-                            }
-                            .company-info {
-                              text-align: ${textAlign === 'right' ? 'left' : 'right'};
-                              color: #666;
-                              font-size: 0.9rem;
-                            }
-                            .company-info strong {
-                              display: block;
-                              color: #6f42c1;
-                              font-size: 1.8rem;
-                              font-weight: 700;
-                              margin-bottom: 5px;
-                            }
-                            h1 { 
-                              text-align: center; 
-                              color: #6f42c1; 
-                              margin: 20px 0;
-                              font-size: 1.8rem;
-                            }
-                            .report-meta {
-                              text-align: center;
-                              color: #666;
-                              font-size: 0.9rem;
-                              margin-bottom: 20px;
-                            }
-                            table { 
-                              width: 100%; 
-                              border-collapse: collapse; 
-                              margin-top: 20px; 
-                              direction: ${dir}; 
-                            }
-                            th, td { 
-                              border: 1px solid #dee2e6; 
-                              padding: 12px; 
-                              text-align: ${textAlign}; 
-                            }
-                            th { 
-                              background: #f8f9fa; 
-                              font-weight: 600; 
-                              color: #333;
-                            }
-                            tfoot { 
-                              background: #ede7f6; 
-                              font-weight: 700; 
-                            }
-                            .footer {
-                              text-align: center;
-                              padding: 15px;
-                              font-size: 0.8rem;
-                              color: #999;
-                              border-top: 1px solid #ddd;
-                              margin-top: auto;
-                              page-break-inside: avoid;
-                            }
-                          .button-container {
-      text-align: center;
-      margin-bottom: 20px;
-      padding: 15px;
-      background: #f8f9fa;
-      border-bottom: 1px solid #dee2e6;
-    }
-    .btn-print-doc, .btn-close-doc {
-      padding: 12px 24px;
-      margin: 0 8px;
-      font-size: 16px;
-      cursor: pointer;
-      border: none;
-      border-radius: 5px;
-      font-weight: 600;
-    }
-    .btn-print-doc { background: #3498db; color: white; }
-    .btn-print-doc:hover { background: #2980b9; }
-    .btn-close-doc { background: #95a5a6; color: white; }
-    .btn-close-doc:hover { background: #7f8c8d; }
-    @media print { .button-container { display: none !important; } }
-                          </style>
-                        </head>
-                        <body>
-
+                      const rows = sorted.map(row => `
+                        <tr>
+                          <td>${row.owner_name}</td>
+                          <td style="text-align:center;">${row.total_cases}</td>
+                          <td style="text-align:center;">${row.open}</td>
+                          <td style="text-align:center;">${row.closed}</td>
+                          <td style="text-align:center;">${row.avg_days !== null ? row.avg_days + 'd' : '—'}</td>
+                          <td style="text-align:center;">${row.workload_pct}%</td>
+                        </tr>`).join('');
+                      const printContent = `<html dir="${dir}"><head><meta charset="utf-8"><title>Users Cases Analysis</title>
+                        <style>
+                          @media print { @page { margin: 1cm; } }
+                          body { font-family: Arial, sans-serif; padding: 20px; direction: ${dir}; margin: 0; }
+                          .header { display: flex; justify-content: space-between; align-items: center; padding: 20px 0; border-bottom: 3px solid #6f42c1; margin-bottom: 30px; }
+                          .logo { width: 150px; height: auto; }
+                          .company-info { color: #666; font-size: 0.9rem; }
+                          .company-info strong { display: block; color: #6f42c1; font-size: 1.8rem; font-weight: 700; margin-bottom: 5px; }
+                          h1 { text-align: center; color: #6f42c1; margin: 20px 0; font-size: 1.8rem; }
+                          .report-meta { text-align: center; color: #666; font-size: 0.9rem; margin-bottom: 20px; }
+                          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                          th, td { border: 1px solid #dee2e6; padding: 10px; text-align: ${textAlign}; font-size: 0.85rem; }
+                          th { background: #f8f9fa; font-weight: 600; color: #333; }
+                          tfoot { background: #ede7f6; font-weight: 700; }
+                          .footer { margin-top: 30px; padding: 20px 0 0; border-top: 1px solid #dee2e6; text-align: center; color: #999; font-size: 0.8rem; }
+                          .button-container { text-align: center; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-bottom: 1px solid #dee2e6; }
+                          .btn-print-doc, .btn-close-doc { padding: 12px 24px; margin: 0 8px; font-size: 16px; cursor: pointer; border: none; border-radius: 5px; font-weight: 600; }
+                          .btn-print-doc { background: #3498db; color: white; }
+                          .btn-close-doc { background: #95a5a6; color: white; }
+                          @media print { .button-container { display: none !important; } }
+                        </style></head><body>
                         <div class="button-container">
                           <button class="btn-print-doc" onclick="window.print()">&#128424; Print / Save as PDF</button>
                           <button class="btn-close-doc" onclick="window.close()">&#10005; Close</button>
                         </div>
-                      <div class="header">
-                            ${logoBase64 
-                              ? `<img src="${logoBase64}" alt="Company Logo" class="logo">` 
-                              : `<div class="logo-placeholder">🌐 WorldSecure</div>`
-                            }
-                            <div class="company-info">
-                              <strong>WorldSecure</strong>
-                              <div>${new Date().toLocaleDateString(language === 'he' ? 'he-IL' : language === 'pt' ? 'pt-PT' : 'en-US')}</div>
-                            </div>
-                          </div>
-                          
-                          <h1>👥 ${t('customer_sales_analysis') || 'ניתוח מכירות לקוחות'}</h1>
-                          
-                          <div class="report-meta">
-                            ${t('total') || 'סה"כ'}: <strong>${sorted.length}</strong> ${t('customers') || 'לקוחות'} | 
-                            ${t('deals') || 'עסקאות'}: <strong>${totalDeals}</strong> | 
-                            ${t('sales') || 'מכירות'}: <strong>${fmt(totalAmt)}</strong>
-                          </div>
-                          
-                          <table>
-                            <thead>
-                              <tr>
-                                <th>${t('customer') || 'לקוח'}</th>
-                                <th>${t('deals') || 'עסקאות'}</th>
-                                <th>${t('sales') || 'מכירות'}</th>
-                                <th>${t('country') || 'מדינה'}</th>
-                                <th>%</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              ${sorted.map(row => `
-                                <tr>
-                                  <td>${row.customer_name}</td>
-                                  <td>${row.deals}</td>
-                                  <td>${fmt(row.total)}</td>
-                                  <td>${row.country}</td>
-                                  <td>${row.percent}%</td>
-                                </tr>
-                              `).join('')}
-                            </tbody>
-                            <tfoot>
-                              <tr>
-                                <td><strong>${t('total') || 'סה"כ'} (${sorted.length})</strong></td>
-                                <td><strong>${totalDeals}</strong></td>
-                                <td><strong>${fmt(totalAmt)}</strong></td>
-                                <td></td>
-                                <td><strong>100%</strong></td>
-                              </tr>
-                            </tfoot>
-                          </table>
-                          
-                          <div class="footer">
-                            Generated by WorldSecure CRM • ${new Date().toLocaleString(language === 'he' ? 'he-IL' : language === 'pt' ? 'pt-PT' : 'en-US')}
-                          
-                      </div>
-                    </body>
-                        </html>
-                      `;
-                      
+                        <div class="header">
+                          ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" class="logo">` : `<div style="font-size:2rem;color:#6f42c1;font-weight:700;">🌐 WorldSecure</div>`}
+                          <div class="company-info"><strong>WorldSecure</strong><div>${new Date().toLocaleDateString(language === 'he' ? 'he-IL' : language === 'pt' ? 'pt-PT' : 'en-US')}</div></div>
+                        </div>
+                        <h1>🧑‍💼 ${t('users_cases_analysis') || 'Users Cases Analysis'}</h1>
+                        <div class="report-meta">${t('users') || 'Users'}: <strong>${sorted.length}</strong> | ${t('total_cases') || 'Total Cases'}: <strong>${sorted.reduce((s,r) => s+r.total_cases, 0)}</strong></div>
+                        <table><thead><tr>
+                          <th>${t('user') || 'User'}</th>
+                          <th>${t('total_cases') || 'Total Cases'}</th>
+                          <th>${t('open') || 'Open'}</th>
+                          <th>${t('closed') || 'Closed'}</th>
+                          <th>${t('avg_open_days') || 'Avg. Open Days'}</th>
+                          <th>Workload %</th>
+                        </tr></thead><tbody>${rows}</tbody>
+                        <tfoot><tr>
+                          <td><strong>${t('total') || 'Total'}</strong></td>
+                          <td style="text-align:center;"><strong>${sorted.reduce((s,r) => s+r.total_cases,0)}</strong></td>
+                          <td style="text-align:center;"><strong>${sorted.reduce((s,r) => s+r.open,0)}</strong></td>
+                          <td style="text-align:center;"><strong>${sorted.reduce((s,r) => s+r.closed,0)}</strong></td>
+                          <td style="text-align:center;"></td>
+                          <td style="text-align:center;">100%</td>
+                        </tr></tfoot></table>
+                        <div class="footer">Generated by WorldSecure CRM • ${new Date().toLocaleString(language === 'he' ? 'he-IL' : language === 'pt' ? 'pt-PT' : 'en-US')}</div>
+                        </body></html>`;
                       const printWindow = window.open('', '_blank');
                       printWindow.document.write(printContent);
                       printWindow.document.close();
                     }}
-                    style={{
-                      background: '#007bff',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '6px',
-                      padding: '0.5rem 1rem',
-                      fontSize: '0.9rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem'
-                    }}
+                    style={{ background: '#007bff', color: 'white', border: 'none', borderRadius: '6px', padding: '0.5rem 1rem', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
                   >
                     🖨️ {t('print_pdf') || 'Print / Save as PDF'}
                   </button>
                   <button
                     onClick={async () => {
-                      // Dynamic import of SheetJS
                       const XLSX = await import('xlsx');
-                      
-                      // Prepare data
                       const q = customersSearch.toLowerCase();
-                      const filtered = q
-                        ? customersData.rows.filter(r => (r.customer_name || '').toLowerCase().includes(q) || (r.country || '').toLowerCase().includes(q))
-                        : customersData.rows;
+                      const filtered = q ? customersData.filter(r => r.owner_name.toLowerCase().includes(q)) : customersData;
                       const sorted = doSort(filtered, customersSort.field, customersSort.dir, customersGetters);
-                      const totalAmt = filtered.reduce((s, r) => s + (r.total || 0), 0);
-                      const totalDeals = filtered.reduce((s, r) => s + (r.deals || 0), 0);
-                      
                       const data = [
-                        // Headers
-                        [t('customer') || 'לקוח', t('deals') || 'עסקאות', t('sales') || 'מכירות', t('country') || 'מדינה', '%'],
-                        // Data rows
-                        ...sorted.map(row => [
-                          row.customer_name,
-                          row.deals,
-                          row.total,
-                          row.country,
-                          row.percent
-                        ]),
-                        // Total row
-                        [t('total') || 'סה"כ' + ` (${sorted.length})`, totalDeals, totalAmt, '', 100]
+                        [t('user') || 'User', t('total_cases') || 'Total Cases', t('open') || 'Open', t('closed') || 'Closed', t('avg_open_days') || 'Avg. Open Days', 'Workload %'],
+                        ...sorted.map(r => [r.owner_name, r.total_cases, r.open, r.closed, r.avg_days !== null ? r.avg_days : '', r.workload_pct + '%']),
+                        [t('total') || 'Total', sorted.reduce((s,r) => s+r.total_cases,0), sorted.reduce((s,r) => s+r.open,0), sorted.reduce((s,r) => s+r.closed,0), '', '100%']
                       ];
-                      
-                      // Create worksheet
                       const ws = XLSX.utils.aoa_to_sheet(data);
-                      
-                      // Set column widths
-                      ws['!cols'] = [
-                        { wch: 25 }, // Customer
-                        { wch: 12 }, // Deals
-                        { wch: 15 }, // Sales
-                        { wch: 15 }, // Country
-                        { wch: 8 }   // %
-                      ];
-                      
-                      // Create workbook
+                      ws['!cols'] = [{ wch: 25 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 12 }];
                       const wb = XLSX.utils.book_new();
-                      XLSX.utils.book_append_sheet(wb, ws, 'Customer Sales Analysis');
-                      
-                      // Download
-                      const fileName = `customer_sales_analysis_${new Date().toISOString().split('T')[0]}.xlsx`;
-                      XLSX.writeFile(wb, fileName);
+                      XLSX.utils.book_append_sheet(wb, ws, 'Users Cases');
+                      XLSX.writeFile(wb, `users_cases_${new Date().toISOString().split('T')[0]}.xlsx`);
                     }}
-                    style={{
-                      background: '#28a745',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '6px',
-                      padding: '0.5rem 1rem',
-                      fontSize: '0.9rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem'
-                    }}
+                    style={{ background: '#28a745', color: 'white', border: 'none', borderRadius: '6px', padding: '0.5rem 1rem', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
                   >
                     📊 {t('save_excel') || 'שמור כאקסל'}
                   </button>
@@ -1603,7 +1511,6 @@ function SupportReports() {
           )}
         </AccordionBody>
       </div>
-
       {/* דוח 5 - רווחיות עסקה */}
       <div style={{ marginBottom: '1rem' }}>
         <AccordionBtn open={profitOpen} onClick={toggleProfitReport} color={{ base: '#fd7e14', dark: '#c96a10' }}>
