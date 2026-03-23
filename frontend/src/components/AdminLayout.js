@@ -40,6 +40,10 @@ function AdminLayout() {
               <span className="sidebar-icon">👤</span>
               {t('users')}
             </Link>
+            <Link to="/admin/warehouse-reports" className={isActive('/admin/warehouse-reports')}>
+              <span className="sidebar-icon">📊</span>
+              {t('warehouse_reports') || 'Warehouse Reports'}
+            </Link>
             {!isCloud && (
               <Link to="/admin/sales-reports" className={isActive('/admin/sales-reports')}>
                 <span className="sidebar-icon">💹</span>

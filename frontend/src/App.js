@@ -316,6 +316,7 @@ function AppRoutes() {
               <Route path="sales-reports" element={<SalesReports />} />
             )}
             <Route path="support-reports" element={<SupportReports />} />
+            <Route path="warehouse-reports" element={<WarehouseReports />} />
             <Route path="activity-log" element={<ActivityLog />} />
           </Route>
 
