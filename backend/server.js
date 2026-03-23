@@ -2899,6 +2899,8 @@ app.get('/api/quotes/customers-summary', authenticateToken, (req, res) => {
       c.country,
       COUNT(DISTINCT q.id) as deal_count,
       SUM(q.total) as total_amount,
+      AVG(q.total) as avg_deal_size,
+      MAX(q.created_at) as last_deal_date,
       q.currency
     FROM quotes q
     JOIN customers c ON q.customer_id = c.id
@@ -2912,10 +2914,14 @@ app.get('/api/quotes/customers-summary', authenticateToken, (req, res) => {
     var byCustomer = {};
     rows.forEach(function(r) {
       if (!byCustomer[r.id]) {
-        byCustomer[r.id] = { id: r.id, customer_name: r.customer_name, country: r.country || '-', total: 0, deals: 0, currencies: [] };
+        byCustomer[r.id] = { id: r.id, customer_name: r.customer_name, country: r.country || '-', total: 0, deals: 0, avg_deal_size: 0, last_deal_date: null, currencies: [] };
       }
       byCustomer[r.id].total += r.total_amount || 0;
       byCustomer[r.id].deals += r.deal_count || 0;
+      // Keep latest date across currencies
+      if (!byCustomer[r.id].last_deal_date || (r.last_deal_date && r.last_deal_date > byCustomer[r.id].last_deal_date)) {
+        byCustomer[r.id].last_deal_date = r.last_deal_date;
+      }
       if (r.currency && !byCustomer[r.id].currencies.includes(r.currency)) {
         byCustomer[r.id].currencies.push(r.currency);
       }
@@ -2924,7 +2930,10 @@ app.get('/api/quotes/customers-summary', authenticateToken, (req, res) => {
     var result = Object.values(byCustomer).sort(function(a, b) { return b.total - a.total; });
     var grandTotal = result.reduce((s, r) => s + r.total, 0);
     var grandDeals = result.reduce((s, r) => s + r.deals, 0);
-    result.forEach(r => { r.percent = grandTotal > 0 ? Math.round((r.total / grandTotal) * 100) : 0; });
+    result.forEach(r => {
+      r.percent = grandTotal > 0 ? Math.round((r.total / grandTotal) * 100) : 0;
+      r.avg_deal_size = r.deals > 0 ? Math.round(r.total / r.deals) : 0;
+    });
 
     res.json({ rows: result, grandTotal, grandDeals });
   });
@@ -2938,20 +2947,37 @@ app.get('/api/quotes/products-summary', authenticateToken, (req, res) => {
       p.name, p.name_he, p.name_pt,
       c.name as category_name, c.name_he as category_name_he, c.name_pt as category_name_pt,
       SUM(qi.quantity) as total_qty,
-      COUNT(DISTINCT qi.quote_id) as deal_count
+      COUNT(DISTINCT qi.quote_id) as deal_count,
+      SUM(qi.quantity * qi.unit_price) as total_revenue,
+      q.currency
     FROM quote_items qi
     JOIN products p ON qi.product_id = p.id
     LEFT JOIN categories c ON p.category_id = c.id
     JOIN quotes q ON qi.quote_id = q.id
     WHERE q.parent_id IS NULL
       AND q.status = 'closed'
-    GROUP BY p.id
+    GROUP BY p.id, q.currency
     ORDER BY total_qty DESC
   `, [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    const totalQty = rows.reduce((s, r) => s + (r.total_qty || 0), 0);
-    const totalDeals = rows.reduce((s, r) => s + (r.deal_count || 0), 0);
-    res.json({ rows, totalQty, totalDeals });
+    // Group by product, aggregate revenue per currency
+    const byProduct = {};
+    rows.forEach(r => {
+      if (!byProduct[r.id]) {
+        byProduct[r.id] = { ...r, total_revenue: 0, revenue_by_currency: {}, deal_count: 0, total_qty: 0 };
+      }
+      byProduct[r.id].total_qty += r.total_qty || 0;
+      byProduct[r.id].deal_count += r.deal_count || 0;
+      byProduct[r.id].total_revenue += r.total_revenue || 0;
+      const cur = r.currency || 'USD';
+      if (!byProduct[r.id].revenue_by_currency[cur]) byProduct[r.id].revenue_by_currency[cur] = 0;
+      byProduct[r.id].revenue_by_currency[cur] += r.total_revenue || 0;
+    });
+    const result = Object.values(byProduct).sort((a, b) => b.total_qty - a.total_qty);
+    const totalQty = result.reduce((s, r) => s + (r.total_qty || 0), 0);
+    const totalDeals = result.reduce((s, r) => s + (r.deal_count || 0), 0);
+    const totalRevenue = result.reduce((s, r) => s + (r.total_revenue || 0), 0);
+    res.json({ rows: result, totalQty, totalDeals, totalRevenue });
   });
 });
 

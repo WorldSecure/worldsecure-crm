@@ -224,7 +224,8 @@ function SalesReports() {
     name: r => r.name || '',
     total_qty: r => r.total_qty || 0,
     deal_count: r => r.deal_count || 0,
-    category: r => r.category_name || ''
+    category: r => r.category_name || '',
+    total_revenue: r => r.total_revenue || 0,
   };
   const handleProductsSort = (f) => setProductsSort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' }));
   const handleCustomersSort = (f) => setCustomersSort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' }));
@@ -234,6 +235,8 @@ function SalesReports() {
     total: r => r.total || 0,
     country: r => r.country || '',
     percent: r => r.percent || 0,
+    avg_deal_size: r => r.avg_deal_size || 0,
+    last_deal_date: r => r.last_deal_date || '',
   };
   const countryGetters = { country: r => r.country || '', deals: r => r.deals, total: r => r.total, currency: r => (r.currencies[0] || ''), percent: r => r.percent };
 
@@ -779,6 +782,7 @@ function SalesReports() {
                     <SortTh field="name" sortState={productsSort} onSort={handleProductsSort}>{t('product') || 'מוצר'}</SortTh>
                     <SortTh field="total_qty" sortState={productsSort} onSort={handleProductsSort} style={{ textAlign: 'center' }}>{t('quantity') || 'כמות'}</SortTh>
                     <SortTh field="deal_count" sortState={productsSort} onSort={handleProductsSort} style={{ textAlign: 'center' }}>{t('deals') || 'עסקאות'}</SortTh>
+                    <SortTh field="total_revenue" sortState={productsSort} onSort={handleProductsSort} style={{ textAlign: 'right' }}>{t('total_revenue') || 'הכנסה כוללת'}</SortTh>
                     <SortTh field="category" sortState={productsSort} onSort={handleProductsSort}>{t('category') || 'קטגוריה'}</SortTh>
                   </tr>
                 </thead>
@@ -799,6 +803,13 @@ function SalesReports() {
                             <span style={{ background: '#e3f2fd', color: '#1565c0', padding: '2px 10px', borderRadius: '12px', fontWeight: 600, fontSize: '0.85rem' }}>{fmt(row.total_qty)}</span>
                           </td>
                           <td style={{ padding: '0.6rem 1rem', textAlign: 'center', color: '#555' }}>{row.deal_count}</td>
+                          <td style={{ padding: '0.6rem 1rem', textAlign: 'right', fontWeight: 600, color: '#155724' }}>
+                            {row.total_revenue > 0
+                              ? Object.entries(row.revenue_by_currency || {}).map(([cur, val]) =>
+                                  <span key={cur} style={{ display: 'block' }}>{fmt(Math.round(val))} <span style={{ fontSize: '0.78rem', color: '#888' }}>{cur}</span></span>
+                                )
+                              : '—'}
+                          </td>
                           <td style={{ padding: '0.6rem 1rem', color: '#666', fontSize: '0.85rem' }}>
                             <span style={{ background: '#e9ecef', padding: '2px 8px', borderRadius: '10px' }}>{row.category_name || '-'}</span>
                           </td>
@@ -808,6 +819,13 @@ function SalesReports() {
                         <td style={{ padding: '0.65rem 1rem', color: '#0c5460' }}>{t('total') || 'סה"כ'} ({sorted.length})</td>
                         <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#0c5460' }}>{fmt(totalQty)}</td>
                         <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#0c5460' }}>{totalDeals}</td>
+                        <td style={{ padding: '0.65rem 1rem', textAlign: 'right', color: '#155724' }}>
+                          {(() => {
+                            const byCur = {};
+                            filtered.forEach(r => Object.entries(r.revenue_by_currency || {}).forEach(([cur, val]) => { byCur[cur] = (byCur[cur] || 0) + val; }));
+                            return Object.entries(byCur).map(([cur, val]) => <span key={cur} style={{ display: 'block' }}>{fmt(Math.round(val))} {cur}</span>);
+                          })()}
+                        </td>
                         <td></td>
                       </tr>
                     </>;
@@ -1152,6 +1170,8 @@ function SalesReports() {
                     <SortTh field="customer_name" sortState={customersSort} onSort={handleCustomersSort}>{t('customer') || 'לקוח'}</SortTh>
                     <SortTh field="deals" sortState={customersSort} onSort={handleCustomersSort} style={{ textAlign: 'center' }}>{t('deals') || 'עסקאות'}</SortTh>
                     <SortTh field="total" sortState={customersSort} onSort={handleCustomersSort} style={{ textAlign: 'right' }}>{t('sales') || 'מכירות'}</SortTh>
+                    <SortTh field="avg_deal_size" sortState={customersSort} onSort={handleCustomersSort} style={{ textAlign: 'right' }}>{t('avg_deal_size') || 'ממוצע עסקה'}</SortTh>
+                    <SortTh field="last_deal_date" sortState={customersSort} onSort={handleCustomersSort} style={{ width: '110px' }}>{t('last_deal_date') || 'עסקה אחרונה'}</SortTh>
                     <SortTh field="country" sortState={customersSort} onSort={handleCustomersSort} style={{ textAlign: 'center' }}>{t('country') || 'מדינה'}</SortTh>
                     <SortTh field="percent" sortState={customersSort} onSort={handleCustomersSort} style={{ textAlign: 'center' }}>%</SortTh>
                   </tr>
@@ -1509,33 +1529,47 @@ function SalesReports() {
               {closedDeals.length === 0 ? (
                 <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>{t('no_closed_deals') || 'אין עסקאות סגורות'}</div>
               ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', tableLayout: 'fixed' }}>
-                  <colgroup><col /><col style={{ width: '160px' }} /><col style={{ width: '130px' }} /><col style={{ width: '130px' }} /><col style={{ width: '100px' }} /></colgroup>
-                  <thead>
-                    <tr style={{ background: '#f8f9fa' }}>
-                      <th style={{ padding: '0.65rem 1rem', borderBottom: '2px solid #dee2e6', fontWeight: 600 }}>{t('customer') || 'לקוח'}</th>
-                      <th style={{ padding: '0.65rem 1rem', borderBottom: '2px solid #dee2e6', fontWeight: 600, textAlign: 'right' }}>{t('total') || 'סכום'}</th>
-                      <th style={{ padding: '0.65rem 1rem', borderBottom: '2px solid #dee2e6', fontWeight: 600, textAlign: 'center' }}>{t('currency') || 'מטבע'}</th>
-                      <th style={{ padding: '0.65rem 1rem', borderBottom: '2px solid #dee2e6', fontWeight: 600, textAlign: 'center' }}>{t('date') || 'תאריך סגירה'}</th>
-                      <th style={{ padding: '0.65rem 1rem', borderBottom: '2px solid #dee2e6' }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {closedDeals.map((deal, i) => (
-                      <tr key={deal.id} style={{ borderBottom: '1px solid #f0f0f0', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
-                        <td style={{ padding: '0.6rem 1rem', fontWeight: 500 }}>#{deal.id} {deal.customer_name}</td>
-                        <td style={{ padding: '0.6rem 1rem', textAlign: 'right', fontWeight: 600 }}>{fmt(deal.total)}</td>
-                        <td style={{ padding: '0.6rem 1rem', textAlign: 'center', color: '#666' }}>{deal.currency}</td>
-                        <td style={{ padding: '0.6rem 1rem', textAlign: 'center', color: '#666', fontSize: '0.82rem' }}>{deal.closed_at ? deal.closed_at.split('T')[0] : '-'}</td>
-                        <td style={{ padding: '0.6rem 0.8rem', textAlign: 'center' }}>
-                          <button onClick={() => loadProfitability(deal)} style={{ background: '#fd7e14', color: 'white', border: 'none', borderRadius: '4px', padding: '0.3rem 0.7rem', fontSize: '0.82rem', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                            💹 {t('calc_profit') || 'חשב רווח'}
-                          </button>
-                        </td>
+                <div>
+                  {/* Summary bar */}
+                  <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #f0f0f0', background: '#fff8f0', display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <div style={{ fontSize: '0.85rem', color: '#784212' }}>
+                      💹 <strong>{closedDeals.length}</strong> {t('closed_deals') || 'עסקאות סגורות'}
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: '#784212' }}>
+                      💰 {t('total_revenue') || 'הכנסה כוללת'}: <strong>{fmt(Math.round(closedDeals.reduce((s, d) => s + (d.total || 0), 0)))}</strong>
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: '#784212' }}>
+                      📊 {t('avg_deal_size') || 'ממוצע עסקה'}: <strong>{fmt(Math.round(closedDeals.reduce((s, d) => s + (d.total || 0), 0) / closedDeals.length))}</strong>
+                    </div>
+                  </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', tableLayout: 'fixed' }}>
+                    <colgroup><col /><col style={{ width: '160px' }} /><col style={{ width: '130px' }} /><col style={{ width: '130px' }} /><col style={{ width: '100px' }} /></colgroup>
+                    <thead>
+                      <tr style={{ background: '#f8f9fa' }}>
+                        <th style={{ padding: '0.65rem 1rem', borderBottom: '2px solid #dee2e6', fontWeight: 600 }}>{t('customer') || 'לקוח'}</th>
+                        <th style={{ padding: '0.65rem 1rem', borderBottom: '2px solid #dee2e6', fontWeight: 600, textAlign: 'right' }}>{t('total') || 'סכום'}</th>
+                        <th style={{ padding: '0.65rem 1rem', borderBottom: '2px solid #dee2e6', fontWeight: 600, textAlign: 'center' }}>{t('currency') || 'מטבע'}</th>
+                        <th style={{ padding: '0.65rem 1rem', borderBottom: '2px solid #dee2e6', fontWeight: 600, textAlign: 'center' }}>{t('date') || 'תאריך סגירה'}</th>
+                        <th style={{ padding: '0.65rem 1rem', borderBottom: '2px solid #dee2e6' }}></th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {closedDeals.map((deal, i) => (
+                        <tr key={deal.id} style={{ borderBottom: '1px solid #f0f0f0', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                          <td style={{ padding: '0.6rem 1rem', fontWeight: 500 }}>#{deal.id} {deal.customer_name}</td>
+                          <td style={{ padding: '0.6rem 1rem', textAlign: 'right', fontWeight: 600 }}>{fmt(deal.total)}</td>
+                          <td style={{ padding: '0.6rem 1rem', textAlign: 'center', color: '#666' }}>{deal.currency}</td>
+                          <td style={{ padding: '0.6rem 1rem', textAlign: 'center', color: '#666', fontSize: '0.82rem' }}>{deal.closed_at ? deal.closed_at.split('T')[0] : '-'}</td>
+                          <td style={{ padding: '0.6rem 0.8rem', textAlign: 'center' }}>
+                            <button onClick={() => loadProfitability(deal)} style={{ background: '#fd7e14', color: 'white', border: 'none', borderRadius: '4px', padding: '0.3rem 0.7rem', fontSize: '0.82rem', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                              💹 {t('calc_profit') || 'חשב רווח'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </>
           )}
