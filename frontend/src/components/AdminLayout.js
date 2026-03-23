@@ -32,14 +32,6 @@ function AdminLayout() {
               <span className="sidebar-icon">👥</span>
               {t('customers')}
             </Link>
-            <Link to="/admin/settings" className={isActive('/admin/settings')}>
-              <span className="sidebar-icon">⚙️</span>
-              {t('settings')}
-            </Link>
-            <Link to="/admin/users" className={isActive('/admin/users')}>
-              <span className="sidebar-icon">👤</span>
-              {t('users')}
-            </Link>
             <Link to="/admin/warehouse-reports" className={isActive('/admin/warehouse-reports')}>
               <span className="sidebar-icon">📊</span>
               {t('warehouse_reports') || 'Warehouse Reports'}
@@ -53,6 +45,14 @@ function AdminLayout() {
             <Link to="/admin/support-reports" className={isActive('/admin/support-reports')}>
               <span className="sidebar-icon">📞</span>
               {t('support_reports') || 'Support Reports'}
+            </Link>
+            <Link to="/admin/settings" className={isActive('/admin/settings')}>
+              <span className="sidebar-icon">⚙️</span>
+              {t('settings')}
+            </Link>
+            <Link to="/admin/users" className={isActive('/admin/users')}>
+              <span className="sidebar-icon">👤</span>
+              {t('users')}
             </Link>
             <Link to="/admin/activity-log" className={isActive('/admin/activity-log')}>
               <span className="sidebar-icon">📝</span>
