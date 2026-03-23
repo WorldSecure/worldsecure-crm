@@ -83,6 +83,8 @@ function WarehouseReports() {
   const [turnoverCustomFrom, setTurnoverCustomFrom] = useState('');
   const [turnoverCustomTo, setTurnoverCustomTo] = useState('');
   const [turnoverAllData, setTurnoverAllData] = useState(null);
+  const [turnoverPageSize, setTurnoverPageSize] = useState(10);
+  const [turnoverCurrentPage, setTurnoverCurrentPage] = useState(1);
 
   // ── Helpers ──
   const fmt = (n) => new Intl.NumberFormat('en-US').format(n || 0);
@@ -1098,7 +1100,9 @@ function WarehouseReports() {
         <AccordionBody open={turnoverOpen} loading={turnoverLoading}>
           {turnoverData && (() => {
             const sorted = doSort(turnoverData, turnoverSort.field, turnoverSort.dir, turnoverGetters);
-            const handleSort = f => setTurnoverSort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' }));
+            const handleSort = f => { setTurnoverSort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' })); setTurnoverCurrentPage(1); };
+            const totalPages = turnoverPageSize === 'all' ? 1 : Math.ceil(sorted.length / turnoverPageSize);
+            const paginated = turnoverPageSize === 'all' ? sorted : sorted.slice((turnoverCurrentPage - 1) * turnoverPageSize, turnoverCurrentPage * turnoverPageSize);
             const activeCount = sorted.filter(r => r.status === 'active').length;
             const slowCount = sorted.filter(r => r.status === 'slow').length;
             const deadCount = sorted.filter(r => r.status === 'dead').length;
@@ -1139,7 +1143,7 @@ function WarehouseReports() {
                       </tr>
                     </thead>
                     <tbody>
-                      {sorted.map((r, i) => {
+                      {paginated.map((r, i) => {
                         const sc = statusConfig[r.status] || statusConfig.dead;
                         return (
                           <tr key={r.product_id} style={{ borderBottom: '1px solid #f0f0f0', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
@@ -1173,7 +1177,7 @@ function WarehouseReports() {
 
                 {/* Mobile Cards */}
                 <div style={{ display: isMobile ? 'flex' : 'none', flexDirection: 'column', gap: '0.75rem', padding: '0.75rem' }}>
-                  {sorted.map(r => {
+                  {paginated.map(r => {
                     const sc = statusConfig[r.status] || statusConfig.dead;
                     return (
                       <div key={r.product_id} style={{ background: 'white', border: `1px solid ${sc.bg === '#d4edda' ? '#a5d6a7' : sc.bg === '#fff3cd' ? '#ffd54f' : '#ef9a9a'}`, borderRadius: '10px', padding: '1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
@@ -1204,6 +1208,33 @@ function WarehouseReports() {
                       </div>
                     );
                   })}
+                </div>
+
+                {/* Pagination Bar */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', padding: '0.75rem 1rem', borderTop: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: '#555' }}>
+                    <span>{sorted.length} {t('products') || 'מוצרים'}</span>
+                    <span>|</span>
+                    <label>{t('per_page') || 'פר עמוד'}:</label>
+                    <select value={turnoverPageSize} onChange={e => { setTurnoverPageSize(e.target.value === 'all' ? 'all' : parseInt(e.target.value)); setTurnoverCurrentPage(1); }}
+                      style={{ padding: '0.2rem 0.4rem', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '0.85rem' }}>
+                      {[10, 15, 20, 50].map(n => <option key={n} value={n}>{n}</option>)}
+                      <option value="all">{t('all') || 'הכל'}</option>
+                    </select>
+                  </div>
+                  {turnoverPageSize !== 'all' && totalPages > 1 && (
+                    <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                      <button onClick={() => setTurnoverCurrentPage(1)} disabled={turnoverCurrentPage === 1}
+                        style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: turnoverCurrentPage === 1 ? '#f3f4f6' : '#fff', cursor: turnoverCurrentPage === 1 ? 'default' : 'pointer' }}>«</button>
+                      <button onClick={() => setTurnoverCurrentPage(p => Math.max(1, p - 1))} disabled={turnoverCurrentPage === 1}
+                        style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: turnoverCurrentPage === 1 ? '#f3f4f6' : '#fff', cursor: turnoverCurrentPage === 1 ? 'default' : 'pointer' }}>‹</button>
+                      <span style={{ fontSize: '0.85rem', padding: '0 0.3rem' }}>{turnoverCurrentPage} / {totalPages}</span>
+                      <button onClick={() => setTurnoverCurrentPage(p => Math.min(totalPages, p + 1))} disabled={turnoverCurrentPage === totalPages}
+                        style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: turnoverCurrentPage === totalPages ? '#f3f4f6' : '#fff', cursor: turnoverCurrentPage === totalPages ? 'default' : 'pointer' }}>›</button>
+                      <button onClick={() => setTurnoverCurrentPage(totalPages)} disabled={turnoverCurrentPage === totalPages}
+                        style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: turnoverCurrentPage === totalPages ? '#f3f4f6' : '#fff', cursor: turnoverCurrentPage === totalPages ? 'default' : 'pointer' }}>»</button>
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ padding: '1rem', borderTop: '1px solid #dee2e6', display: 'flex', justifyContent: 'flex-end' }}>
