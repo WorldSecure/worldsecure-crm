@@ -779,7 +779,7 @@ function WarehouseReports() {
       </div>
 
       {/* ── דוח 5: ערך מלאי כולל (Admin only) ── */}
-      {isAdmin && (
+      {isAdmin && window.location.pathname.startsWith('/admin') && (
       <div style={{ marginBottom: '1rem' }}>
         <AccordionBtn open={valueOpen} onClick={toggleValue} color={{ base: '#20c997', dark: '#12b886' }}>
           💰 {t('inventory_value_report') || 'Inventory Value Report'}
