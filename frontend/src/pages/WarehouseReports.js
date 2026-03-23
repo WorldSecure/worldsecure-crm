@@ -74,6 +74,16 @@ function WarehouseReports() {
   const [valuePageSize, setValuePageSize] = useState(10);
   const [valueCurrentPage, setValueCurrentPage] = useState(1);
 
+  // ── State: דוח 6 - Inventory Turnover (Admin only) ──
+  const [turnoverOpen, setTurnoverOpen] = useState(false);
+  const [turnoverData, setTurnoverData] = useState(null);
+  const [turnoverLoading, setTurnoverLoading] = useState(false);
+  const [turnoverSort, setTurnoverSort] = useState({ field: 'total_outbound_qty', dir: 'desc' });
+  const [turnoverDateFilter, setTurnoverDateFilter] = useState('all');
+  const [turnoverCustomFrom, setTurnoverCustomFrom] = useState('');
+  const [turnoverCustomTo, setTurnoverCustomTo] = useState('');
+  const [turnoverAllData, setTurnoverAllData] = useState(null);
+
   // ── Helpers ──
   const fmt = (n) => new Intl.NumberFormat('en-US').format(n || 0);
 
@@ -212,7 +222,132 @@ function WarehouseReports() {
     currency: r => r.currency || '',
   };
 
-  // ── UI Components ──
+  const buildTurnoverStats = (outboundList, products) => {
+    const map = {};
+    // Init all products
+    products.forEach(p => {
+      map[p.id] = {
+        product_id: p.id,
+        name_display: getProductName(p),
+        sku: p.sku || '-',
+        category_name: p.category_name || '-',
+        current_qty: p.quantity || 0,
+        total_outbound_qty: 0,
+        movement_months: new Set(),
+        last_movement_date: null,
+      };
+    });
+    // Aggregate outbound transactions
+    outboundList.forEach(tx => {
+      // Each tx may have items — but /api/outbound returns header-level, quantity not in header
+      // We'll use count of transactions per product as a proxy via items
+      // Actually items are loaded separately; we'll use the tx date to mark activity
+    });
+    return Object.values(map);
+  };
+
+  const toggleTurnover = async () => {
+    if (turnoverOpen) { setTurnoverOpen(false); return; }
+    setTurnoverLoading(true);
+    try {
+      const [productsRes, outboundRes] = await Promise.all([
+        axios.get('/api/products'),
+        axios.get('/api/outbound'),
+      ]);
+      const products = productsRes.data;
+      const outbound = outboundRes.data;
+
+      // Build product map
+      const map = {};
+      products.forEach(p => {
+        map[p.id] = {
+          product_id: p.id,
+          name_display: getProductName(p),
+          sku: p.sku || '-',
+          category_name: p.category_name || '-',
+          current_qty: p.quantity || 0,
+          total_outbound_qty: 0,
+          movement_months: new Set(),
+          last_movement_date: null,
+          transaction_count: 0,
+        };
+      });
+
+      // Aggregate outbound — fetch details for each transaction to get items
+      // Use /api/outbound which has items embedded or use product_id from items
+      // Since header doesn't have product_id, we aggregate by transaction date as activity
+      // For qty: fetch each outbound detail
+      const detailPromises = outbound.map(tx =>
+        axios.get(`/api/outbound/${tx.id}/details`).catch(() => null)
+      );
+      const details = await Promise.all(detailPromises);
+
+      details.forEach((detail, idx) => {
+        if (!detail) return;
+        const tx = outbound[idx];
+        const txDate = tx.transaction_date ? new Date(tx.transaction_date) : null;
+        const items = detail.data?.items || [];
+        items.forEach(item => {
+          const pid = item.product_id || item.id;
+          if (!pid || !map[pid]) return;
+          map[pid].total_outbound_qty += item.quantity || 0;
+          map[pid].transaction_count++;
+          if (txDate) {
+            const monthKey = `${txDate.getFullYear()}-${txDate.getMonth()}`;
+            map[pid].movement_months.add(monthKey);
+            if (!map[pid].last_movement_date || txDate > new Date(map[pid].last_movement_date)) {
+              map[pid].last_movement_date = tx.transaction_date;
+            }
+          }
+        });
+      });
+
+      // Calculate avg monthly movement and status
+      const now = new Date();
+      const result = Object.values(map).map(p => {
+        const months = p.movement_months.size || 1;
+        const avgMonthly = p.total_outbound_qty > 0 ? parseFloat((p.total_outbound_qty / months).toFixed(1)) : 0;
+        const daysSinceMove = p.last_movement_date
+          ? Math.round((now - new Date(p.last_movement_date)) / 86400000)
+          : null;
+        let status = 'dead';
+        if (p.total_outbound_qty === 0) status = 'dead';
+        else if (daysSinceMove !== null && daysSinceMove <= 30) status = 'active';
+        else if (daysSinceMove !== null && daysSinceMove <= 90) status = 'slow';
+        else status = 'dead';
+
+        return {
+          ...p,
+          avg_monthly: avgMonthly,
+          days_since_move: daysSinceMove,
+          status,
+          movement_months: p.movement_months.size,
+        };
+      });
+
+      setTurnoverAllData(result);
+      setTurnoverData(applyDateFilter(result, turnoverDateFilter, turnoverCustomFrom, turnoverCustomTo, 'last_movement_date'));
+    } catch (e) { console.error(e); }
+    setTurnoverLoading(false);
+    setTurnoverOpen(true);
+  };
+
+  const turnoverGetters = {
+    name: r => r.name_display || '',
+    sku: r => r.sku || '',
+    category: r => r.category_name || '',
+    total_outbound_qty: r => r.total_outbound_qty || 0,
+    avg_monthly: r => r.avg_monthly || 0,
+    last_movement_date: r => r.last_movement_date || '',
+    status: r => r.status || '',
+    current_qty: r => r.current_qty || 0,
+  };
+
+  const statusConfig = {
+    active: { bg: '#d4edda', color: '#155724', label: '✅ Active' },
+    slow:   { bg: '#fff3cd', color: '#856404', label: '🐢 Slow' },
+    dead:   { bg: '#f8d7da', color: '#721c24', label: '💀 Dead' },
+  };
   const SortTh = ({ field, sortState, onSort, children, style = {} }) => {
     const active = sortState.field === field;
     return (
@@ -945,6 +1080,141 @@ function WarehouseReports() {
                       <tfoot><tr style="background:#d4edda;font-weight:700;"><td colspan="6">${t('total_inventory_value')||'Total Inventory Value'} (${sorted.length} ${t('products')||'products'})</td><td style="text-align:right;">${Object.entries(byCurrency).map(([c,v])=>`${fmt(v)} ${c}`).join(' | ')}</td></tr></tfoot></table>`
                       + `<div class="footer">Generated by WorldSecure CRM • ${new Date().toLocaleString(locale)}</div></body></html>`;
                     openPrint(html);
+                  }} />
+                </div>
+              </>
+            );
+          })()}
+        </AccordionBody>
+      </div>
+      )}
+
+      {/* ── דוח 6: Inventory Turnover (Admin only) ── */}
+      {isAdmin && window.location.pathname.startsWith('/admin') && (
+      <div style={{ marginBottom: '1rem' }}>
+        <AccordionBtn open={turnoverOpen} onClick={toggleTurnover} color={{ base: '#e67e22', dark: '#ca6f1e' }}>
+          🔁 {t('inventory_turnover_report') || 'Inventory Turnover Report'}
+        </AccordionBtn>
+        <AccordionBody open={turnoverOpen} loading={turnoverLoading}>
+          {turnoverData && (() => {
+            const sorted = doSort(turnoverData, turnoverSort.field, turnoverSort.dir, turnoverGetters);
+            const handleSort = f => setTurnoverSort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' }));
+            const activeCount = sorted.filter(r => r.status === 'active').length;
+            const slowCount = sorted.filter(r => r.status === 'slow').length;
+            const deadCount = sorted.filter(r => r.status === 'dead').length;
+            return (
+              <>
+                <FilterBar
+                  activeFilter={turnoverDateFilter}
+                  onFilter={f => { setTurnoverDateFilter(f); setTurnoverData(applyDateFilter(turnoverAllData, f, turnoverCustomFrom, turnoverCustomTo, 'last_movement_date')); }}
+                  color="#e67e22"
+                  customFrom={turnoverCustomFrom}
+                  customTo={turnoverCustomTo}
+                  onCustomFrom={v => { setTurnoverCustomFrom(v); setTurnoverData(applyDateFilter(turnoverAllData, 'custom', v, turnoverCustomTo, 'last_movement_date')); }}
+                  onCustomTo={v => { setTurnoverCustomTo(v); setTurnoverData(applyDateFilter(turnoverAllData, 'custom', turnoverCustomFrom, v, 'last_movement_date')); }}
+                />
+                {/* Summary badges */}
+                <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #f0f0f0', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <span style={{ background: '#d4edda', color: '#155724', padding: '3px 12px', borderRadius: '20px', fontWeight: 600, fontSize: '0.85rem' }}>✅ Active: {activeCount}</span>
+                    <span style={{ background: '#fff3cd', color: '#856404', padding: '3px 12px', borderRadius: '20px', fontWeight: 600, fontSize: '0.85rem' }}>🐢 Slow: {slowCount}</span>
+                    <span style={{ background: '#f8d7da', color: '#721c24', padding: '3px 12px', borderRadius: '20px', fontWeight: 600, fontSize: '0.85rem' }}>💀 Dead: {deadCount}</span>
+                  </div>
+                  <RefreshBtn onClick={toggleTurnover} />
+                </div>
+
+                {/* Desktop Table */}
+                <div style={{ display: isMobile ? 'none' : 'block' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
+                    <thead>
+                      <tr style={{ background: '#f8f9fa' }}>
+                        <SortTh field="sku" sortState={turnoverSort} onSort={handleSort} style={{ width: '90px' }}>SKU</SortTh>
+                        <SortTh field="name" sortState={turnoverSort} onSort={handleSort}>{t('product') || 'מוצר'}</SortTh>
+                        <SortTh field="category" sortState={turnoverSort} onSort={handleSort} style={{ width: '120px' }}>{t('category') || 'קטגוריה'}</SortTh>
+                        <SortTh field="current_qty" sortState={turnoverSort} onSort={handleSort} style={{ width: '90px', textAlign: 'center' }}>{t('in_stock') || 'במלאי'}</SortTh>
+                        <SortTh field="total_outbound_qty" sortState={turnoverSort} onSort={handleSort} style={{ width: '110px', textAlign: 'center' }}>{t('total_outbound_qty') || 'יצא סה"כ'}</SortTh>
+                        <SortTh field="avg_monthly" sortState={turnoverSort} onSort={handleSort} style={{ width: '110px', textAlign: 'center' }}>{t('avg_monthly') || 'ממוצע/חודש'}</SortTh>
+                        <SortTh field="last_movement_date" sortState={turnoverSort} onSort={handleSort} style={{ width: '120px' }}>{t('last_movement') || 'תנועה אחרונה'}</SortTh>
+                        <SortTh field="status" sortState={turnoverSort} onSort={handleSort} style={{ width: '100px', textAlign: 'center' }}>{t('status') || 'סטטוס'}</SortTh>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sorted.map((r, i) => {
+                        const sc = statusConfig[r.status] || statusConfig.dead;
+                        return (
+                          <tr key={r.product_id} style={{ borderBottom: '1px solid #f0f0f0', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                            <td style={{ padding: '0.6rem 1rem', color: '#888', fontSize: '0.82rem' }}>{r.sku}</td>
+                            <td style={{ padding: '0.6rem 1rem', fontWeight: 500 }}>{r.name_display}</td>
+                            <td style={{ padding: '0.6rem 1rem', color: '#666', fontSize: '0.85rem' }}>{r.category_name}</td>
+                            <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>{fmt(r.current_qty)}</td>
+                            <td style={{ padding: '0.6rem 1rem', textAlign: 'center', fontWeight: 600 }}>{fmt(r.total_outbound_qty)}</td>
+                            <td style={{ padding: '0.6rem 1rem', textAlign: 'center', color: '#555' }}>{r.avg_monthly > 0 ? r.avg_monthly : '—'}</td>
+                            <td style={{ padding: '0.6rem 1rem', color: '#666', whiteSpace: 'nowrap' }}>
+                              {r.last_movement_date ? new Date(r.last_movement_date).toLocaleDateString() : '—'}
+                              {r.days_since_move !== null && <span style={{ fontSize: '0.75rem', color: '#999', marginLeft: '4px' }}>({r.days_since_move}d ago)</span>}
+                            </td>
+                            <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
+                              <span style={{ background: sc.bg, color: sc.color, padding: '2px 8px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: 600 }}>{sc.label}</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ background: '#fef3e2', fontWeight: 700, borderTop: '2px solid #e67e22' }}>
+                        <td colSpan={3} style={{ padding: '0.65rem 1rem', color: '#784212' }}>{t('total') || 'סה"כ'}: {sorted.length} {t('products') || 'מוצרים'}</td>
+                        <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#784212' }}>{fmt(sorted.reduce((s,r) => s+r.current_qty, 0))}</td>
+                        <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#784212' }}>{fmt(sorted.reduce((s,r) => s+r.total_outbound_qty, 0))}</td>
+                        <td colSpan={3}></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {/* Mobile Cards */}
+                <div style={{ display: isMobile ? 'flex' : 'none', flexDirection: 'column', gap: '0.75rem', padding: '0.75rem' }}>
+                  {sorted.map(r => {
+                    const sc = statusConfig[r.status] || statusConfig.dead;
+                    return (
+                      <div key={r.product_id} style={{ background: 'white', border: `1px solid ${sc.bg === '#d4edda' ? '#a5d6a7' : sc.bg === '#fff3cd' ? '#ffd54f' : '#ef9a9a'}`, borderRadius: '10px', padding: '1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                          <span style={{ fontSize: '0.8rem', color: '#888' }}>{r.sku}</span>
+                          <span style={{ background: sc.bg, color: sc.color, padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>{sc.label}</span>
+                        </div>
+                        <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#1e293b', marginBottom: '0.25rem' }}>🔁 {r.name_display}</div>
+                        <div style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '0.5rem' }}>🏷️ {r.category_name}</div>
+                        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                          <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#888' }}>{t('in_stock') || 'במלאי'}</div>
+                            <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{fmt(r.current_qty)}</span>
+                          </div>
+                          <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#888' }}>{t('total_outbound_qty') || 'יצא'}</div>
+                            <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#e67e22' }}>{fmt(r.total_outbound_qty)}</span>
+                          </div>
+                          <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#888' }}>{t('avg_monthly') || 'ממוצע/חודש'}</div>
+                            <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#555' }}>{r.avg_monthly > 0 ? r.avg_monthly : '—'}</span>
+                          </div>
+                          <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#888' }}>{t('last_movement') || 'תנועה אחרונה'}</div>
+                            <span style={{ fontSize: '0.82rem', color: '#666' }}>{r.last_movement_date ? new Date(r.last_movement_date).toLocaleDateString() : '—'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div style={{ padding: '1rem', borderTop: '1px solid #dee2e6', display: 'flex', justifyContent: 'flex-end' }}>
+                  <PrintBtn onClick={() => {
+                    const rows = sorted.map(r => {
+                      const sc = statusConfig[r.status] || statusConfig.dead;
+                      return `<tr><td>${r.sku}</td><td>${r.name_display}</td><td>${r.category_name}</td><td style="text-align:center;">${fmt(r.current_qty)}</td><td style="text-align:center;">${fmt(r.total_outbound_qty)}</td><td style="text-align:center;">${r.avg_monthly > 0 ? r.avg_monthly : '—'}</td><td>${r.last_movement_date ? new Date(r.last_movement_date).toLocaleDateString() : '—'}</td><td style="text-align:center;">${sc.label}</td></tr>`;
+                    }).join('');
+                    openPrint(printHeader(`🔁 ${t('inventory_turnover_report') || 'Inventory Turnover Report'}`, '#e67e22')
+                      + `<table><thead><tr><th>SKU</th><th>${t('product')||'Product'}</th><th>${t('category')||'Category'}</th><th>${t('in_stock')||'In Stock'}</th><th>${t('total_outbound_qty')||'Total Out'}</th><th>${t('avg_monthly')||'Avg/Month'}</th><th>${t('last_movement')||'Last Movement'}</th><th>${t('status')||'Status'}</th></tr></thead><tbody>${rows}</tbody></table>`
+                      + `<div class="footer">Generated by WorldSecure CRM • ${new Date().toLocaleString()}</div></body></html>`);
                   }} />
                 </div>
               </>
