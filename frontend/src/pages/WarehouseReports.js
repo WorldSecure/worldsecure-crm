@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useLanguage } from '../utils/LanguageContext';
+import { useAuth } from '../utils/AuthContext';
 
 function WarehouseReports() {
   const { t, language } = useLanguage();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const isMobile = window.innerWidth <= 768;
 
   // Preload logo
@@ -61,6 +64,15 @@ function WarehouseReports() {
   const [suppliersCustomFrom, setSuppliersCustomFrom] = useState('');
   const [suppliersCustomTo, setSuppliersCustomTo] = useState('');
   const [suppliersAllData, setSuppliersAllData] = useState(null);
+
+  // ── State: דוח 5 - ערך מלאי כולל (Admin only) ──
+  const [valueOpen, setValueOpen] = useState(false);
+  const [valueData, setValueData] = useState(null);
+  const [valueLoading, setValueLoading] = useState(false);
+  const [valueSort, setValueSort] = useState({ field: 'total_value', dir: 'desc' });
+  const [valueSearch, setValueSearch] = useState('');
+  const [valuePageSize, setValuePageSize] = useState(10);
+  const [valueCurrentPage, setValueCurrentPage] = useState(1);
 
   // ── Helpers ──
   const fmt = (n) => new Intl.NumberFormat('en-US').format(n || 0);
@@ -170,6 +182,35 @@ function WarehouseReports() {
   const movementsGetters = { date: r => r.date || '', type: r => r.type || '', party: r => r.party || '', notes: r => r.notes || '' };
   const lowStockGetters = { name: r => r.name_display || '', sku: r => r.sku || '', quantity: r => r.quantity || 0, min_quantity: r => r.min_quantity || 0, shortage: r => r.shortage || 0 };
   const suppliersGetters = { supplier_name: r => r.supplier_name || '', total_receipts: r => r.total_receipts || 0, last_date: r => r.last_date || '' };
+
+  const toggleValue = async () => {
+    if (valueOpen) { setValueOpen(false); return; }
+    setValueLoading(true);
+    try {
+      const res = await axios.get('/api/products');
+      // Only products with price > 0 and quantity > 0
+      const withValue = res.data
+        .filter(p => (p.price || 0) > 0 && (p.quantity || 0) > 0)
+        .map(p => ({
+          ...p,
+          name_display: getProductName(p),
+          total_value: (p.price || 0) * (p.quantity || 0),
+        }));
+      setValueData(withValue);
+    } catch (e) { console.error(e); }
+    setValueLoading(false);
+    setValueOpen(true);
+  };
+
+  const valueGetters = {
+    name: r => r.name_display || '',
+    sku: r => r.sku || '',
+    category: r => r.category_name || '',
+    quantity: r => r.quantity || 0,
+    price: r => r.price || 0,
+    total_value: r => r.total_value || 0,
+    currency: r => r.currency || '',
+  };
 
   // ── UI Components ──
   const SortTh = ({ field, sortState, onSort, children, style = {} }) => {
@@ -736,6 +777,182 @@ function WarehouseReports() {
           })()}
         </AccordionBody>
       </div>
+
+      {/* ── דוח 5: ערך מלאי כולל (Admin only) ── */}
+      {isAdmin && (
+      <div style={{ marginBottom: '1rem' }}>
+        <AccordionBtn open={valueOpen} onClick={toggleValue} color={{ base: '#20c997', dark: '#12b886' }}>
+          💰 {t('inventory_value_report') || 'Inventory Value Report'}
+        </AccordionBtn>
+        <AccordionBody open={valueOpen} loading={valueLoading}>
+          {valueData && (() => {
+            const q = valueSearch.toLowerCase();
+            const filtered = q ? valueData.filter(p => p.name_display.toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q) || (p.category_name || '').toLowerCase().includes(q)) : valueData;
+            const sorted = doSort(filtered, valueSort.field, valueSort.dir, valueGetters);
+            const handleSort = f => { setValueSort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' })); setValueCurrentPage(1); };
+            const totalPages = valuePageSize === 'all' ? 1 : Math.ceil(sorted.length / valuePageSize);
+            const paginated = valuePageSize === 'all' ? sorted : sorted.slice((valueCurrentPage - 1) * valuePageSize, valueCurrentPage * valuePageSize);
+
+            // Group by category for subtotals
+            const categories = [...new Set(paginated.map(p => p.category_name || 'Uncategorized'))];
+            const grandTotal = sorted.reduce((s, p) => s + p.total_value, 0);
+
+            // Group by currency for grand total display
+            const byCurrency = {};
+            sorted.forEach(p => {
+              const cur = p.currency || 'USD';
+              if (!byCurrency[cur]) byCurrency[cur] = 0;
+              byCurrency[cur] += p.total_value;
+            });
+
+            return (
+              <>
+                <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ color: '#666', fontSize: '0.85rem' }}>🔍</span>
+                    <input type="text" placeholder={t('search') || 'חיפוש...'} value={valueSearch} onChange={e => setValueSearch(e.target.value)}
+                      style={{ border: '1px solid #ddd', borderRadius: '6px', padding: '0.3rem 0.6rem', fontSize: '0.85rem', outline: 'none', width: '200px' }} />
+                    <span style={{ color: '#666', fontSize: '0.85rem' }}>{t('products') || 'מוצרים'}: <strong>{filtered.length}</strong></span>
+                  </div>
+                  <RefreshBtn onClick={async () => { setValueLoading(true); try { const r = await axios.get('/api/products'); setValueData(r.data.filter(p => (p.price||0)>0 && (p.quantity||0)>0).map(p => ({...p, name_display: getProductName(p), total_value: (p.price||0)*(p.quantity||0)}))); } catch(e){} setValueLoading(false); }} />
+                </div>
+
+                {/* Desktop Table */}
+                <div style={{ display: isMobile ? 'none' : 'block' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
+                    <thead>
+                      <tr style={{ background: '#f8f9fa' }}>
+                        <SortTh field="sku" sortState={valueSort} onSort={handleSort} style={{ width: '100px' }}>SKU</SortTh>
+                        <SortTh field="name" sortState={valueSort} onSort={handleSort}>{t('product') || 'מוצר'}</SortTh>
+                        <SortTh field="category" sortState={valueSort} onSort={handleSort} style={{ width: '130px' }}>{t('category') || 'קטגוריה'}</SortTh>
+                        <SortTh field="quantity" sortState={valueSort} onSort={handleSort} style={{ width: '90px', textAlign: 'center' }}>{t('quantity') || 'כמות'}</SortTh>
+                        <SortTh field="price" sortState={valueSort} onSort={handleSort} style={{ width: '110px', textAlign: 'right' }}>{t('cost_price') || 'מחיר עלות'}</SortTh>
+                        <SortTh field="currency" sortState={valueSort} onSort={handleSort} style={{ width: '80px', textAlign: 'center' }}>{t('currency') || 'מטבע'}</SortTh>
+                        <SortTh field="total_value" sortState={valueSort} onSort={handleSort} style={{ width: '130px', textAlign: 'right' }}>{t('total_value') || 'ערך כולל'}</SortTh>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {categories.map(cat => {
+                        const catRows = paginated.filter(p => (p.category_name || 'Uncategorized') === cat);
+                        const catTotal = catRows.reduce((s, p) => s + p.total_value, 0);
+                        const catCurrencies = [...new Set(catRows.map(p => p.currency || 'USD'))];
+                        return [
+                          ...catRows.map((p, i) => (
+                            <tr key={p.id} style={{ borderBottom: '1px solid #f0f0f0', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                              <td style={{ padding: '0.6rem 1rem', color: '#888', fontSize: '0.82rem' }}>{p.sku || '-'}</td>
+                              <td style={{ padding: '0.6rem 1rem', fontWeight: 500 }}>{p.name_display}</td>
+                              <td style={{ padding: '0.6rem 1rem', color: '#666', fontSize: '0.85rem' }}>{p.category_name || '-'}</td>
+                              <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>{fmt(p.quantity)}</td>
+                              <td style={{ padding: '0.6rem 1rem', textAlign: 'right' }}>{fmt(p.price)}</td>
+                              <td style={{ padding: '0.6rem 1rem', textAlign: 'center', color: '#666', fontSize: '0.82rem' }}>{p.currency || 'USD'}</td>
+                              <td style={{ padding: '0.6rem 1rem', textAlign: 'right', fontWeight: 600, color: '#155724' }}>{fmt(p.total_value)}</td>
+                            </tr>
+                          )),
+                          <tr key={`subtotal-${cat}`} style={{ background: '#e8f5e9', borderTop: '1px solid #a5d6a7' }}>
+                            <td colSpan={6} style={{ padding: '0.5rem 1rem', fontWeight: 700, color: '#2e7d32', fontSize: '0.85rem' }}>
+                              🏷️ {cat} — {catRows.length} {t('products') || 'מוצרים'}
+                            </td>
+                            <td style={{ padding: '0.5rem 1rem', textAlign: 'right', fontWeight: 700, color: '#2e7d32', fontSize: '0.85rem' }}>
+                              {catCurrencies.map(cur => `${fmt(catRows.filter(p=>(p.currency||'USD')===cur).reduce((s,p)=>s+p.total_value,0))} ${cur}`).join(' | ')}
+                            </td>
+                          </tr>
+                        ];
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ background: '#d4edda', fontWeight: 700, borderTop: '2px solid #20c997' }}>
+                        <td colSpan={6} style={{ padding: '0.65rem 1rem', color: '#155724', fontSize: '0.9rem' }}>
+                          💰 {t('total_inventory_value') || 'סך ערך המלאי'} — {sorted.length} {t('products') || 'מוצרים'}
+                        </td>
+                        <td style={{ padding: '0.65rem 1rem', textAlign: 'right', color: '#155724', fontSize: '0.95rem' }}>
+                          {Object.entries(byCurrency).map(([cur, val]) => `${fmt(val)} ${cur}`).join(' | ')}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {/* Mobile Cards */}
+                <div style={{ display: isMobile ? 'flex' : 'none', flexDirection: 'column', gap: '0.75rem', padding: '0.75rem' }}>
+                  {sorted.length === 0
+                    ? <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>{t('no_data') || 'No data'}</div>
+                    : sorted.map(p => (
+                      <div key={p.id} style={{ background: 'white', border: '1px solid #b2dfdb', borderRadius: '10px', padding: '1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                          <span style={{ fontSize: '0.8rem', color: '#888' }}>{p.sku || '-'}</span>
+                          <span style={{ fontSize: '0.78rem', color: '#666' }}>🏷️ {p.category_name || '-'}</span>
+                        </div>
+                        <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#1e293b', marginBottom: '0.5rem' }}>💰 {p.name_display}</div>
+                        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                          <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#888' }}>{t('quantity') || 'כמות'}</div>
+                            <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#333' }}>{fmt(p.quantity)}</span>
+                          </div>
+                          <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#888' }}>{t('cost_price') || 'עלות'}</div>
+                            <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#555' }}>{fmt(p.price)} {p.currency || 'USD'}</span>
+                          </div>
+                          <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#888' }}>{t('total_value') || 'ערך'}</div>
+                            <span style={{ background: '#d4edda', color: '#155724', padding: '2px 10px', borderRadius: '12px', fontWeight: 700, fontSize: '0.9rem' }}>{fmt(p.total_value)} {p.currency || 'USD'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  {/* Mobile Summary */}
+                  <div style={{ background: '#d4edda', borderRadius: '10px', padding: '1rem', border: '2px solid #20c997' }}>
+                    <div style={{ fontWeight: 700, color: '#155724', fontSize: '0.9rem', marginBottom: '0.4rem' }}>💰 {t('total_inventory_value') || 'סך ערך המלאי'}</div>
+                    {Object.entries(byCurrency).map(([cur, val]) => (
+                      <div key={cur} style={{ fontWeight: 700, color: '#155724', fontSize: '1rem' }}>{fmt(val)} {cur}</div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Pagination Bar */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', padding: '0.75rem 1rem', borderTop: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: '#555' }}>
+                    <span>{sorted.length} {t('products') || 'מוצרים'}</span>
+                    <span>|</span>
+                    <label>{t('per_page') || 'פר עמוד'}:</label>
+                    <select value={valuePageSize} onChange={e => { setValuePageSize(e.target.value === 'all' ? 'all' : parseInt(e.target.value)); setValueCurrentPage(1); }}
+                      style={{ padding: '0.2rem 0.4rem', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '0.85rem' }}>
+                      {[10, 15, 20, 50].map(n => <option key={n} value={n}>{n}</option>)}
+                      <option value="all">{t('all') || 'הכל'}</option>
+                    </select>
+                  </div>
+                  {valuePageSize !== 'all' && totalPages > 1 && (
+                    <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                      <button onClick={() => setValueCurrentPage(1)} disabled={valueCurrentPage === 1}
+                        style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: valueCurrentPage === 1 ? '#f3f4f6' : '#fff', cursor: valueCurrentPage === 1 ? 'default' : 'pointer' }}>«</button>
+                      <button onClick={() => setValueCurrentPage(p => Math.max(1, p - 1))} disabled={valueCurrentPage === 1}
+                        style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: valueCurrentPage === 1 ? '#f3f4f6' : '#fff', cursor: valueCurrentPage === 1 ? 'default' : 'pointer' }}>‹</button>
+                      <span style={{ fontSize: '0.85rem', padding: '0 0.3rem' }}>{valueCurrentPage} / {totalPages}</span>
+                      <button onClick={() => setValueCurrentPage(p => Math.min(totalPages, p + 1))} disabled={valueCurrentPage === totalPages}
+                        style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: valueCurrentPage === totalPages ? '#f3f4f6' : '#fff', cursor: valueCurrentPage === totalPages ? 'default' : 'pointer' }}>›</button>
+                      <button onClick={() => setValueCurrentPage(totalPages)} disabled={valueCurrentPage === totalPages}
+                        style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: valueCurrentPage === totalPages ? '#f3f4f6' : '#fff', cursor: valueCurrentPage === totalPages ? 'default' : 'pointer' }}>»</button>
+                    </div>
+                  )}
+                </div>
+                <div style={{ padding: '1rem', borderTop: '1px solid #dee2e6', display: 'flex', justifyContent: 'flex-end' }}>
+                  <PrintBtn onClick={() => {
+                    const dir = language === 'he' ? 'rtl' : 'ltr';
+                    const ta = language === 'he' ? 'right' : 'left';
+                    const locale = language === 'he' ? 'he-IL' : language === 'pt' ? 'pt-PT' : 'en-US';
+                    const rows = sorted.map(p => `<tr><td>${p.sku||'-'}</td><td>${p.name_display}</td><td>${p.category_name||'-'}</td><td style="text-align:center;">${fmt(p.quantity)}</td><td style="text-align:right;">${fmt(p.price)}</td><td style="text-align:center;">${p.currency||'USD'}</td><td style="text-align:right;font-weight:700;">${fmt(p.total_value)}</td></tr>`).join('');
+                    const html = printHeader(`💰 ${t('inventory_value_report')||'Inventory Value Report'}`, '#20c997')
+                      + `<table><thead><tr><th>SKU</th><th>${t('product')||'Product'}</th><th>${t('category')||'Category'}</th><th>${t('quantity')||'Qty'}</th><th>${t('cost_price')||'Cost'}</th><th>${t('currency')||'Currency'}</th><th>${t('total_value')||'Total Value'}</th></tr></thead><tbody>${rows}</tbody>
+                      <tfoot><tr style="background:#d4edda;font-weight:700;"><td colspan="6">${t('total_inventory_value')||'Total Inventory Value'} (${sorted.length} ${t('products')||'products'})</td><td style="text-align:right;">${Object.entries(byCurrency).map(([c,v])=>`${fmt(v)} ${c}`).join(' | ')}</td></tr></tfoot></table>`
+                      + `<div class="footer">Generated by WorldSecure CRM • ${new Date().toLocaleString(locale)}</div></body></html>`;
+                    openPrint(html);
+                  }} />
+                </div>
+              </>
+            );
+          })()}
+        </AccordionBody>
+      </div>
+      )}
 
       <div style={{ padding: '1.5rem', textAlign: 'center', color: '#ccc', border: '2px dashed #e9ecef', borderRadius: '8px', background: '#fafafa' }}>
         {t('more_reports_coming') || '➕ דוחות נוספים יתווספו בקרוב'}
