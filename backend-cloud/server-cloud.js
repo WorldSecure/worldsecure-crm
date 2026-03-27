@@ -1053,7 +1053,7 @@ app.get('/api/outbound/:id/delivery-note', authenticateToken, async (req, res) =
   <style>
     * { box-sizing: border-box; }
     body > *:first-child { border-top: none !important; margin-top: 0 !important; padding-top: 0 !important; }
-    @media print { .no-print { display: none; } .doc-footer { display: block !important; } @page { margin: 1.5cm 2cm; size: A4; } th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+    @media print { .no-print { display: none; } .doc-footer { display: block !important; position: fixed !important; bottom: 0 !important; left: 0 !important; right: 0 !important; background: white !important; } body { padding-bottom: 30px; } @page { margin: 1.5cm 2cm; size: A4; } th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
     .button-container { text-align: center; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; }
     .btn-print, .btn-email, .btn-close { padding: 12px 24px; margin: 0 8px; font-size: 16px; cursor: pointer; border: none; border-radius: 5px; font-weight: 600; }
     .btn-print { background: #3498db; color: white; } .btn-print:hover { background: #2980b9; }
@@ -1068,7 +1068,6 @@ app.get('/api/outbound/:id/delivery-note', authenticateToken, async (req, res) =
     th, td { border: 1px solid #ddd; padding: 12px; text-align: ${t.dir === 'rtl' ? 'right' : 'left'}; }
     th { background-color: #3498db; color: white; text-align: center; }
     tr:nth-child(even) { background-color: #f9f9f9; }
-    .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #ddd; text-align: center; color: #7f8c8d; }
     .email-modal-overlay { display:none; position:fixed; top:0;left:0;right:0;bottom:0; background:rgba(0,0,0,0.5); z-index:99999; justify-content:center; align-items:center; }
     .email-modal-overlay.open { display:flex !important; }
     .email-modal-box { background:white; border-radius:10px; padding:2rem; width:420px; max-width:95vw; box-shadow:0 10px 40px rgba(0,0,0,0.3); direction:${t.dir}; }
@@ -1245,11 +1244,6 @@ app.get('/api/outbound/:id/delivery-note', authenticateToken, async (req, res) =
 
   ${signatureHtml}
 
-  <div class="footer">
-    <p>${t.preparedBy}: ${transaction.username}</p>
-    <p>${company.company_name || ''} © ${new Date().getFullYear()}</p>
-  </div>
-
   <div class="email-modal-overlay no-print" id="emailModal">
     <div class="email-modal-box">
       <h3>✉️ ${t.sendEmail}</h3>
@@ -1273,7 +1267,7 @@ app.get('/api/outbound/:id/delivery-note', authenticateToken, async (req, res) =
     </div>
   </div>
 
-  <div class="doc-footer">${company.company_name || 'WorldSecure LTD'} &nbsp;&bull;&nbsp; ${company.email || 'info@world-secure.com'}</div>
+  <div class="doc-footer">${t.preparedBy}: ${transaction.username} &nbsp;&bull;&nbsp; ${company.company_name || 'WorldSecure LTD'} &nbsp;&bull;&nbsp; ${company.email || 'info@world-secure.com'} &nbsp;&bull;&nbsp; © ${new Date().getFullYear()}</div>
 </body>
 </html>`;
 

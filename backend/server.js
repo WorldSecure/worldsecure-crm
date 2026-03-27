@@ -1985,13 +1985,6 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
     tr:nth-child(even) {
       background-color: #f9f9f9;
     }
-    .footer {
-      margin-top: 40px;
-      padding-top: 20px;
-      border-top: 2px solid #ddd;
-      text-align: center;
-      color: #7f8c8d;
-    }
     .email-modal-overlay {
       display: none;
       position: fixed;
@@ -2274,9 +2267,8 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
 
   ${signatureHtml}
 
-  <div class="footer">
-    <p>${t.preparedBy}: ${transaction.username}</p>
-    <p>${company.company_name || ''} © ${new Date().getFullYear()}</p>
+  <div class="doc-footer">
+    ${t.preparedBy}: ${transaction.username} &nbsp;&bull;&nbsp; ${company.company_name || 'WorldSecure LTD'} &nbsp;&bull;&nbsp; ${company.email || 'info@world-secure.com'} &nbsp;&bull;&nbsp; © ${new Date().getFullYear()}
   </div>
   <div class="email-modal-overlay no-print" id="emailModal">
     <div class="email-modal-box">
@@ -2300,9 +2292,6 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
         <button class="btn-modal-send" onclick="sendDocumentEmail('${id}', 'outbound')">📤 ${t.emailSend}</button>
       </div>
     </div>
-  </div>
-  <div class="doc-footer">
-    ${company.company_name || 'WorldSecure LTD'} &nbsp;&bull;&nbsp; ${company.email || 'info@world-secure.com'}
   </div>
 </body>
 </html>
