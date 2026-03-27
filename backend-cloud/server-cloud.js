@@ -2981,7 +2981,49 @@ async function runMigrations() {
   console.log('✅ Migrations complete');
 }
 
-initDatabase().then(runMigrations).then(() => {
+// ════════════════════════════════════════════════════════════════════════════
+//  FIX SEQUENCES — מסנכרן את כל ה-sequences עם MAX(id) בכל טבלה
+//  רץ פעם אחת בהפעלה, מונע שגיאת "duplicate key value violates unique constraint"
+// ════════════════════════════════════════════════════════════════════════════
+async function fixSequences() {
+  const tables = [
+    'users', 'customers', 'suppliers', 'manufacturers', 'products',
+    'categories', 'subcategories', 'inbound_transactions', 'inbound_items',
+    'outbound_transactions', 'outbound_items', 'quotes', 'quote_items',
+    'quote_stages', 'quote_stage_files', 'support_tickets',
+    'support_ticket_history', 'support_attachments', 'documents',
+    'activity_log', 'notifications', 'stock_alerts', 'warehouse_alerts',
+    'email_signatures', 'qr_codes', 'product_price_history', 'pending_deletions'
+  ];
+
+  let fixed = 0, skipped = 0;
+
+  for (const table of tables) {
+    try {
+      // מוצא את שם ה-sequence דרך information_schema
+      const seqRes = await query(`
+        SELECT pg_get_serial_sequence($1, 'id') AS seq
+      `, [table]);
+
+      const seq = seqRes.rows[0]?.seq;
+      if (!seq) { skipped++; continue; }
+
+      // מסנכרן את ה-sequence ל-MAX(id), או 1 אם הטבלה ריקה
+      await query(`
+        SELECT setval($1, GREATEST(COALESCE((SELECT MAX(id) FROM "${table}"), 0), 1))
+      `, [seq]);
+
+      fixed++;
+    } catch (e) {
+      console.warn(`⚠️  fixSequences: skipped table "${table}" — ${e.message}`);
+      skipped++;
+    }
+  }
+
+  console.log(`✅ fixSequences complete — fixed: ${fixed}, skipped: ${skipped}`);
+}
+
+initDatabase().then(runMigrations).then(fixSequences).then(() => {
   app.listen(PORT, () => {
     console.log(`✅ WorldSecure Cloud server running on port ${PORT}`);
   });
