@@ -55,12 +55,24 @@ function Settings() {
   const [showSigEditor, setShowSigEditor] = useState(false);
   const sigFrameRef = useRef(null);
   const sigInitializedRef = useRef(false);
+
+  // ── Outbound Signature ──
+  const [outboundSigs, setOutboundSigs] = useState([]);
+  const [editingOutSig, setEditingOutSig] = useState(null);
+  const [outSigContent, setOutSigContent] = useState('');
+  const [outSigName, setOutSigName] = useState('');
+  const [outSigLang, setOutSigLang] = useState('he');
+  const [outSigPreview, setOutSigPreview] = useState(false);
+  const [showOutSigEditor, setShowOutSigEditor] = useState(false);
+  const outSigInitializedRef = useRef(false);
+
   const [editingQrTitle, setEditingQrTitle] = useState(null); // { id, title }
 
   useEffect(() => {
     fetchCompanyData();
     loadQrGallery();
     fetchSignatures();
+    fetchOutboundSignatures();
   }, []);
 
   const fetchCompanyData = async () => {
@@ -196,6 +208,51 @@ function Settings() {
     try {
       await axios.delete(`/api/email-signatures/${id}`);
       fetchSignatures();
+    } catch (e) { alert(t('error') + ': ' + (e.response?.data?.error || e.message)); }
+  };
+
+  // ── Outbound Signature logic ──
+  const fetchOutboundSignatures = async () => {
+    try {
+      const res = await axios.get('/api/outbound-signatures');
+      setOutboundSigs(res.data);
+    } catch (e) { console.error('Error fetching outbound signatures:', e); }
+  };
+
+  const saveOutboundSignature = async () => {
+    if (!outSigName.trim()) { alert('חובה להזין שם לחתימה'); return; }
+    if (!outSigContent.trim()) { alert('החתימה לא יכולה להיות ריקה'); return; }
+    try {
+      if (editingOutSig?.id) {
+        await axios.put(`/api/outbound-signatures/${editingOutSig.id}`, { name: outSigName, content: outSigContent, lang: outSigLang, is_active: editingOutSig.is_active });
+      } else {
+        await axios.post('/api/outbound-signatures', { name: outSigName, content: outSigContent, lang: outSigLang, is_active: false });
+      }
+      alert(t('success'));
+      setShowOutSigEditor(false);
+      outSigInitializedRef.current = false;
+      setEditingOutSig(null);
+      setOutSigName('');
+      setOutSigContent('');
+      fetchOutboundSignatures();
+    } catch (e) {
+      alert(t('error') + ': ' + (e.response?.data?.error || e.message));
+    }
+  };
+
+  const setActiveOutboundSignature = async (id) => {
+    try {
+      const sig = outboundSigs.find(s => s.id === id);
+      await axios.put(`/api/outbound-signatures/${id}`, { name: sig.name, content: sig.content, lang: sig.lang || 'he', is_active: true });
+      fetchOutboundSignatures();
+    } catch (e) { alert(t('error') + ': ' + (e.response?.data?.error || e.message)); }
+  };
+
+  const deleteOutboundSignature = async (id) => {
+    if (!window.confirm(t('confirm_delete') || 'למחוק?')) return;
+    try {
+      await axios.delete(`/api/outbound-signatures/${id}`);
+      fetchOutboundSignatures();
     } catch (e) { alert(t('error') + ': ' + (e.response?.data?.error || e.message)); }
   };
 
@@ -431,6 +488,7 @@ function Settings() {
           { key: 'smtp',    icon: '✉️', label: t('smtp_settings') || 'הגדרות SMTP' },
           { key: 'qr',      icon: '📱', label: t('qr_code') || 'QR CODE' },
           { key: 'signature', icon: '✍️', label: t('email_signature') || 'חתימת מייל' },
+          { key: 'outbound_signature', icon: '📦', label: t('outbound_signature') || 'חתימת משלוח' },
         ].map(s => (
           <button
             key={s.key}
@@ -952,6 +1010,169 @@ function Settings() {
                     <p style={{ color: '#555', marginBottom: '1rem', fontSize: '0.9rem' }}>מצורף מסמך לעיונך.</p>
                     <hr style={{ border: 'none', borderTop: '1px solid #e0e0e0', margin: '1rem 0' }} />
                     <div dangerouslySetInnerHTML={{ __html: sigContent }} />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ===== OUTBOUND SIGNATURE SECTION ===== */}
+      {activeSection === 'outbound_signature' && (
+        <div className="card">
+          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 className="card-title">📦 {t('outbound_signature') || 'חתימת תעודת משלוח'}</h3>
+            <button className="btn btn-primary" onClick={() => {
+              setEditingOutSig(null); setOutSigName(''); setOutSigContent(''); setOutSigLang('he'); outSigInitializedRef.current = false; setShowOutSigEditor(true);
+            }}>+ {t('add_signature') || 'חתימה חדשה'}</button>
+          </div>
+          <div style={{ padding: '1rem' }}>
+
+            {/* רשימת חתימות */}
+            {outboundSigs.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
+                {t('no_signatures') || 'אין חתימות עדיין. צור חתימה חדשה!'}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1rem' }}>
+                {outboundSigs.map(sig => {
+                  const langFlag = sig.lang === 'en' ? '🇬🇧' : sig.lang === 'pt' ? '🇵🇹' : '🇮🇱';
+                  const langLabel = sig.lang === 'en' ? 'EN' : sig.lang === 'pt' ? 'PT' : 'HE';
+                  return (
+                  <div key={sig.id} style={{ border: sig.is_active ? '2px solid #27ae60' : '1px solid #dee2e6', borderRadius: '8px', padding: '0.75rem', background: sig.is_active ? '#f0fff4' : 'white' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontSize: '1.2rem' }}>{langFlag}</span>
+                        <span style={{ background: '#e9ecef', borderRadius: '4px', padding: '0.1rem 0.4rem', fontSize: '0.72rem', fontWeight: 700, color: '#555' }}>{langLabel}</span>
+                        <strong>{sig.name}</strong>
+                        {sig.is_active && <span style={{ background: '#27ae60', color: 'white', borderRadius: '4px', padding: '0.1rem 0.4rem', fontSize: '0.75rem' }}>✓ {t('active') || 'פעיל'}</span>}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        {!sig.is_active && (
+                          <button className="btn btn-success" onClick={() => setActiveOutboundSignature(sig.id)}
+                            style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem' }}>✓ {t('set_active') || 'הפעל'}</button>
+                        )}
+                        <button className="btn btn-secondary" onClick={() => {
+                          setEditingOutSig(sig); setOutSigName(sig.name); setOutSigContent(sig.content); setOutSigLang(sig.lang || 'he'); outSigInitializedRef.current = false; setShowOutSigEditor(true);
+                        }} style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem' }}>✏️ {t('edit') || 'עריכה'}</button>
+                        <button className="btn btn-danger" onClick={() => deleteOutboundSignature(sig.id)}
+                          style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem' }}>🗑️</button>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#444', marginBottom: '0.25rem', fontStyle: 'italic' }}
+                      dangerouslySetInnerHTML={{ __html: sig.content }} />
+                  </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* עורך חתימה */}
+            {showOutSigEditor && (
+              <div style={{ border: '2px solid #007bff', borderRadius: '8px', padding: '1rem', background: '#f8f9ff' }}>
+                <h4 style={{ marginBottom: '1rem' }}>
+                  {editingOutSig ? (t('edit_signature') || 'עריכת חתימה') : (t('new_signature') || 'חתימה חדשה')}
+                </h4>
+                <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                  <label className="form-label">{t('signature_name') || 'שם החתימה'} *</label>
+                  <input type="text" className="form-input" value={outSigName}
+                    onChange={(e) => setOutSigName(e.target.value)}
+                    placeholder={t('signature_name_placeholder') || 'לדוגמה: חתימת משלוח ראשית...'} />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                  <label className="form-label">🌐 {t('language') || 'שפה'}</label>
+                  <select className="form-input" value={outSigLang} onChange={(e) => setOutSigLang(e.target.value)}
+                    style={{ maxWidth: '200px' }}>
+                    <option value="he">🇮🇱 עברית</option>
+                    <option value="en">🇬🇧 English</option>
+                    <option value="pt">🇵🇹 Português</option>
+                  </select>
+                </div>
+
+                {/* סרגל עיצוב */}
+                <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', padding: '0.5rem', background: '#f8f9fa', border: '1px solid #dee2e6', borderBottom: 'none', borderRadius: '6px 6px 0 0' }}>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.getElementById('out-sig-frame')?.contentDocument?.execCommand('bold'); }}
+                    style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', fontWeight: 'bold', cursor: 'pointer' }}>B</button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.getElementById('out-sig-frame')?.contentDocument?.execCommand('italic'); }}
+                    style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', fontStyle: 'italic', cursor: 'pointer' }}>I</button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.getElementById('out-sig-frame')?.contentDocument?.execCommand('underline'); }}
+                    style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', textDecoration: 'underline', cursor: 'pointer' }}>U</button>
+                  <div style={{ width: '1px', background: '#ccc', margin: '0 0.2rem' }} />
+                  <select onMouseDown={(e) => e.preventDefault()} onChange={(e) => { document.getElementById('out-sig-frame')?.contentDocument?.execCommand('fontSize', false, e.target.value); e.target.value = ''; }}
+                    style={{ padding: '0.3rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.8rem' }}>
+                    <option value="">גודל</option>
+                    <option value="1">10px</option><option value="2">13px</option><option value="3">16px</option>
+                    <option value="4">18px</option><option value="5">24px</option><option value="6">32px</option>
+                  </select>
+                  <label style={{ padding: '0.3rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                    A <input type="color" defaultValue="#000000" style={{ width: '20px', height: '18px', border: 'none', padding: 0 }}
+                      onChange={(e) => document.getElementById('out-sig-frame')?.contentDocument?.execCommand('foreColor', false, e.target.value)} />
+                  </label>
+                  <div style={{ width: '1px', background: '#ccc', margin: '0 0.2rem' }} />
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.getElementById('out-sig-frame')?.contentDocument?.execCommand('justifyLeft'); }}
+                    style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer' }}>⬅</button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.getElementById('out-sig-frame')?.contentDocument?.execCommand('justifyCenter'); }}
+                    style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer' }}>☰</button>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.getElementById('out-sig-frame')?.contentDocument?.execCommand('justifyRight'); }}
+                    style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer' }}>➡</button>
+                  <div style={{ width: '1px', background: '#ccc', margin: '0 0.2rem' }} />
+                  <button type="button" onMouseDown={(e) => {
+                    e.preventDefault();
+                    const url = prompt('הכנס כתובת URL:');
+                    if (url) document.getElementById('out-sig-frame')?.contentDocument?.execCommand('createLink', false, url);
+                  }} style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>🔗</button>
+                  <label style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                    🖼️ תמונה
+                    <input type="file" accept="image/*" style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files[0]; if (!file) return;
+                        const reader = new FileReader();
+                        reader.onloadend = () => document.getElementById('out-sig-frame')?.contentDocument?.execCommand('insertHTML', false, `<img src="${reader.result}" style="max-height:80px;max-width:200px;object-fit:contain;" />`);
+                        reader.readAsDataURL(file); e.target.value = '';
+                      }} />
+                  </label>
+                  <button type="button" onMouseDown={(e) => { e.preventDefault(); document.getElementById('out-sig-frame')?.contentDocument?.execCommand('insertHorizontalRule'); }}
+                    style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>─</button>
+                </div>
+
+                {/* iframe עורך */}
+                <iframe
+                  ref={(el) => {
+                    if (el && !outSigInitializedRef.current) {
+                      outSigInitializedRef.current = true;
+                      el.onload = () => {
+                        const doc = el.contentDocument;
+                        if (!doc) return;
+                        doc.open();
+                        doc.write(`<!DOCTYPE html><html dir="ltr"><head><style>body{margin:0;padding:12px;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;direction:ltr;text-align:left;outline:none;min-height:160px;}</style></head><body contenteditable="true">${outSigContent}</body></html>`);
+                        doc.close();
+                        doc.body.focus();
+                        doc.body.addEventListener('input', () => setOutSigContent(doc.body.innerHTML));
+                      };
+                      el.src = 'about:blank';
+                    }
+                  }}
+                  id="out-sig-frame"
+                  title="outbound sig editor"
+                  style={{ width: '100%', height: '200px', border: '1px solid #dee2e6', borderRadius: '0 0 6px 6px', background: 'white', display: 'block' }}
+                />
+
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+                  <button className="btn btn-primary" onClick={saveOutboundSignature}>💾 {t('save') || 'שמור'}</button>
+                  <button className="btn btn-secondary" onClick={() => { outSigInitializedRef.current = false; setShowOutSigEditor(false); setEditingOutSig(null); setOutSigName(''); setOutSigContent(''); }}>
+                    {t('cancel') || 'ביטול'}
+                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={() => setOutSigPreview(!outSigPreview)}>
+                    {outSigPreview ? '🙈' : '👁️'} {t('preview') || 'תצוגה מקדימה'}
+                  </button>
+                </div>
+
+                {outSigPreview && outSigContent && (
+                  <div style={{ marginTop: '1rem', padding: '1rem', border: '1px solid #dee2e6', borderRadius: '6px', background: 'white', maxWidth: '600px' }}>
+                    <hr style={{ border: 'none', borderTop: '1px solid #e0e0e0', margin: '1rem 0' }} />
+                    <div dangerouslySetInnerHTML={{ __html: outSigContent }} />
                   </div>
                 )}
               </div>

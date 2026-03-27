@@ -551,6 +551,48 @@ app.delete('/api/email-signatures/:id', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Outbound Signatures ───────────────────────────────────────────────────────
+app.get('/api/outbound-signatures', authenticateToken, async (req, res) => {
+  try {
+    const r = await query('SELECT * FROM outbound_signatures ORDER BY created_at DESC');
+    res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/outbound-signatures', authenticateToken, async (req, res) => {
+  const { name, content, is_active, lang = 'he' } = req.body;
+  try {
+    if (is_active) await query('UPDATE outbound_signatures SET is_active=FALSE WHERE lang=$1', [lang]);
+    const r = await query(
+      'INSERT INTO outbound_signatures (name, content, lang, is_active) VALUES ($1,$2,$3,$4) RETURNING *',
+      [name, content, lang, !!is_active]
+    );
+    res.json(r.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/outbound-signatures/:id', authenticateToken, async (req, res) => {
+  const { name, content, is_active, lang } = req.body;
+  try {
+    const existing = await query('SELECT lang FROM outbound_signatures WHERE id=$1', [req.params.id]);
+    const actualLang = lang || existing.rows[0]?.lang || 'he';
+    if (is_active) await query('UPDATE outbound_signatures SET is_active=FALSE WHERE lang=$1', [actualLang]);
+    await query(
+      'UPDATE outbound_signatures SET name=$1, content=$2, lang=$3, is_active=$4 WHERE id=$5',
+      [name, content, actualLang, !!is_active, req.params.id]
+    );
+    res.json({ message: 'Updated' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/outbound-signatures/:id', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  try {
+    await query('DELETE FROM outbound_signatures WHERE id=$1', [req.params.id]);
+    res.json({ message: 'Deleted' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── GET/PUT: Email Signature (legacy) ────────────────────────────────────────
 app.get('/api/company/email-signature', authenticateToken, async (req, res) => {
   try {
@@ -994,6 +1036,13 @@ app.get('/api/outbound/:id/delivery-note', authenticateToken, async (req, res) =
       ? `<img src="${transaction.qr_image_url}" alt="QR Code" style="width:55px;height:55px;display:block;${t.dir==='rtl'?'margin-right:auto;':'margin-left:auto;'}">`
       : '';
 
+
+    // Active outbound signature
+    const outSigRes = await query('SELECT content FROM outbound_signatures WHERE is_active=TRUE AND lang=$1 LIMIT 1', [lang]).catch(()=>({rows:[]}));
+    const signatureHtml = outSigRes.rows[0]
+      ? `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e0e0e0;direction:${t.dir};text-align:${t.dir==='rtl'?'right':'left'};">${outSigRes.rows[0].content}</div>`
+      : '';
+
     const authToken = req.headers['authorization']?.split(' ')[1] || token;
 
     const html = `<!DOCTYPE html>
@@ -1193,6 +1242,8 @@ app.get('/api/outbound/:id/delivery-note', authenticateToken, async (req, res) =
   </table>
 
   ${transaction.notes ? `<div class="info-box"><h3>${t.notes}</h3><p>${transaction.notes}</p></div>` : ''}
+
+  ${signatureHtml}
 
   <div class="footer">
     <p>${t.preparedBy}: ${transaction.username}</p>
@@ -2227,6 +2278,36 @@ app.post('/api/sync/email-signatures', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Outbound Signatures Sync ──────────────────────────────────────────────────
+app.post('/api/sync/outbound-signatures', authenticateToken, async (req, res) => {
+  const { rows } = req.body;
+  if (!rows || !Array.isArray(rows)) return res.status(400).json({ error: 'rows required' });
+  try {
+    for (const r of rows) {
+      await query(`
+        INSERT INTO outbound_signatures (id, name, content, lang, is_active, created_at)
+        VALUES ($1,$2,$3,$4,$5,$6)
+        ON CONFLICT (id) DO UPDATE SET name=$2, content=$3, lang=$4, is_active=$5`,
+        [r.id, r.name, r.content, r.lang || 'he', r.is_active ? true : false, r.created_at || new Date().toISOString()]
+      );
+    }
+    if (rows.length > 0) {
+      const ids = rows.map(r => r.id);
+      await query(`DELETE FROM outbound_signatures WHERE id NOT IN (${ids.map((_,i)=>`$${i+1}`).join(',')})`, ids);
+    } else {
+      await query('DELETE FROM outbound_signatures');
+    }
+    res.json({ message: 'outbound-signatures synced', count: rows.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/sync/pull/outbound-signatures', authenticateToken, async (req, res) => {
+  try {
+    const r = await query('SELECT * FROM outbound_signatures ORDER BY id');
+    res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Sync: Push warehouse_alerts from local → cloud ────────────────────────────
 app.post('/api/sync/warehouse-alerts', authenticateToken, async (req, res) => {
   const { alerts } = req.body;
@@ -2962,6 +3043,9 @@ async function runMigrations() {
     `ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS logo_base64 TEXT`,
     `ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS email_signature TEXT`,
     `CREATE TABLE IF NOT EXISTS email_signatures (id SERIAL PRIMARY KEY, name TEXT NOT NULL, content TEXT NOT NULL, is_active BOOLEAN DEFAULT FALSE, created_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS outbound_signatures (id SERIAL PRIMARY KEY, name TEXT NOT NULL, content TEXT NOT NULL, lang TEXT DEFAULT 'he', is_active BOOLEAN DEFAULT FALSE, created_at TIMESTAMPTZ DEFAULT NOW())`,
+    `ALTER TABLE outbound_signatures ADD COLUMN IF NOT EXISTS lang TEXT DEFAULT 'he'`,
+    `UPDATE outbound_signatures SET lang='he' WHERE lang IS NULL OR lang=''`,
     `CREATE TABLE IF NOT EXISTS stock_alerts (
       id SERIAL PRIMARY KEY,
       quote_id INTEGER,

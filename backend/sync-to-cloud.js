@@ -131,6 +131,7 @@ async function syncLocalToCloud() {
     await syncEntityToCloud('suppliers',  'SELECT id, name, address, phone, email, tax_id, country, contact_person, notes, created_at, updated_at FROM suppliers');
     await syncEntityToCloud('manufacturers', 'SELECT id, name, address, phone, email, tax_id, country, contact_person, notes, created_at, updated_at FROM manufacturers');
     await syncEmailSignaturesToCloud();
+    await syncOutboundSignaturesToCloud();
     await syncInboundToCloud();
     await syncOutboundToCloud();
     await syncSupportToCloud();
@@ -420,6 +421,7 @@ async function syncCloudToLocal() {
     await syncWarehouseAlertsFromCloud();
     await syncNotificationsFromCloud();
     await syncDocumentsFromCloud();
+    await syncOutboundSignaturesFromCloud();
     log('✅ CLOUD → LOCAL complete');
   } catch (err) {
     log(`❌ CLOUD → LOCAL error: ${err.message}`);
@@ -897,6 +899,39 @@ async function syncEmailSignaturesToCloud() {
   const result = await apiRequest('POST', '/api/sync/email-signatures', { rows });
   if (result.status === 200) log('  ↳ email-signatures to cloud: ' + rows.length + ' synced');
   else log('  ⚠ email-signatures to cloud: ' + JSON.stringify(result.body));
+}
+
+// ── Outbound Signatures סינק דו-כיווני ───────────────────────────────────────
+async function syncOutboundSignaturesToCloud() {
+  const rows = await sqliteAll('SELECT * FROM outbound_signatures ORDER BY id').catch(() => []);
+  if (!rows.length) return;
+  const result = await apiRequest('POST', '/api/sync/outbound-signatures', { rows });
+  if (result.status === 200) log('  ↳ outbound-signatures to cloud: ' + rows.length + ' synced');
+  else log('  ⚠ outbound-signatures to cloud: ' + JSON.stringify(result.body));
+}
+
+async function syncOutboundSignaturesFromCloud() {
+  const result = await apiRequest('GET', '/api/sync/pull/outbound-signatures');
+  if (result.status !== 200) { log('  ⚠ pull outbound-signatures: ' + JSON.stringify(result.body)); return; }
+  const rows = result.body || [];
+  await sqliteRun(`CREATE TABLE IF NOT EXISTS outbound_signatures (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    content TEXT NOT NULL,
+    lang TEXT DEFAULT 'he',
+    is_active INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`).catch(() => {});
+  await sqliteRun(`ALTER TABLE outbound_signatures ADD COLUMN lang TEXT DEFAULT 'he'`).catch(() => {});
+  // last-write-wins: replace all from cloud (cloud is authority for signatures)
+  await sqliteRun('DELETE FROM outbound_signatures').catch(() => {});
+  for (const r of rows) {
+    await sqliteRun(
+      'INSERT OR REPLACE INTO outbound_signatures (id, name, content, lang, is_active, created_at) VALUES (?,?,?,?,?,?)',
+      [r.id, r.name, r.content, r.lang || 'he', r.is_active ? 1 : 0, r.created_at || null]
+    ).catch(() => {});
+  }
+  if (rows.length > 0) log('  ↳ outbound-signatures from cloud: ' + rows.length + ' synced');
 }
 
 // ── Warehouse Alerts — דו-כיווני ─────────────────────────────────────────────

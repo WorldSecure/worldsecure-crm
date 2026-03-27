@@ -562,6 +562,50 @@ app.delete('/api/email-signatures/:id', authenticateToken, (req, res) => {
   });
 });
 
+// ============ OUTBOUND SIGNATURES ============
+app.get('/api/outbound-signatures', authenticateToken, (req, res) => {
+  db.all('SELECT * FROM outbound_signatures ORDER BY created_at DESC', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.post('/api/outbound-signatures', authenticateToken, (req, res) => {
+  const { name, content, is_active, lang = 'he' } = req.body;
+  const run = () => db.run(
+    'INSERT INTO outbound_signatures (name, content, lang, is_active) VALUES (?,?,?,?)',
+    [name, content, lang, is_active ? 1 : 0],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ id: this.lastID, name, content, lang, is_active: is_active ? 1 : 0 });
+    }
+  );
+  if (is_active) db.run('UPDATE outbound_signatures SET is_active=0 WHERE lang=?', [lang], run);
+  else run();
+});
+
+app.put('/api/outbound-signatures/:id', authenticateToken, (req, res) => {
+  const { name, content, is_active, lang = 'he' } = req.body;
+  const run = () => db.run(
+    'UPDATE outbound_signatures SET name=?, content=?, lang=?, is_active=? WHERE id=?',
+    [name, content, lang, is_active ? 1 : 0, req.params.id],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Updated' });
+    }
+  );
+  if (is_active) db.run('UPDATE outbound_signatures SET is_active=0 WHERE lang=?', [lang], run);
+  else run();
+});
+
+app.delete('/api/outbound-signatures/:id', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  db.run('DELETE FROM outbound_signatures WHERE id=?', [req.params.id], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'Deleted' });
+  });
+});
+
 // ============ EMAIL SIGNATURE ROUTES (legacy) ============
 
 app.get('/api/company/email-signature', authenticateToken, (req, res) => {
@@ -1792,6 +1836,16 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
         else resolve(row || {});
       });
     });
+
+    // Get active outbound signature
+    const outboundSig = await new Promise((resolve) => {
+      db.get('SELECT content FROM outbound_signatures WHERE is_active=1 AND lang=? LIMIT 1', [lang], (err, row) => {
+        resolve(row || null);
+      });
+    });
+    const signatureHtml = outboundSig
+      ? `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e0e0e0;direction:${t.dir};text-align:${t.dir==='rtl'?'right':'left'};">${outboundSig.content}</div>`
+      : '';
     
     // Build logo HTML - positioned top-left
     let logoHtml = '';
@@ -2209,6 +2263,8 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
       <p>${transaction.notes}</p>
     </div>
   ` : ''}
+
+  ${signatureHtml}
 
   <div class="footer">
     <p>${t.preparedBy}: ${transaction.username}</p>
@@ -5274,6 +5330,15 @@ app.put('/api/qr-codes/:id', authenticateToken, (req, res) => {
 db.run(`ALTER TABLE support_tickets ADD COLUMN owner_id INTEGER`, () => {});
 db.run(`ALTER TABLE company_settings ADD COLUMN email_signature TEXT`, () => {});
 db.run(`ALTER TABLE company_settings ADD COLUMN logo_base64 TEXT`, () => {});
+db.run(`CREATE TABLE IF NOT EXISTS outbound_signatures (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  content TEXT NOT NULL,
+  lang TEXT DEFAULT 'he',
+  is_active INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`, () => {});
+db.run(`ALTER TABLE outbound_signatures ADD COLUMN lang TEXT DEFAULT 'he'`, () => {});
 db.run(`CREATE TABLE IF NOT EXISTS email_signatures (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
