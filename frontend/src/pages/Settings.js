@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useLanguage } from '../utils/LanguageContext';
 
@@ -53,6 +53,8 @@ function Settings() {
   const [sigName, setSigName] = useState('');
   const [signaturePreview, setSignaturePreview] = useState(false);
   const [showSigEditor, setShowSigEditor] = useState(false);
+  const sigFrameRef = useRef(null);
+  const sigInitializedRef = useRef(false);
   const [editingQrTitle, setEditingQrTitle] = useState(null); // { id, title }
 
   useEffect(() => {
@@ -168,6 +170,7 @@ function Settings() {
       }
       alert(t('success'));
       setShowSigEditor(false);
+      sigInitializedRef.current = false;
       setEditingSig(null);
       setSigName('');
       setSigContent('');
@@ -799,7 +802,7 @@ function Settings() {
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 className="card-title">✍️ {t('email_signature') || 'חתימות מייל'}</h3>
             <button className="btn btn-primary" onClick={() => {
-              setEditingSig(null); setSigName(''); setSigContent(''); setShowSigEditor(true);
+              setEditingSig(null); setSigName(''); setSigContent(''); sigInitializedRef.current = false; setShowSigEditor(true);
             }}>+ {t('add_signature') || 'חתימה חדשה'}</button>
           </div>
           <div style={{ padding: '1rem' }}>
@@ -829,7 +832,7 @@ function Settings() {
                           </button>
                         )}
                         <button className="btn btn-secondary" onClick={() => {
-                          setEditingSig(sig); setSigName(sig.name); setSigContent(sig.content); setShowSigEditor(true);
+                          setEditingSig(sig); setSigName(sig.name); setSigContent(sig.content); sigInitializedRef.current = false; setShowSigEditor(true);
                         }} style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem' }}>✏️</button>
                         <button className="btn btn-danger" onClick={() => deleteSignature(sig.id)}
                           style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem' }}>🗑️</button>
@@ -904,23 +907,35 @@ function Settings() {
                 </div>
 
                 {/* iframe עורך */}
-                <iframe id="sig-frame" title="sig editor"
-                  style={{ width: '100%', height: '200px', border: '1px solid #dee2e6', borderRadius: '0 0 6px 6px', background: 'white', display: 'block' }}
-                  onLoad={(e) => {
-                    const doc = e.target.contentDocument;
-                    if (!doc) return;
-                    doc.open();
-                    doc.write(`<!DOCTYPE html><html dir="ltr"><head><style>body{margin:0;padding:12px;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;direction:ltr;text-align:left;outline:none;min-height:160px;}</style></head><body contenteditable="true">${sigContent}</body></html>`);
-                    doc.close();
-                    doc.body.addEventListener('input', () => setSigContent(doc.body.innerHTML));
+                <iframe
+                  ref={(el) => {
+                    sigFrameRef.current = el;
+                    if (el && !sigInitializedRef.current) {
+                      sigInitializedRef.current = true;
+                      // מאתחל את ה-iframe פעם אחת בלבד — לא תלוי ב-state
+                      el.onload = () => {
+                        const doc = el.contentDocument;
+                        if (!doc) return;
+                        doc.open();
+                        doc.write(`<!DOCTYPE html><html dir="ltr"><head><style>body{margin:0;padding:12px;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;direction:ltr;text-align:left;outline:none;min-height:160px;}</style></head><body contenteditable="true">${sigContent}</body></html>`);
+                        doc.close();
+                        doc.body.focus();
+                        doc.body.addEventListener('input', () => {
+                          setSigContent(doc.body.innerHTML);
+                        });
+                      };
+                      el.src = 'about:blank';
+                    }
                   }}
-                  srcDoc={`<!DOCTYPE html><html dir="ltr"><head><style>body{margin:0;padding:12px;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;direction:ltr;text-align:left;outline:none;min-height:160px;}</style></head><body contenteditable="true">${sigContent}</body></html>`}
+                  id="sig-frame"
+                  title="sig editor"
+                  style={{ width: '100%', height: '200px', border: '1px solid #dee2e6', borderRadius: '0 0 6px 6px', background: 'white', display: 'block' }}
                 />
 
                 {/* כפתורי שמירה */}
                 <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
                   <button className="btn btn-primary" onClick={saveSignature}>💾 {t('save') || 'שמור'}</button>
-                  <button className="btn btn-secondary" onClick={() => { setShowSigEditor(false); setEditingSig(null); setSigName(''); setSigContent(''); }}>
+                  <button className="btn btn-secondary" onClick={() => { sigInitializedRef.current = false; setShowSigEditor(false); setEditingSig(null); setSigName(''); setSigContent(''); }}>
                     {t('cancel') || 'ביטול'}
                   </button>
                   <button type="button" className="btn btn-secondary" onClick={() => setSignaturePreview(!signaturePreview)}>
