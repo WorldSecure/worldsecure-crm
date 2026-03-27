@@ -68,6 +68,12 @@ function SalesReports() {
   const [selectedDeal, setSelectedDeal] = useState(null);
   const [profitData, setProfitData] = useState(null);
   const [profitCalcLoading, setProfitCalcLoading] = useState(false);
+  // Exchange rate modal
+  const [rateModalOpen, setRateModalOpen] = useState(false);
+  const [pendingProfitData, setPendingProfitData] = useState(null);
+  const [rateInputs, setRateInputs] = useState({}); // { "ILS→EUR": { rate: "", date: "" } }
+  // Session cache: { "ILS→EUR": { rate: 3.6, date: "2026-03-27" } }
+  const [rateCache, setRateCache] = useState({});
 
   const toggleStatusReport = async () => {
     if (statusOpen) { setStatusOpen(false); return; }
@@ -163,9 +169,98 @@ function SalesReports() {
     setProfitCalcLoading(true);
     try {
       const res = await axios.get(`/api/quotes/${deal.id}/profitability`);
-      setProfitData(res.data);
+      const data = res.data;
+      const saleCurrency = data.currency; // מטבע המכירה = הקובע
+      const today = new Date().toISOString().split('T')[0];
+
+      // מצא מטבעות זרים (שונים ממטבע המכירה) בפריטים
+      const foreignCurrencies = [...new Set(
+        (data.items || [])
+          .map(i => i.purchase_currency)
+          .filter(c => c && c !== saleCurrency)
+      )];
+
+      if (foreignCurrencies.length === 0) {
+        // אין שוני מטבע — חשב ישירות
+        setProfitData(data);
+      } else {
+        // יש שוני — בדוק cache
+        const todayRates = {};
+        const neededPairs = [];
+        foreignCurrencies.forEach(fc => {
+          const key = `${fc}→${saleCurrency}`;
+          const cached = rateCache[key];
+          if (cached && cached.date === today) {
+            todayRates[key] = cached.rate;
+          } else {
+            neededPairs.push({ from: fc, to: saleCurrency, key });
+          }
+        });
+
+        if (neededPairs.length === 0) {
+          // כל השערים קיימים מהיום — חשב עם cache
+          setProfitData(applyExchangeRates(data, todayRates, saleCurrency));
+        } else {
+          // צריך הזנה ידנית
+          const initialInputs = {};
+          neededPairs.forEach(p => {
+            initialInputs[p.key] = { from: p.from, to: p.to, rate: todayRates[p.key] || '' };
+          });
+          // גם כלול שערים שכבר יש מהיום
+          Object.entries(todayRates).forEach(([key, rate]) => {
+            const [from, to] = key.split('→');
+            initialInputs[key] = { from, to, rate };
+          });
+          setRateInputs(initialInputs);
+          setPendingProfitData(data);
+          setRateModalOpen(true);
+        }
+      }
     } catch(e) { console.error(e); }
     setProfitCalcLoading(false);
+  };
+
+  const applyExchangeRates = (data, rates, saleCurrency) => {
+    // המר עלות כל פריט למטבע המכירה
+    const convertedItems = data.items.map(item => {
+      const pc = item.purchase_currency;
+      if (!pc || pc === saleCurrency) return item;
+      const key = `${pc}→${saleCurrency}`;
+      const rate = rates[key];
+      if (!rate) return item;
+      const convertedPrice = (item.purchase_price || 0) / rate;
+      const convertedTotal = convertedPrice * item.quantity;
+      return { ...item, purchase_price_converted: convertedPrice, cost_total: convertedTotal, rate_used: rate };
+    });
+
+    const productCost = convertedItems.reduce((s, i) => s + (i.cost_total || 0), 0);
+    const totalCosts = productCost + (data.additionalCosts?.total || 0);
+    const netProfit = data.totalSale - totalCosts;
+    const profitPct = data.totalSale > 0 ? Math.round((netProfit / data.totalSale) * 100) : 0;
+
+    return { ...data, items: convertedItems, productCost, totalCosts, netProfit, profitPct, appliedRates: rates };
+  };
+
+  const confirmRates = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const rates = {};
+    let valid = true;
+    Object.entries(rateInputs).forEach(([key, val]) => {
+      const r = parseFloat(val.rate);
+      if (!r || r <= 0) { valid = false; return; }
+      rates[key] = r;
+    });
+    if (!valid) { alert(t('enter_valid_rate') || 'נא להזין שערי המרה תקינים'); return; }
+
+    // שמור ב-cache עם תאריך היום
+    const newCache = { ...rateCache };
+    Object.entries(rates).forEach(([key, rate]) => {
+      newCache[key] = { rate, date: today };
+    });
+    setRateCache(newCache);
+    setRateModalOpen(false);
+    setProfitData(applyExchangeRates(pendingProfitData, rates, pendingProfitData.currency));
+    setPendingProfitData(null);
   };
 
   const toggleCountryReport = async () => {
@@ -458,7 +553,16 @@ function SalesReports() {
                 <tr style={{ background: '#d4edda', fontWeight: 700, borderTop: '2px solid #28a745' }}>
                   <td style={{ padding: '0.65rem 1rem', color: '#155724' }}>{t('total') || 'סה"כ'}</td>
                   <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#155724' }}>{countryData.grandDeals}</td>
-                  <td style={{ padding: '0.65rem 1rem', textAlign: 'right', color: '#155724' }}>{fmt(countryData.grandTotal)}</td>
+                  <td style={{ padding: '0.65rem 1rem', textAlign: 'right', color: '#155724' }}>
+                    {(() => {
+                      const byCur = {};
+                      (countryData.rows || []).forEach(r => (r.currencies || []).forEach(c => { byCur[c] = (byCur[c] || 0) + r.total; }));
+                      const entries = Object.entries(byCur);
+                      return entries.length > 1
+                        ? entries.map(([c, v]) => <div key={c}>{fmt(v)} <span style={{ fontSize: '0.78rem' }}>{c}</span></div>)
+                        : <span>{fmt(countryData.grandTotal)}</span>;
+                    })()}
+                  </td>
                   <td style={{ padding: '0.65rem 1rem' }}></td>
                   <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#155724' }}>100%</td>
                 </tr>
@@ -1157,23 +1261,16 @@ function SalesReports() {
                   style={{ border: '1px solid #ddd', borderRadius: '6px', padding: '0.3rem 0.6rem', fontSize: '0.85rem', outline: 'none', width: '200px' }}
                 />
               </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', tableLayout: 'fixed' }}>
-                <colgroup>
-                  <col />
-                  <col style={{ width: '110px' }} />
-                  <col style={{ width: '130px' }} />
-                  <col style={{ width: '110px' }} />
-                  <col style={{ width: '130px' }} />
-                </colgroup>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                 <thead>
                   <tr>
                     <SortTh field="customer_name" sortState={customersSort} onSort={handleCustomersSort}>{t('customer') || 'לקוח'}</SortTh>
-                    <SortTh field="deals" sortState={customersSort} onSort={handleCustomersSort} style={{ textAlign: 'center' }}>{t('deals') || 'עסקאות'}</SortTh>
-                    <SortTh field="total" sortState={customersSort} onSort={handleCustomersSort} style={{ textAlign: 'right' }}>{t('sales') || 'מכירות'}</SortTh>
-                    <SortTh field="avg_deal_size" sortState={customersSort} onSort={handleCustomersSort} style={{ textAlign: 'right' }}>{t('avg_deal_size') || 'ממוצע עסקה'}</SortTh>
-                    <SortTh field="last_deal_date" sortState={customersSort} onSort={handleCustomersSort} style={{ width: '110px' }}>{t('last_deal_date') || 'עסקה אחרונה'}</SortTh>
-                    <SortTh field="country" sortState={customersSort} onSort={handleCustomersSort} style={{ textAlign: 'center' }}>{t('country') || 'מדינה'}</SortTh>
-                    <SortTh field="percent" sortState={customersSort} onSort={handleCustomersSort} style={{ textAlign: 'center' }}>%</SortTh>
+                    <SortTh field="deals" sortState={customersSort} onSort={handleCustomersSort} style={{ width: '90px', textAlign: 'center' }}>{t('deals') || 'עסקאות'}</SortTh>
+                    <SortTh field="total" sortState={customersSort} onSort={handleCustomersSort} style={{ width: '120px', textAlign: 'right' }}>{t('sales') || 'מכירות'}</SortTh>
+                    <SortTh field="avg_deal_size" sortState={customersSort} onSort={handleCustomersSort} style={{ width: '120px', textAlign: 'right' }}>{t('avg_deal_size') || 'ממוצע עסקה'}</SortTh>
+                    <SortTh field="last_deal_date" sortState={customersSort} onSort={handleCustomersSort} style={{ width: '130px', textAlign: 'center' }}>{t('last_deal_date') || 'עסקה אחרונה'}</SortTh>
+                    <SortTh field="country" sortState={customersSort} onSort={handleCustomersSort} style={{ width: '110px', textAlign: 'center' }}>{t('country') || 'מדינה'}</SortTh>
+                    <SortTh field="percent" sortState={customersSort} onSort={handleCustomersSort} style={{ width: '80px', textAlign: 'center' }}>%</SortTh>
                   </tr>
                 </thead>
                 <tbody>
@@ -1186,28 +1283,64 @@ function SalesReports() {
                     const totalAmt = filtered.reduce((s, r) => s + (r.total || 0), 0);
                     const totalDeals = filtered.reduce((s, r) => s + (r.deals || 0), 0);
                     return <>
-                      {sorted.map((row, i) => (
-                        <tr key={row.id} style={{ borderBottom: '1px solid #f0f0f0', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
-                          <td style={{ padding: '0.6rem 1rem', fontWeight: 500 }}>👤 {row.customer_name}</td>
-                          <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
-                            <span style={{ background: '#e3f2fd', color: '#1565c0', padding: '2px 10px', borderRadius: '12px', fontWeight: 600, fontSize: '0.85rem' }}>{row.deals}</span>
-                          </td>
-                          <td style={{ padding: '0.6rem 1rem', textAlign: 'right', fontWeight: 600 }}>{fmt(row.total)}</td>
-                          <td style={{ padding: '0.6rem 1rem', textAlign: 'center', color: '#666', fontSize: '0.85rem' }}>{row.country}</td>
-                          <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', justifyContent: 'center' }}>
-                              <div style={{ flex: 1, height: '6px', background: '#e9ecef', borderRadius: '3px', overflow: 'hidden', maxWidth: '60px' }}>
-                                <div style={{ width: row.percent + '%', height: '100%', background: '#6f42c1', borderRadius: '3px' }}></div>
+                      {sorted.map((row, i) => {
+                        const daysSince = row.last_deal_date ? Math.round((new Date() - new Date(row.last_deal_date)) / 86400000) : null;
+                        const dateColor = daysSince === null ? '#888' : daysSince <= 90 ? '#155724' : daysSince <= 180 ? '#856404' : '#721c24';
+                        const dateBg = daysSince === null ? '#eee' : daysSince <= 90 ? '#d4edda' : daysSince <= 180 ? '#fff3cd' : '#f8d7da';
+                        const currency = (row.currencies && row.currencies[0]) || '';
+                        return (
+                          <tr key={row.id} style={{ borderBottom: '1px solid #f0f0f0', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                            <td style={{ padding: '0.6rem 1rem', fontWeight: 500 }}>👤 {row.customer_name}</td>
+                            <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
+                              <span style={{ background: '#e3f2fd', color: '#1565c0', padding: '2px 10px', borderRadius: '12px', fontWeight: 600, fontSize: '0.85rem' }}>{row.deals}</span>
+                            </td>
+                            <td style={{ padding: '0.6rem 1rem', textAlign: 'right', fontWeight: 600 }}>
+                              {fmt(row.total)}{currency && <span style={{ fontSize: '0.75rem', color: '#888', marginLeft: '3px' }}>{currency}</span>}
+                            </td>
+                            <td style={{ padding: '0.6rem 1rem', textAlign: 'right', color: '#555', fontSize: '0.88rem' }}>
+                              {row.avg_deal_size > 0 ? <>{fmt(row.avg_deal_size)}{currency && <span style={{ fontSize: '0.75rem', color: '#888', marginLeft: '3px' }}>{currency}</span>}</> : '—'}
+                            </td>
+                            <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
+                              {row.last_deal_date
+                                ? <span style={{ background: dateBg, color: dateColor, padding: '2px 8px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: 600 }}>{new Date(row.last_deal_date).toLocaleDateString()}</span>
+                                : <span style={{ color: '#aaa' }}>—</span>}
+                            </td>
+                            <td style={{ padding: '0.6rem 1rem', textAlign: 'center', color: '#666', fontSize: '0.85rem' }}>{row.country || '—'}</td>
+                            <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', justifyContent: 'center' }}>
+                                <div style={{ flex: 1, height: '6px', background: '#e9ecef', borderRadius: '3px', overflow: 'hidden', maxWidth: '50px' }}>
+                                  <div style={{ width: row.percent + '%', height: '100%', background: '#6f42c1', borderRadius: '3px' }}></div>
+                                </div>
+                                <span style={{ fontSize: '0.82rem', color: '#555', minWidth: '30px' }}>{row.percent}%</span>
                               </div>
-                              <span style={{ fontSize: '0.82rem', color: '#555', minWidth: '34px' }}>{row.percent}%</span>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                          </tr>
+                        );
+                      })}
                       <tr style={{ background: '#ede7f6', fontWeight: 700, borderTop: '2px solid #6f42c1' }}>
                         <td style={{ padding: '0.65rem 1rem', color: '#4527a0' }}>{t('total') || 'סה"כ'} ({sorted.length})</td>
                         <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#4527a0' }}>{totalDeals}</td>
-                        <td style={{ padding: '0.65rem 1rem', textAlign: 'right', color: '#4527a0' }}>{fmt(totalAmt)}</td>
+                        <td style={{ padding: '0.65rem 1rem', textAlign: 'right', color: '#4527a0' }}>
+                          {(() => {
+                            const byCur = {};
+                            sorted.forEach(r => (r.currencies || []).forEach(c => { byCur[c] = (byCur[c] || 0) + r.total; }));
+                            const entries = Object.entries(byCur);
+                            return entries.length > 1
+                              ? entries.map(([c, v]) => <div key={c}>{fmt(v)} <span style={{ fontSize: '0.78rem' }}>{c}</span></div>)
+                              : <span>{fmt(totalAmt)}</span>;
+                          })()}
+                        </td>
+                        <td style={{ padding: '0.65rem 1rem', textAlign: 'right', color: '#4527a0' }}>
+                          {(() => {
+                            const byCur = {};
+                            sorted.forEach(r => (r.currencies || []).forEach(c => { byCur[c] = (byCur[c] || 0) + (r.avg_deal_size || 0); }));
+                            const entries = Object.entries(byCur);
+                            return entries.length > 1
+                              ? entries.map(([c, v]) => <div key={c}>{fmt(Math.round(v / sorted.filter(r => (r.currencies||[]).includes(c)).length))} <span style={{ fontSize: '0.78rem' }}>{c}</span></div>)
+                              : sorted.length > 0 ? <span>{fmt(Math.round(totalAmt / sorted.length))}</span> : '—';
+                          })()}
+                        </td>
+                        <td></td>
                         <td></td>
                         <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#4527a0' }}>100%</td>
                       </tr>
@@ -1585,6 +1718,17 @@ function SalesReports() {
                 </button>
               </div>
 
+              {/* Applied exchange rates notice */}
+              {profitData.appliedRates && Object.keys(profitData.appliedRates).length > 0 && (
+                <div style={{ background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '6px', padding: '0.6rem 1rem', marginBottom: '1rem', fontSize: '0.82rem', color: '#856404' }}>
+                  💱 {t('rates_used') || 'שערי המרה שהופעלו'}:{' '}
+                  {Object.entries(profitData.appliedRates).map(([key, rate]) => {
+                    const [from, to] = key.split('→');
+                    return <span key={key} style={{ background: '#fff', border: '1px solid #ffc107', borderRadius: '4px', padding: '1px 6px', marginLeft: '6px', fontWeight: 600 }}>1 {to} = {rate} {from}</span>;
+                  })}
+                </div>
+              )}
+
               {/* סך מכירה */}
               <div style={{ background: '#e3f2fd', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ fontWeight: 600, color: '#1565c0' }}>💰 {t('total_sale') || 'סך מכירה'}</span>
@@ -1610,8 +1754,19 @@ function SalesReports() {
                         <td style={{ padding: '0.5rem 0.8rem' }}>{item.product_name}</td>
                         <td style={{ padding: '0.5rem 0.8rem', textAlign: 'center' }}>{item.quantity}</td>
                         <td style={{ padding: '0.5rem 0.8rem', textAlign: 'right' }}>{fmt(item.unit_price)}</td>
-                        <td style={{ padding: '0.5rem 0.8rem', textAlign: 'right', color: item.purchase_price ? '#333' : '#aaa' }}>{item.purchase_price ? fmt(item.purchase_price) : '—'}</td>
-                        <td style={{ padding: '0.5rem 0.8rem', textAlign: 'right', fontWeight: 500, color: '#dc3545' }}>{item.purchase_price ? fmt(item.cost_total) : '—'}</td>
+                        <td style={{ padding: '0.5rem 0.8rem', textAlign: 'right', color: item.purchase_price ? '#333' : '#aaa' }}>
+                          {item.purchase_price ? (
+                            <>
+                              <span>{fmt(item.purchase_price)} <span style={{ fontSize: '0.75rem', color: '#888' }}>{item.purchase_currency || profitData.currency}</span></span>
+                              {item.rate_used && item.purchase_currency !== profitData.currency && (
+                                <div style={{ fontSize: '0.75rem', color: '#856404' }}>
+                                  → {fmt(item.purchase_price_converted?.toFixed(2))} <span style={{ color: '#856404' }}>{profitData.currency}</span>
+                                </div>
+                              )}
+                            </>
+                          ) : '—'}
+                        </td>
+                        <td style={{ padding: '0.5rem 0.8rem', textAlign: 'right', fontWeight: 500, color: '#dc3545' }}>{item.purchase_price ? fmt(item.cost_total) + ' ' + profitData.currency : '—'}</td>
                       </tr>
                     ))}
                     <tr style={{ background: '#ffeaea', fontWeight: 700, borderTop: '2px solid #dc3545' }}>
@@ -1953,6 +2108,77 @@ function SalesReports() {
       <div style={{ padding: '1.5rem', textAlign: 'center', color: '#ccc', border: '2px dashed #e9ecef', borderRadius: '8px', background: '#fafafa' }}>
         {t('more_reports_coming') || '➕ דוחות נוספים יתווספו בקרוב'}
       </div>
+
+      {/* ── Exchange Rate Modal ── */}
+      {rateModalOpen && pendingProfitData && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'white', borderRadius: '12px', padding: '2rem', maxWidth: '480px', width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            {/* Header */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h3 style={{ margin: 0, color: '#fd7e14', fontSize: '1.2rem' }}>💱 {t('exchange_rate_required') || 'נדרש שער המרה'}</h3>
+              <p style={{ margin: '0.5rem 0 0', color: '#666', fontSize: '0.88rem' }}>
+                {t('exchange_rate_desc') || 'מוצרים בעסקה זו נרכשו במטבע שונה ממטבע המכירה.'}<br/>
+                <strong style={{ color: '#333' }}>{t('sale_currency') || 'מטבע מכירה'}: {pendingProfitData.currency}</strong>
+              </p>
+            </div>
+
+            {/* Rate inputs */}
+            {Object.entries(rateInputs).map(([key, val]) => {
+              const today = new Date().toISOString().split('T')[0];
+              const cached = rateCache[key];
+              const isFromToday = cached && cached.date === today;
+              return (
+                <div key={key} style={{ marginBottom: '1.25rem' }}>
+                  <label style={{ display: 'block', fontWeight: 600, color: '#333', marginBottom: '0.4rem', fontSize: '0.9rem' }}>
+                    1 <span style={{ background: '#fd7e14', color: 'white', padding: '1px 8px', borderRadius: '8px', fontSize: '0.85rem' }}>{val.to}</span>
+                    {' = ? '}
+                    <span style={{ background: '#6c757d', color: 'white', padding: '1px 8px', borderRadius: '8px', fontSize: '0.85rem' }}>{val.from}</span>
+                  </label>
+                  {isFromToday && (
+                    <div style={{ fontSize: '0.78rem', color: '#28a745', marginBottom: '0.3rem' }}>
+                      ✅ {t('rate_from_today') || 'שער מהיום'} — {t('can_modify') || 'ניתן לשינוי'}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      min="0"
+                      placeholder={`1 ${val.to} = ? ${val.from}`}
+                      value={val.rate}
+                      onChange={e => setRateInputs(prev => ({ ...prev, [key]: { ...prev[key], rate: e.target.value } }))}
+                      style={{ flex: 1, border: '2px solid #fd7e14', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '1rem', outline: 'none', textAlign: 'center' }}
+                      autoFocus
+                    />
+                    <span style={{ fontSize: '0.85rem', color: '#666', whiteSpace: 'nowrap' }}>{val.from} / {val.to}</span>
+                  </div>
+                  {val.rate > 0 && (
+                    <div style={{ fontSize: '0.78rem', color: '#888', marginTop: '0.25rem' }}>
+                      → 1 {val.from} = {(1 / parseFloat(val.rate)).toFixed(6)} {val.to}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            <div style={{ fontSize: '0.78rem', color: '#888', marginBottom: '1.25rem', padding: '0.6rem', background: '#f8f9fa', borderRadius: '6px' }}>
+              ℹ️ {t('rate_cache_note') || 'השערים ישמרו לשימוש חוזר עד סוף היום'} ({new Date().toLocaleDateString()})
+            </div>
+
+            {/* Buttons */}
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button onClick={() => { setRateModalOpen(false); setPendingProfitData(null); setProfitCalcLoading(false); }}
+                style={{ padding: '0.6rem 1.2rem', borderRadius: '6px', border: '1px solid #dee2e6', background: 'white', cursor: 'pointer', fontSize: '0.9rem', color: '#666' }}>
+                {t('cancel') || 'ביטול'}
+              </button>
+              <button onClick={confirmRates}
+                style={{ padding: '0.6rem 1.4rem', borderRadius: '6px', border: 'none', background: '#fd7e14', color: 'white', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 700 }}>
+                💹 {t('calc_profit') || 'חשב רווח'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
