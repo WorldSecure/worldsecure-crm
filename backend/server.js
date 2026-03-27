@@ -493,6 +493,22 @@ app.post('/api/company/logo', authenticateToken, upload.single('logo'), (req, re
   );
 });
 
+// שמירת לוגו כ-Base64 ישירות ב-DB (משמש גם בענן וגם בלוקאל)
+app.post('/api/company/logo-base64', authenticateToken, (req, res) => {
+  const { logo_base64 } = req.body;
+  if (!logo_base64) return res.status(400).json({ error: 'logo_base64 is required' });
+
+  db.run(
+    'UPDATE company_settings SET logo_base64 = ? WHERE id = 1',
+    [logo_base64],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      logActivity(req.user.id, 'UPDATE_LOGO_BASE64', 'company', 1, {});
+      res.json({ message: 'Logo saved as base64' });
+    }
+  );
+});
+
 // ============ EMAIL SIGNATURES ROUTES ============
 
 app.get('/api/email-signatures', authenticateToken, (req, res) => {
@@ -5257,6 +5273,7 @@ app.put('/api/qr-codes/:id', authenticateToken, (req, res) => {
 // ===== SUPPORT TICKETS - MIGRATIONS =====
 db.run(`ALTER TABLE support_tickets ADD COLUMN owner_id INTEGER`, () => {});
 db.run(`ALTER TABLE company_settings ADD COLUMN email_signature TEXT`, () => {});
+db.run(`ALTER TABLE company_settings ADD COLUMN logo_base64 TEXT`, () => {});
 db.run(`CREATE TABLE IF NOT EXISTS email_signatures (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,

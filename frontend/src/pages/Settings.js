@@ -106,7 +106,9 @@ function Settings() {
         phone2_primary: phones[1]?.primary || false,
         phone3_primary: phones[2]?.primary || false,
       };
-      await axios.put('/api/company', { ...companyData, ...phoneData });
+      // הוצא logo_base64 — הוא נשמר בנפרד דרך /api/company/logo-base64
+      const { logo_base64, ...companyDataWithoutLogo } = companyData;
+      await axios.put('/api/company', { ...companyDataWithoutLogo, ...phoneData });
       alert(t('success'));
     } catch (error) {
       alert(t('error') + ': ' + (error.response?.data?.error || error.message));
@@ -141,6 +143,7 @@ function Settings() {
           alert(t('success'));
           setLogoFile(null);
           setLogoPreview(base64);
+          setCompanyData(prev => ({ ...prev, logo_base64: base64 }));
         } catch (error) {
           alert(t('error') + ': ' + (error.response?.data?.error || error.message));
         }
