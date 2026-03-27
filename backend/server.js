@@ -1883,7 +1883,15 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
     hr:first-of-type { display: none !important; }
     @media print {
       .no-print { display: none; }
-      .doc-footer { display: block !important; }
+      .doc-footer {
+        display: block !important;
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        background: white !important;
+      }
+      body { padding-bottom: 30px; }
       @page { margin: 1.5cm 2cm; size: A4; }
       th {
         -webkit-print-color-adjust: exact;
