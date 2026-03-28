@@ -437,20 +437,29 @@ app.post('/api/products', authenticateToken, adminOnly, async (req, res) => {
           const combos = cartesian(attrs.map(a => a.values));
           const skuBase = variant_sku_prefix || sku;
           for (const combo of combos) {
-            const variantSku = `${skuBase}-${combo.join('-')}`;
-            const existing = await query('SELECT id FROM products WHERE sku=$1', [variantSku]);
-            if (existing.rows.length > 0) {
-              await query('UPDATE products SET parent_id=$1 WHERE id=$2 AND (parent_id IS NULL OR parent_id=0)', [parentId, existing.rows[0].id]);
-            } else {
-              await query(
-                `INSERT INTO products (sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, supplier_id, manufacturer_id, parent_id, meta_updated_at)
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,$11,$12,$13,$14,NOW())`,
-                [variantSku, `${name} (${combo.join(' ')})`, name_he ? `${name_he} (${combo.join(' ')})` : null, name_pt ? `${name_pt} (${combo.join(' ')})` : null,
-                 description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null,
-                 min_quantity||0, supplier_id||null, manufacturer_id||null, parentId]
-              );
+            const baseVariantSku = `${skuBase}-${combo.join('-')}`;
+            // בדוק אם SKU כבר קיים — אם כן, צור SKU ייחודי עם suffix (A,B,C...)
+            const existingSkus = await query('SELECT id, sku FROM products WHERE sku LIKE $1', [`${baseVariantSku}%`]);
+            let variantSku = baseVariantSku;
+            const existingById = existingSkus.rows.find(r => r.sku === baseVariantSku);
+            if (existingById) {
+              // SKU קיים — בדוק אם כבר שייך לאב הזה
+              const alreadyLinked = await query('SELECT id FROM products WHERE sku=$1 AND parent_id=$2', [baseVariantSku, parentId]);
+              if (alreadyLinked.rows.length > 0) continue; // כבר קיים ומקושר
+              // שייך לאב אחר — צור suffix חדש
+              const suffixes = ['A','B','C','D','E','F','G','H'];
+              for (const s of suffixes) {
+                const candidate = `${baseVariantSku}-${s}`;
+                if (!existingSkus.rows.find(r => r.sku === candidate)) { variantSku = candidate; break; }
+              }
             }
-          }
+            await query(
+              `INSERT INTO products (sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, supplier_id, manufacturer_id, parent_id, meta_updated_at)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,$11,$12,$13,$14,NOW())`,
+              [variantSku, `${name} (${combo.join(' ')})`, name_he ? `${name_he} (${combo.join(' ')})` : null, name_pt ? `${name_pt} (${combo.join(' ')})` : null,
+               description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null,
+               min_quantity||0, supplier_id||null, manufacturer_id||null, parentId]
+            );
         }
       } catch (e) { console.error('Error creating variants:', e.message); }
     }
