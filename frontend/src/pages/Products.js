@@ -73,6 +73,9 @@ function Products() {
   const [currentPage, setCurrentPage] = useState(1);
   const [priceHistory, setPriceHistory] = useState([]);
   const [showAddPrice, setShowAddPrice] = useState(false);
+  const [expandedParents, setExpandedParents] = useState({});
+  const [variantsCache, setVariantsCache] = useState({});
+  const [editingQty, setEditingQty] = useState({}); // { variantId: newQty }
   const [newPrice, setNewPrice] = useState({ price: '', currency: 'ILS', effective_date: new Date().toISOString().split('T')[0] });
   
   const [formData, setFormData] = useState({
@@ -385,6 +388,35 @@ function Products() {
     }
   };
 
+  const toggleExpand = async (parentId) => {
+    if (expandedParents[parentId]) {
+      setExpandedParents(p => ({ ...p, [parentId]: false }));
+      return;
+    }
+    if (!variantsCache[parentId]) {
+      try {
+        const res = await axios.get(`/api/products/${parentId}/variants`);
+        setVariantsCache(c => ({ ...c, [parentId]: res.data }));
+      } catch (e) { return; }
+    }
+    setExpandedParents(p => ({ ...p, [parentId]: true }));
+  };
+
+  const saveVariantQty = async (variantId, parentId) => {
+    const qty = editingQty[variantId];
+    if (qty === undefined || qty === '') return;
+    try {
+      await axios.patch(`/api/products/${variantId}/quantity`, { quantity: parseInt(qty) });
+      setVariantsCache(c => ({
+        ...c,
+        [parentId]: c[parentId].map(v => v.id === variantId ? { ...v, quantity: parseInt(qty) } : v)
+      }));
+      setEditingQty(q => { const n = { ...q }; delete n[variantId]; return n; });
+    } catch (e) {
+      alert(t('error') + ': ' + e.message);
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       sku: '',
@@ -533,9 +565,10 @@ function Products() {
               <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>{t('no_data')}</div>
             ) : (
               sortedProducts.map(product => (
-                <div key={product.id} style={{
-                  background: '#fff',
-                  border: '1px solid #e0e0e0',
+                <React.Fragment key={product.id}>
+                <div style={{
+                  background: product.is_parent ? '#fffbf0' : '#fff',
+                  border: product.is_parent ? '1px solid #ffc107' : '1px solid #e0e0e0',
                   borderRadius: '10px',
                   padding: '1rem',
                   marginBottom: '0.75rem',
@@ -543,11 +576,18 @@ function Products() {
                 }}>
                   {/* Row 1: Name + stock badge */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                    <span style={{ fontWeight: '700', fontSize: '1rem' }}>
-                      {product.is_parent ? <span title={t('is_parent_product') || 'מוצר אב'}>⭐ </span> : null}
+                    <span style={{ fontWeight: '700', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      {product.is_parent && (
+                        <button onClick={() => toggleExpand(product.id)} style={{ background: 'none', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', padding: '0.1rem 0.4rem', fontSize: '0.8rem' }}>
+                          {expandedParents[product.id] ? '▼' : '▶'}
+                        </button>
+                      )}
+                      {product.is_parent ? <span>⭐ </span> : null}
                       {getProductName(product, language)}
                     </span>
-                    {product.quantity <= product.min_quantity ? (
+                    {product.is_parent ? (
+                      <span style={{ color: '#999', fontSize: '0.8rem' }}>—</span>
+                    ) : product.quantity <= product.min_quantity ? (
                       <span className="badge badge-danger">{product.quantity}</span>
                     ) : (
                       <span className="badge badge-success">{product.quantity}</span>
@@ -581,6 +621,28 @@ function Products() {
                     </div>
                   )}
                 </div>
+
+                {/* כרטיסי דגמים */}
+                {product.is_parent && expandedParents[product.id] && (variantsCache[product.id] || []).map(variant => (
+                  <div key={variant.id} style={{ background: '#f9f9f9', border: '1px solid #dee2e6', borderLeft: '4px solid #ffc107', borderRadius: '8px', padding: '0.6rem 0.75rem', marginBottom: '0.5rem', marginRight: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontFamily: 'monospace', fontSize: '0.82rem', color: '#555' }}>└ {variant.sku}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                        <input
+                          type="number"
+                          style={{ width: '65px', padding: '0.2rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.85rem' }}
+                          value={editingQty[variant.id] !== undefined ? editingQty[variant.id] : variant.quantity}
+                          onChange={(e) => setEditingQty(q => ({ ...q, [variant.id]: e.target.value }))}
+                        />
+                        {editingQty[variant.id] !== undefined && (
+                          <button onClick={() => saveVariantQty(variant.id, product.id)}
+                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>✓</button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                </React.Fragment>
               ))
             )}
             <PaginationBar />
@@ -614,15 +676,24 @@ function Products() {
                 </tr>
               ) : (
                 sortedProducts.map(product => (
-                  <tr key={product.id}>
-                    <td>{product.sku}</td>
+                  <React.Fragment key={product.id}>
+                  <tr key={product.id} style={{ background: product.is_parent ? '#fffbf0' : '' }}>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{product.sku}</td>
                     <td>
-                      {product.is_parent ? <span title={t('is_parent_product') || 'מוצר אב'}>⭐ </span> : null}
-                      {getProductName(product, language)}
+                      {product.is_parent ? (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <button onClick={() => toggleExpand(product.id)} style={{ background: 'none', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', padding: '0.1rem 0.4rem', fontSize: '0.8rem', lineHeight: 1 }}>
+                            {expandedParents[product.id] ? '▼' : '▶'}
+                          </button>
+                          <span>⭐ {getProductName(product, language)}</span>
+                        </span>
+                      ) : getProductName(product, language)}
                     </td>
                     <td>{getCategoryName(product, language)}</td>
                     <td>
-                      {product.quantity <= product.min_quantity ? (
+                      {product.is_parent ? (
+                        <span style={{ color: '#999', fontSize: '0.8rem' }}>—</span>
+                      ) : product.quantity <= product.min_quantity ? (
                         <span className="badge badge-danger">{product.quantity}</span>
                       ) : (
                         <span className="badge badge-success">{product.quantity}</span>
@@ -634,22 +705,38 @@ function Products() {
                     <td>
                       {isAdmin && (
                       <div className="table-actions">
-                        <button 
-                          className="btn btn-secondary"
-                          onClick={() => handleEdit(product)}
-                        >
-                          {t('edit')}
-                        </button>
-                        <button 
-                          className="btn btn-danger"
-                          onClick={() => handleDelete(product.id)}
-                        >
-                          {t('delete')}
-                        </button>
+                        <button className="btn btn-secondary" onClick={() => handleEdit(product)}>{t('edit')}</button>
+                        <button className="btn btn-danger" onClick={() => handleDelete(product.id)}>{t('delete')}</button>
                       </div>
                       )}
                     </td>
                   </tr>
+                  {/* שורות דגמים */}
+                  {product.is_parent && expandedParents[product.id] && (variantsCache[product.id] || []).map(variant => (
+                    <tr key={variant.id} style={{ background: '#f9f9f9', borderLeft: '3px solid #ffc107' }}>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.82rem', paddingLeft: '2rem', color: '#555' }}>
+                        └ {variant.sku}
+                      </td>
+                      <td style={{ fontSize: '0.85rem', color: '#444', paddingLeft: '1rem' }}>{getProductName(variant, language) || variant.sku}</td>
+                      <td>—</td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <input
+                            type="number"
+                            style={{ width: '65px', padding: '0.2rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.85rem' }}
+                            value={editingQty[variant.id] !== undefined ? editingQty[variant.id] : variant.quantity}
+                            onChange={(e) => setEditingQty(q => ({ ...q, [variant.id]: e.target.value }))}
+                          />
+                          {editingQty[variant.id] !== undefined && (
+                            <button onClick={() => saveVariantQty(variant.id, product.id)}
+                              style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>✓</button>
+                          )}
+                        </div>
+                      </td>
+                      <td colSpan="4"></td>
+                    </tr>
+                  ))}
+                  </React.Fragment>
                 ))
               )}
             </tbody>

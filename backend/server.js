@@ -726,6 +726,7 @@ db.run(`ALTER TABLE products ADD COLUMN subcategory_id INTEGER`, () => {});
 db.run(`ALTER TABLE products ADD COLUMN quantity_updated_at TEXT`, () => {});
 db.run(`ALTER TABLE products ADD COLUMN is_parent INTEGER DEFAULT 0`, () => {});
 db.run(`ALTER TABLE products ADD COLUMN variant_attrs TEXT`, () => {});
+db.run(`ALTER TABLE products ADD COLUMN parent_id INTEGER`, () => {});
 
 app.get('/api/categories', authenticateToken, (req, res) => {
   db.all('SELECT * FROM categories ORDER BY id', [], (err, rows) => {
@@ -853,6 +854,31 @@ app.get('/api/products', authenticateToken, (req, res) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
+});
+
+// ── Product Variants ──────────────────────────────────────────────────────────
+app.get('/api/products/:id/variants', authenticateToken, (req, res) => {
+  db.all(
+    `SELECT * FROM products WHERE parent_id = ? ORDER BY sku`,
+    [req.params.id],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows);
+    }
+  );
+});
+
+app.patch('/api/products/:id/quantity', authenticateToken, (req, res) => {
+  const { quantity } = req.body;
+  db.run(
+    `UPDATE products SET quantity = ?, quantity_updated_at = datetime('now'), meta_updated_at = datetime('now') WHERE id = ?`,
+    [quantity, req.params.id],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      logActivity(req.user.id, 'UPDATE_PRODUCT_QTY', 'product', req.params.id, { quantity });
+      res.json({ message: 'Quantity updated' });
+    }
+  );
 });
 
 app.get('/api/products/low-stock', authenticateToken, (req, res) => {
