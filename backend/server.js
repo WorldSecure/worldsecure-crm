@@ -1001,15 +1001,29 @@ app.post('/api/products', authenticateToken, (req, res) => {
   const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs, variant_sku_prefix } = req.body;
 
   if (!sku || !sku.trim()) return res.status(400).json({ error: 'SKU is required' });
+
+  // אם מוצר אב — בנה SKU ייחודי עם counter
+  const buildParentSku = (baseSku, callback) => {
+    if (!is_parent) return callback(sku);
+    db.get(
+      `SELECT COUNT(*) as cnt FROM products WHERE sku LIKE ? AND is_parent = 1`,
+      [`${baseSku}%`],
+      (err, row) => {
+        const num = String((row?.cnt || 0) + 1).padStart(3, '0');
+        callback(`${baseSku}-${num}`);
+      }
+    );
+  };
   
+  buildParentSku(sku, (finalSku) => {
   db.run(
     `INSERT INTO products (sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs, meta_updated_at) 
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-    [sku, name, description, category_id, subcategory_id||null, price, currency || 'ILS', unit, quantity || 0, min_quantity || 0, name_he || null, name_pt || null, supplier_id||null, manufacturer_id||null, is_parent ? 1 : 0, variant_attrs||null],
+    [finalSku, name, description, category_id, subcategory_id||null, price, currency || 'ILS', unit, quantity || 0, min_quantity || 0, name_he || null, name_pt || null, supplier_id||null, manufacturer_id||null, is_parent ? 1 : 0, variant_attrs||null],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
       const parentId = this.lastID;
-      logActivity(req.user.id, 'CREATE_PRODUCT', 'product', parentId, { sku, name });
+      logActivity(req.user.id, 'CREATE_PRODUCT', 'product', parentId, { sku: finalSku, name });
 
       // יצירת דגמים אוטומטית אם מוצר אב עם variant_attrs
       if (is_parent && variant_attrs) {
@@ -1065,9 +1079,10 @@ app.post('/api/products', authenticateToken, (req, res) => {
         }
       }
 
-      res.json({ id: parentId, ...req.body });
+      res.json({ id: parentId, ...req.body, sku: finalSku });
     }
   );
+  }); // סוף buildParentSku
 });
 
 // Price history endpoints
