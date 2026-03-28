@@ -20,6 +20,7 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/documents', express.static(path.join(__dirname, 'documents')));
 
 // Create uploads directory
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -43,6 +44,39 @@ const storage = multer.diskStorage({
   }
 });
 const upload = multer({ storage });
+
+// multer דינמי לקבצי עסקה — שומר ב-documents/quote_ID
+function uploadQuoteFile(req, res, next) {
+  const quoteId = req.params.id;
+  const quoteDir = path.join(__dirname, 'documents', `quote_${quoteId}`);
+  if (!require('fs').existsSync(quoteDir)) require('fs').mkdirSync(quoteDir, { recursive: true });
+  const quoteStorage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, quoteDir),
+    filename: (req, file, cb) => {
+      const timestamp = Date.now();
+      const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+      const safeName = originalName.replace(/[<>:"\/\\|?*]/g, '_');
+      cb(null, timestamp + '_' + safeName);
+    }
+  });
+  multer({ storage: quoteStorage }).single('file')(req, res, next);
+}
+
+function uploadQuoteBLFile(req, res, next) {
+  const quoteId = req.params.id;
+  const quoteDir = path.join(__dirname, 'documents', `quote_${quoteId}`);
+  if (!require('fs').existsSync(quoteDir)) require('fs').mkdirSync(quoteDir, { recursive: true });
+  const quoteStorage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, quoteDir),
+    filename: (req, file, cb) => {
+      const timestamp = Date.now();
+      const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+      const safeName = originalName.replace(/[<>:"\/\\|?*]/g, '_');
+      cb(null, timestamp + '_' + safeName);
+    }
+  });
+  multer({ storage: quoteStorage }).single('bl_file')(req, res, next);
+}
 
 // Auth middleware
 const authenticateToken = (req, res, next) => {
@@ -493,20 +527,37 @@ app.post('/api/company/logo', authenticateToken, upload.single('logo'), (req, re
   );
 });
 
-// שמירת לוגו כ-Base64 ישירות ב-DB (משמש גם בענן וגם בלוקאל)
+// שמירת לוגו כ-Base64 ישירות ב-DB
+// שמירת לוגו כ-Base64 — שומר כקובץ בדיסק ולא ב-DB כדי למנוע SQLite corruption
 app.post('/api/company/logo-base64', authenticateToken, (req, res) => {
   const { logo_base64 } = req.body;
   if (!logo_base64) return res.status(400).json({ error: 'logo_base64 is required' });
 
-  db.run(
-    'UPDATE company_settings SET logo_base64 = ? WHERE id = 1',
-    [logo_base64],
-    (err) => {
+  try {
+    // חלץ את ה-mime type ואת הנתונים
+    const matches = logo_base64.match(/^data:([^;]+);base64,(.+)$/);
+    if (!matches) return res.status(400).json({ error: 'Invalid base64 format' });
+    const mimeType = matches[1];
+    const ext = mimeType.includes('png') ? 'png' : mimeType.includes('svg') ? 'svg' : 'jpg';
+    const buffer = Buffer.from(matches[2], 'base64');
+
+    // שמור כקובץ בתיקיית uploads
+    const filename = `logo_company.${ext}`;
+    const uploadDir = path.join(__dirname, 'uploads');
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    const filepath = path.join(uploadDir, filename);
+    fs.writeFileSync(filepath, buffer);
+    const logoPath = `/uploads/${filename}`;
+
+    // שמור רק את ה-path ב-DB (לא את ה-base64 הגדול)
+    db.run('UPDATE company_settings SET logo_path = ?, logo_base64 = NULL WHERE id = 1', [logoPath], (err) => {
       if (err) return res.status(500).json({ error: err.message });
-      logActivity(req.user.id, 'UPDATE_LOGO_BASE64', 'company', 1, {});
-      res.json({ message: 'Logo saved as base64' });
-    }
-  );
+      logActivity(req.user.id, 'UPDATE_LOGO_BASE64', 'company', 1, { logoPath });
+      res.json({ message: 'Logo saved', path: logoPath });
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ============ EMAIL SIGNATURES ROUTES ============
@@ -585,17 +636,21 @@ app.post('/api/outbound-signatures', authenticateToken, (req, res) => {
 });
 
 app.put('/api/outbound-signatures/:id', authenticateToken, (req, res) => {
-  const { name, content, is_active, lang = 'he' } = req.body;
-  const run = () => db.run(
-    'UPDATE outbound_signatures SET name=?, content=?, lang=?, is_active=? WHERE id=?',
-    [name, content, lang, is_active ? 1 : 0, req.params.id],
-    (err) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ message: 'Updated' });
-    }
-  );
-  if (is_active) db.run('UPDATE outbound_signatures SET is_active=0 WHERE lang=?', [lang], run);
-  else run();
+  const { name, content, is_active, lang } = req.body;
+  db.get('SELECT lang FROM outbound_signatures WHERE id=?', [req.params.id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    const actualLang = lang || row?.lang || 'he';
+    const run = () => db.run(
+      'UPDATE outbound_signatures SET name=?, content=?, lang=?, is_active=? WHERE id=?',
+      [name, content, actualLang, is_active ? 1 : 0, req.params.id],
+      (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: 'Updated' });
+      }
+    );
+    if (is_active) db.run('UPDATE outbound_signatures SET is_active=0 WHERE lang=?', [actualLang], run);
+    else run();
+  });
 });
 
 app.delete('/api/outbound-signatures/:id', authenticateToken, (req, res) => {
@@ -1613,6 +1668,11 @@ app.delete('/api/inbound/:id', authenticateToken, (req, res) => {
             db.run('DELETE FROM inbound_transactions WHERE id = ?', [id], (err) => {
               if (err) return res.status(500).json({ error: err.message });
               
+              // רשום את המחיקה כדי שהסינק לא יחזיר אותה מהענן
+              db.run('CREATE TABLE IF NOT EXISTS deleted_inbound (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)', () => {
+                db.run('INSERT OR IGNORE INTO deleted_inbound (id) VALUES (?)', [id], () => {});
+              });
+
               logActivity(req.user.id, 'DELETE_INBOUND', 'inbound', id, {});
               res.json({ message: 'Inbound transaction deleted' });
             });
@@ -1659,6 +1719,11 @@ app.delete('/api/outbound/:id', authenticateToken, (req, res) => {
             db.run('DELETE FROM outbound_transactions WHERE id = ?', [id], (err) => {
               if (err) return res.status(500).json({ error: err.message });
               
+              // רשום את המחיקה כדי שהסינק לא יחזיר אותה מהענן
+              db.run('CREATE TABLE IF NOT EXISTS deleted_outbound (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)', () => {
+                db.run('INSERT OR IGNORE INTO deleted_outbound (id) VALUES (?)', [id], () => {});
+              });
+
               logActivity(req.user.id, 'DELETE_OUTBOUND', 'outbound', id, {});
               res.json({ message: 'Outbound transaction deleted' });
             });
@@ -1836,20 +1901,14 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
         else resolve(row || {});
       });
     });
-
-    // Get active outbound signature
-    const outboundSig = await new Promise((resolve) => {
-      db.get('SELECT content FROM outbound_signatures WHERE is_active=1 AND lang=? LIMIT 1', [lang], (err, row) => {
-        resolve(row || null);
-      });
-    });
-    const signatureHtml = outboundSig
-      ? `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e0e0e0;direction:${t.dir};text-align:${t.dir==='rtl'?'right':'left'};">${outboundSig.content}</div>`
-      : '';
     
     // Build logo HTML - positioned top-left
     let logoHtml = '';
-    if (company.logo_path) {
+    if (company.logo_base64) {
+      logoHtml = `<div style="text-align: left; margin-bottom: 20px; position: relative; z-index: 1;">
+        <img src="${company.logo_base64}" alt="Company Logo" style="max-height: 120px; max-width: 300px; object-fit: contain;">
+      </div>`;
+    } else if (company.logo_path) {
       try {
         const logoFullPath = path.join(__dirname, company.logo_path.replace('/uploads/', 'uploads/'));
         if (fs.existsSync(logoFullPath)) {
@@ -1869,6 +1928,16 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
       ? `<img src="${transaction.qr_image_url}" alt="QR Code" style="width: 55px; height: 55px; display: block; ${t.dir === 'rtl' ? 'margin-right: auto;' : 'margin-left: auto;'}">`
       : '';
 
+    // Get active outbound signature by language
+    const outboundSig = await new Promise((resolve) => {
+      db.get('SELECT content FROM outbound_signatures WHERE is_active=1 AND lang=? LIMIT 1', [lang], (err, row) => {
+        resolve(row || null);
+      });
+    });
+    const signatureHtml = outboundSig
+      ? `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e0e0e0;direction:${t.dir};text-align:${t.dir==='rtl'?'right':'left'};">${outboundSig.content}</div>`
+      : '';
+
     // Generate HTML for delivery note
     const html = `
 <!DOCTYPE html>
@@ -1883,15 +1952,7 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
     hr:first-of-type { display: none !important; }
     @media print {
       .no-print { display: none; }
-      .doc-footer {
-        display: block !important;
-        position: fixed !important;
-        bottom: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        background: white !important;
-      }
-      body { padding-bottom: 30px; }
+      .doc-footer { display: block !important; }
       @page { margin: 1.5cm 2cm; size: A4; }
       th {
         -webkit-print-color-adjust: exact;
@@ -1984,6 +2045,13 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
     }
     tr:nth-child(even) {
       background-color: #f9f9f9;
+    }
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 2px solid #ddd;
+      text-align: center;
+      color: #7f8c8d;
     }
     .email-modal-overlay {
       display: none;
@@ -3467,12 +3535,12 @@ app.delete('/api/quotes/:id/stages/3/proforma', authenticateToken, (req, res) =>
 });
 
 // Stage 7 - Upload Payment Proof (final stage)
-app.post('/api/quotes/:id/stages/7/upload', authenticateToken, upload.single('file'), (req, res) => {
+app.post('/api/quotes/:id/stages/7/upload', authenticateToken, uploadQuoteFile, (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   if (req.file.size > 10 * 1024 * 1024) return res.status(400).json({ error: 'File too large (max 10MB)' });
 
   const { id } = req.params;
-  const filePath = '/uploads/' + req.file.filename;
+  const filePath = `/documents/quote_${id}/${req.file.filename}`;
   const fileName = req.file.originalname;
   const fileSize = req.file.size;
   const now = new Date().toISOString();
@@ -3496,12 +3564,12 @@ app.post('/api/quotes/:id/stages/7/upload', authenticateToken, upload.single('fi
 });
 
 // Stage 6 - Upload Commercial Invoice
-app.post('/api/quotes/:id/stages/6/upload', authenticateToken, upload.single('file'), (req, res) => {
+app.post('/api/quotes/:id/stages/6/upload', authenticateToken, uploadQuoteFile, (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   if (req.file.size > 10 * 1024 * 1024) return res.status(400).json({ error: 'File too large (max 10MB)' });
 
   const { id } = req.params;
-  const filePath = '/uploads/' + req.file.filename;
+  const filePath = `/documents/quote_${id}/${req.file.filename}`;
   const fileName = req.file.originalname;
   const fileSize = req.file.size;
   const now = new Date().toISOString();
@@ -3626,6 +3694,34 @@ app.post('/api/quotes/:id/stages/8/costs', authenticateToken, (req, res) => {
 });
 
 // Stage 4 - Link existing outbound transaction
+// שומר עותק של תעודת המשלוח בתיקיית העסקה
+async function saveDeliveryNoteToQuoteFolder(quoteId, outboundId, lang) {
+  try {
+    const quoteDir = path.join(__dirname, 'documents', `quote_${quoteId}`);
+    if (!fs.existsSync(quoteDir)) fs.mkdirSync(quoteDir, { recursive: true });
+
+    // שלוף את ה-HTML של תעודת המשלוח דרך endpoint פנימי
+    const http = require('http');
+    const url = `http://localhost:${PORT}/api/outbound/${outboundId}/delivery-note?lang=${lang}`;
+    const html = await new Promise((resolve, reject) => {
+      http.get(url, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => resolve(data));
+      }).on('error', reject);
+    });
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const langLabel = lang === 'he' ? 'HE' : lang === 'pt' ? 'PT' : 'EN';
+    const filename = `delivery_note_outbound${outboundId}_${dateStr}_${langLabel}.html`;
+    const filepath = path.join(quoteDir, filename);
+    fs.writeFileSync(filepath, html, 'utf8');
+    console.log(`✅ Saved delivery note to quote folder: quote_${quoteId}/${filename}`);
+  } catch (err) {
+    console.error(`⚠️ Could not save delivery note to quote folder: ${err.message}`);
+  }
+}
+
 app.post('/api/quotes/:id/stages/5/link-delivery', authenticateToken, (req, res) => {
   const { id } = req.params;
   const { outbound_id, delivery_lang } = req.body;
@@ -3660,6 +3756,8 @@ app.post('/api/quotes/:id/stages/5/link-delivery', authenticateToken, (req, res)
             return res.status(500).json({ error: err2.message });
           }
           console.log(`✅ Updated quote_stages for quote #${id}`);
+          // שמור עותק של תעודת המשלוח בתיקיית העסקה
+          saveDeliveryNoteToQuoteFolder(id, outbound_id, delivery_lang || 'he');
           checkStage5Complete(id, res);
         }
       );
@@ -3674,6 +3772,8 @@ app.post('/api/quotes/:id/stages/5/link-delivery', authenticateToken, (req, res)
             return res.status(500).json({ error: err2.message });
           }
           console.log(`✅ Created quote_stages for quote #${id}`);
+          // שמור עותק של תעודת המשלוח בתיקיית העסקה
+          saveDeliveryNoteToQuoteFolder(id, outbound_id, delivery_lang || 'he');
           checkStage5Complete(id, res);
         }
       );
@@ -3696,10 +3796,10 @@ app.delete('/api/quotes/:id/stages/5/link-delivery', authenticateToken, (req, re
 });
 
 // Stage 4 - Upload Commercial Contract
-app.post('/api/quotes/:id/stages/4/contract-upload', authenticateToken, upload.single('file'), (req, res) => {
+app.post('/api/quotes/:id/stages/4/contract-upload', authenticateToken, uploadQuoteFile, (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   const { id } = req.params;
-  const fileRef = `/uploads/${req.file.filename}|${req.file.originalname}|${req.file.size}|${new Date().toISOString()}`;
+  const fileRef = `/documents/quote_${id}/${req.file.filename}|${req.file.originalname}|${req.file.size}|${new Date().toISOString()}`;
   const now = new Date().toISOString();
   const approvedBy = req.user.username || req.user.email;
   db.run(
@@ -3716,10 +3816,10 @@ app.post('/api/quotes/:id/stages/4/contract-upload', authenticateToken, upload.s
 // Stage 4 - Delete Commercial Contract
 
 // Stage 5 - Upload B/L file (real file)
-app.post('/api/quotes/:id/stages/5/bl-upload', authenticateToken, upload.single('bl_file'), (req, res) => {
+app.post('/api/quotes/:id/stages/5/bl-upload', authenticateToken, uploadQuoteBLFile, (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   const { id } = req.params;
-  const filePath = '/uploads/' + req.file.filename;
+  const filePath = `/documents/quote_${id}/${req.file.filename}`;
   const fileName = req.file.originalname;
   const now = new Date().toISOString();
   const approvedBy = req.user.username || req.user.email;
@@ -3816,10 +3916,14 @@ app.post('/api/quotes/:id/stages/5/delivery', authenticateToken, (req, res) => {
   });
 });
 
-// בדיקה אם שלב 4 הושלם
 // Save document to filesystem and DB
 async function saveDocument(type, referenceId, htmlContent, language, userId, entityName) {
-  const docsDir = path.join(__dirname, 'documents', type);
+  // proforma ו-proforma-invoice נשמרים בתיקיית quote_ID
+  const isQuoteDoc = type === 'proforma' || type === 'proforma-invoice';
+  const docsDir = isQuoteDoc
+    ? path.join(__dirname, 'documents', `quote_${referenceId}`)
+    : path.join(__dirname, 'documents', type);
+
   if (!fs.existsSync(docsDir)) {
     fs.mkdirSync(docsDir, { recursive: true });
   }
@@ -3830,12 +3934,15 @@ async function saveDocument(type, referenceId, htmlContent, language, userId, en
   const langLabel = language === 'he' ? 'HE_VERSION' : language === 'pt' ? 'PT_VERSION' : 'EN_VERSION';
   const filename = `${type}${safeName}_ID${referenceId}_${dateStr}_${langLabel}.pdf`;
   const filepath = path.join(docsDir, filename);
+
+  // הסר base64 גדול לפני שליחה ל-Puppeteer כדי למנוע קריסת זיכרון ופגיעה ב-DB
+  const safeHtml = htmlContent.replace(/src="data:[^"]{1000,}"/g, 'src=""');
   
   try {
     const puppeteer = require('puppeteer');
     const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
     const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+    await page.setContent(safeHtml, { waitUntil: 'networkidle0' });
     await page.pdf({ path: filepath, format: 'A4', printBackground: true, margin: { top: '1.5cm', bottom: '1.5cm', left: '2cm', right: '2cm' } });
     await browser.close();
   } catch (err) {
@@ -3844,14 +3951,14 @@ async function saveDocument(type, referenceId, htmlContent, language, userId, en
     const htmlFilepath = path.join(docsDir, htmlFilename);
     fs.writeFileSync(htmlFilepath, htmlContent, 'utf8');
     const fileSize = fs.statSync(htmlFilepath).size;
-    const relativePath = `/documents/${type}/${htmlFilename}`;
+    const relativePath = `/documents/${isQuoteDoc ? `quote_${referenceId}` : type}/${htmlFilename}`;
     db.run(`INSERT INTO documents (type, reference_id, filename, filepath, language, file_size, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [type, referenceId, htmlFilename, relativePath, language, fileSize, userId]);
     return relativePath;
   }
 
   const fileSize = fs.statSync(filepath).size;
-  const relativePath = `/documents/${type}/${filename}`;
+  const relativePath = `/documents/${isQuoteDoc ? `quote_${referenceId}` : type}/${filename}`;
   db.run(
     `INSERT INTO documents (type, reference_id, filename, filepath, language, file_size, created_by)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -5768,14 +5875,14 @@ app.listen(PORT, () => {
 // ===== STAGE 9: Additional Costs File Upload =====
 
 // Upload file for stage 9
-app.post('/api/quotes/:id/stages/9/upload', authenticateToken, upload.single('file'), (req, res) => {
+app.post('/api/quotes/:id/stages/9/upload', authenticateToken, uploadQuoteFile, (req, res) => {
   const { id } = req.params;
   
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
-  const filePath = `/uploads/${req.file.filename}`;
+  const filePath = `/documents/quote_${id}/${req.file.filename}`;
   const now = new Date().toISOString();
   const uploadedBy = req.user.username || req.user.email;
 
