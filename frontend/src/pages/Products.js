@@ -79,6 +79,8 @@ function Products() {
   const [editingPrice, setEditingPrice] = useState({}); // { variantId: newPrice }
   const [editingUnit, setEditingUnit] = useState({}); // { variantId: unit }
   const [editingCurrency, setEditingCurrency] = useState({}); // { variantId: currency }
+  const [variantPage, setVariantPage] = useState({}); // { parentId: currentPage }
+  const VARIANT_PAGE_SIZE = 5;
   const [newPrice, setNewPrice] = useState({ price: '', currency: 'ILS', effective_date: new Date().toISOString().split('T')[0] });
   
   const [formData, setFormData] = useState({
@@ -779,64 +781,97 @@ function Products() {
                       )}
                     </td>
                   </tr>
-                  {/* שורות דגמים */}
-                  {!!product.is_parent && expandedParents[product.id] && (variantsCache[product.id] || []).map(variant => (
-                    <tr key={variant.id} style={{ background: '#f9f9f9', borderLeft: '3px solid #ffc107' }}>
-                      <td style={{ fontFamily: 'monospace', fontSize: '0.82rem', paddingLeft: '2rem', color: '#555' }}>
-                        └ {variant.sku}
-                      </td>
-                      <td style={{ fontSize: '0.85rem', color: '#444', paddingLeft: '1rem' }}>{getProductName(variant, language) || variant.sku}</td>
-                      <td>—</td>
-                      <td>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                          <input type="number" min="0"
-                            style={{ width: '65px', padding: '0.2rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.85rem' }}
-                            value={editingQty[variant.id] !== undefined ? editingQty[variant.id] : (variant.quantity ?? 0)}
-                            onChange={(e) => setEditingQty(q => ({ ...q, [variant.id]: e.target.value }))}
-                          />
-                          <span style={{ fontSize: '0.72rem', color: '#888' }}>{t('quantity') || 'כמות'}</span>
-                        </div>
-                      </td>
-                      <td>
-                        <select style={{ padding: '0.2rem 0.3rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.82rem' }}
-                          value={editingUnit[variant.id] !== undefined ? editingUnit[variant.id] : (variant.unit ?? 'unit')}
-                          onChange={(e) => setEditingUnit(u => ({ ...u, [variant.id]: e.target.value }))}>
-                          <option value="unit">{t('unit_piece')}</option>
-                          <option value="box">{t('unit_box')}</option>
-                          <option value="carton">{t('unit_carton')}</option>
-                          <option value="kg">{t('unit_kg')}</option>
-                          <option value="liter">{t('unit_liter')}</option>
-                          <option value="meter">{t('unit_meter')}</option>
-                        </select>
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                            <input type="number" min="0" step="0.01"
-                              style={{ width: '75px', padding: '0.2rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.85rem' }}
-                              value={editingPrice[variant.id] !== undefined ? editingPrice[variant.id] : (variant.price ?? 0)}
-                              onChange={(e) => setEditingPrice(p => ({ ...p, [variant.id]: e.target.value }))}
-                            />
-                            <select style={{ padding: '0.2rem 0.3rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.82rem' }}
-                              value={editingCurrency[variant.id] !== undefined ? editingCurrency[variant.id] : (variant.currency ?? 'ILS')}
-                              onChange={(e) => setEditingCurrency(c => ({ ...c, [variant.id]: e.target.value }))}>
-                              <option value="ILS">ILS</option>
-                              <option value="USD">USD</option>
-                              <option value="EUR">EUR</option>
-                            </select>
+                  {/* מיני-טבלת דגמים עם pagination */}
+                  {!!product.is_parent && expandedParents[product.id] && (() => {
+                    const allVariants = variantsCache[product.id] || [];
+                    const vPage = variantPage[product.id] || 1;
+                    const vTotalPages = Math.ceil(allVariants.length / VARIANT_PAGE_SIZE) || 1;
+                    const vStart = (vPage - 1) * VARIANT_PAGE_SIZE;
+                    const pageVariants = allVariants.slice(vStart, vStart + VARIANT_PAGE_SIZE);
+                    return (
+                      <tr key={`variants-${product.id}`}>
+                        <td colSpan="8" style={{ padding: 0, background: '#fffdf0' }}>
+                          <div style={{ marginLeft: '2rem', borderLeft: '4px solid #ffc107' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                              <thead>
+                                <tr style={{ background: '#fff8e1', borderBottom: '1px solid #ffc107' }}>
+                                  <th style={{ padding: '0.4rem 0.6rem', textAlign: 'left', fontWeight: 600, color: '#666', fontSize: '0.78rem' }}>SKU</th>
+                                  <th style={{ padding: '0.4rem 0.6rem', fontWeight: 600, color: '#666', fontSize: '0.78rem' }}>{t('name')}</th>
+                                  <th style={{ padding: '0.4rem 0.6rem', fontWeight: 600, color: '#666', fontSize: '0.78rem' }}>{t('quantity')}</th>
+                                  <th style={{ padding: '0.4rem 0.6rem', fontWeight: 600, color: '#666', fontSize: '0.78rem' }}>{t('unit')}</th>
+                                  <th style={{ padding: '0.4rem 0.6rem', fontWeight: 600, color: '#666', fontSize: '0.78rem' }}>{t('price')}</th>
+                                  <th style={{ padding: '0.4rem 0.6rem' }}></th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {pageVariants.map(variant => (
+                                  <tr key={variant.id} style={{ borderBottom: '1px solid #f0e6c0' }}>
+                                    <td style={{ padding: '0.4rem 0.6rem', fontFamily: 'monospace', fontSize: '0.8rem', color: '#555' }}>└ {variant.sku}</td>
+                                    <td style={{ padding: '0.4rem 0.6rem', color: '#444' }}>{getProductName(variant, language) || variant.sku}</td>
+                                    <td style={{ padding: '0.4rem 0.6rem' }}>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                                        <input type="number" min="0" style={{ width: '65px', padding: '0.2rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.85rem' }}
+                                          value={editingQty[variant.id] !== undefined ? editingQty[variant.id] : (variant.quantity ?? 0)}
+                                          onChange={(e) => setEditingQty(q => ({ ...q, [variant.id]: e.target.value }))} />
+                                        <span style={{ fontSize: '0.7rem', color: '#aaa' }}>{t('quantity')}</span>
+                                      </div>
+                                    </td>
+                                    <td style={{ padding: '0.4rem 0.6rem' }}>
+                                      <select style={{ padding: '0.2rem 0.3rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.82rem' }}
+                                        value={editingUnit[variant.id] !== undefined ? editingUnit[variant.id] : (variant.unit ?? 'unit')}
+                                        onChange={(e) => setEditingUnit(u => ({ ...u, [variant.id]: e.target.value }))}>
+                                        <option value="unit">{t('unit_piece')}</option>
+                                        <option value="box">{t('unit_box')}</option>
+                                        <option value="carton">{t('unit_carton')}</option>
+                                        <option value="kg">{t('unit_kg')}</option>
+                                        <option value="liter">{t('unit_liter')}</option>
+                                        <option value="meter">{t('unit_meter')}</option>
+                                      </select>
+                                    </td>
+                                    <td style={{ padding: '0.4rem 0.6rem' }}>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                                        <div style={{ display: 'flex', gap: '0.3rem' }}>
+                                          <input type="number" min="0" step="0.01" style={{ width: '72px', padding: '0.2rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.85rem' }}
+                                            value={editingPrice[variant.id] !== undefined ? editingPrice[variant.id] : (variant.price ?? 0)}
+                                            onChange={(e) => setEditingPrice(p => ({ ...p, [variant.id]: e.target.value }))} />
+                                          <select style={{ padding: '0.2rem 0.3rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.82rem' }}
+                                            value={editingCurrency[variant.id] !== undefined ? editingCurrency[variant.id] : (variant.currency ?? 'ILS')}
+                                            onChange={(e) => setEditingCurrency(c => ({ ...c, [variant.id]: e.target.value }))}>
+                                            <option value="ILS">ILS</option>
+                                            <option value="USD">USD</option>
+                                            <option value="EUR">EUR</option>
+                                          </select>
+                                        </div>
+                                        <span style={{ fontSize: '0.7rem', color: '#aaa' }}>{t('price')}</span>
+                                      </div>
+                                    </td>
+                                    <td style={{ padding: '0.4rem 0.6rem' }}>
+                                      {(editingQty[variant.id] !== undefined || editingPrice[variant.id] !== undefined || editingUnit[variant.id] !== undefined || editingCurrency[variant.id] !== undefined) && (
+                                        <button onClick={() => saveVariantQty(variant.id, product.id)}
+                                          style={{ padding: '0.2rem 0.6rem', fontSize: '0.8rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                                          ✓ {t('save') || 'שמור'}
+                                        </button>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                            {vTotalPages > 1 && (
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.4rem', padding: '0.4rem 0.6rem', background: '#fff8e1', borderTop: '1px solid #f0e6c0', fontSize: '0.82rem' }}>
+                                <span style={{ color: '#666' }}>{allVariants.length} {t('variants') || 'דגמים'}</span>
+                                <button onClick={() => setVariantPage(p => ({ ...p, [product.id]: Math.max(1, vPage - 1) }))} disabled={vPage === 1}
+                                  style={{ padding: '0.15rem 0.5rem', border: '1px solid #ccc', borderRadius: '4px', background: vPage === 1 ? '#f3f4f6' : 'white', cursor: vPage === 1 ? 'default' : 'pointer' }}>‹</button>
+                                <span>{vPage} / {vTotalPages}</span>
+                                <button onClick={() => setVariantPage(p => ({ ...p, [product.id]: Math.min(vTotalPages, vPage + 1) }))} disabled={vPage === vTotalPages}
+                                  style={{ padding: '0.15rem 0.5rem', border: '1px solid #ccc', borderRadius: '4px', background: vPage === vTotalPages ? '#f3f4f6' : 'white', cursor: vPage === vTotalPages ? 'default' : 'pointer' }}>›</button>
+                              </div>
+                            )}
                           </div>
-                          <span style={{ fontSize: '0.72rem', color: '#888' }}>{t('price') || 'מחיר'}</span>
-                        </div>
-                      </td>
-                      <td>—</td>
-                      <td>
-                        {(editingQty[variant.id] !== undefined || editingPrice[variant.id] !== undefined || editingUnit[variant.id] !== undefined || editingCurrency[variant.id] !== undefined) && (
-                          <button onClick={() => saveVariantQty(variant.id, product.id)}
-                            style={{ padding: '0.2rem 0.6rem', fontSize: '0.8rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>✓ {t('save') || 'שמור'}</button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                      </tr>
+                    );
+                  })()}
                   </React.Fragment>
                 ))
               )}
