@@ -3430,6 +3430,17 @@ app.delete('/api/quotes/:id', authenticateToken, async (req, res) => {
 
     logActivity(user_id, 'DELETE_QUOTE', 'quote', id, {});
 
+    // מחק את תיקיית העסקה אם קיימת
+    const quoteDir = path.join(__dirname, 'documents', `quote_${id}`);
+    if (fs.existsSync(quoteDir)) {
+      try {
+        fs.rmSync(quoteDir, { recursive: true, force: true });
+        console.log(`✅ Deleted quote folder: quote_${id}`);
+      } catch (e) {
+        console.warn(`⚠️ Could not delete quote folder: ${e.message}`);
+      }
+    }
+
     res.json({ message: 'Quote deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
