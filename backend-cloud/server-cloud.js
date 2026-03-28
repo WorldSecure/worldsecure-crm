@@ -2305,6 +2305,52 @@ app.get('/api/sync/pull/outbound-signatures', authenticateToken, async (req, res
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Proforma Signatures Sync ──────────────────────────────────────────────────
+app.post('/api/sync/proforma-signatures', authenticateToken, async (req, res) => {
+  const { rows } = req.body;
+  if (!rows || !Array.isArray(rows)) return res.status(400).json({ error: 'rows required' });
+  try {
+    await query(`CREATE TABLE IF NOT EXISTS proforma_signatures (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      content TEXT NOT NULL,
+      lang TEXT DEFAULT 'he',
+      is_active BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+    for (const r of rows) {
+      await query(`
+        INSERT INTO proforma_signatures (id, name, content, lang, is_active, created_at)
+        VALUES ($1,$2,$3,$4,$5,$6)
+        ON CONFLICT (id) DO UPDATE SET name=$2, content=$3, lang=$4, is_active=$5`,
+        [r.id, r.name, r.content, r.lang || 'he', r.is_active ? true : false, r.created_at || new Date().toISOString()]
+      );
+    }
+    if (rows.length > 0) {
+      const ids = rows.map(r => r.id);
+      await query(`DELETE FROM proforma_signatures WHERE id NOT IN (${ids.map((_,i)=>`$${i+1}`).join(',')})`, ids);
+    } else {
+      await query('DELETE FROM proforma_signatures');
+    }
+    res.json({ message: 'proforma-signatures synced', count: rows.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/sync/pull/proforma-signatures', authenticateToken, async (req, res) => {
+  try {
+    await query(`CREATE TABLE IF NOT EXISTS proforma_signatures (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      content TEXT NOT NULL,
+      lang TEXT DEFAULT 'he',
+      is_active BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+    const r = await query('SELECT * FROM proforma_signatures ORDER BY id');
+    res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Sync: Push warehouse_alerts from local → cloud ────────────────────────────
 app.post('/api/sync/warehouse-alerts', authenticateToken, async (req, res) => {
   const { alerts } = req.body;
