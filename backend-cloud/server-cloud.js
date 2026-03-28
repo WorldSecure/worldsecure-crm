@@ -2615,9 +2615,11 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
         await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier_id INTEGER`).catch(() => {});
         await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS manufacturer_id INTEGER`).catch(() => {});
         await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS is_parent BOOLEAN DEFAULT FALSE`).catch(() => {});
+        await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS variant_attrs TEXT`).catch(() => {});
+        await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS parent_id INTEGER`).catch(() => {});
         await client.query(`
-          INSERT INTO products (id, sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at, supplier_id, manufacturer_id, is_parent, created_at)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+          INSERT INTO products (id, sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at, supplier_id, manufacturer_id, is_parent, variant_attrs, parent_id, created_at)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
           ON CONFLICT (id) DO UPDATE SET
             sku            = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $2  ELSE products.sku END,
             name           = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $3  ELSE products.name END,
@@ -2633,12 +2635,15 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
             supplier_id    = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $16 ELSE products.supplier_id END,
             manufacturer_id= CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $17 ELSE products.manufacturer_id END,
             is_parent      = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $18 ELSE products.is_parent END,
+            variant_attrs  = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $19 ELSE products.variant_attrs END,
+            parent_id      = COALESCE($20, products.parent_id),
             meta_updated_at= CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $15::timestamptz ELSE products.meta_updated_at END,
             quantity       = CASE WHEN $14::text IS NOT NULL AND ($14::timestamptz > COALESCE(products.quantity_updated_at,'1970-01-01')) THEN $12 ELSE products.quantity END,
             quantity_updated_at = CASE WHEN $14::text IS NOT NULL AND ($14::timestamptz > COALESCE(products.quantity_updated_at,'1970-01-01')) THEN $14::timestamptz ELSE products.quantity_updated_at END`,
           [r.id, r.sku, r.name, r.name_he||null, r.name_pt||null, r.description||null,
            r.category_id||null, r.subcategory_id||null, r.price||null, r.currency||'ILS', r.unit||'unit',
-           qty, minQty, localQtyTs||null, localMetaTs||null, r.supplier_id||null, r.manufacturer_id||null, r.is_parent ? true : false, r.created_at]);
+           qty, minQty, localQtyTs||null, localMetaTs||null, r.supplier_id||null, r.manufacturer_id||null,
+           r.is_parent ? true : false, r.variant_attrs||null, r.parent_id||null, r.created_at]);
       }
       if (rows.length > 0) {
         const ids = rows.map(r => r.id);
