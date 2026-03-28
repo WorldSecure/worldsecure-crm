@@ -892,7 +892,7 @@ app.patch('/api/products/:id/quantity', authenticateToken, (req, res) => {
 
 app.get('/api/products/low-stock', authenticateToken, (req, res) => {
   db.all(
-    'SELECT * FROM products WHERE quantity <= min_quantity ORDER BY name',
+    'SELECT * FROM products WHERE quantity <= min_quantity AND (parent_id IS NULL OR parent_id = 0) AND is_parent = 0 ORDER BY name',
     [],
     (err, rows) => {
       if (err) {
