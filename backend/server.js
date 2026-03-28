@@ -1026,14 +1026,25 @@ app.post('/api/products', authenticateToken, (req, res) => {
             const insertVariant = (combo, index) => {
               if (index >= combos.length) return;
               const variantSku = `${sku}-${combo.join('-')}`;
-              db.run(
-                `INSERT INTO products (sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, supplier_id, manufacturer_id, parent_id, meta_updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, datetime('now'))`,
-                [variantSku, `${name} (${combo.join(' ')})`, name_he ? `${name_he} (${combo.join(' ')})` : null, name_pt ? `${name_pt} (${combo.join(' ')})` : null,
-                 description, category_id, subcategory_id||null, price, currency||'ILS', unit,
-                 min_quantity||0, supplier_id||null, manufacturer_id||null, parentId],
-                () => insertVariant(combos[index + 1], index + 1)
-              );
+              // בדוק אם SKU כבר קיים — אם כן, עדכן parent_id בלבד
+              db.get('SELECT id FROM products WHERE sku = ?', [variantSku], (err, existing) => {
+                if (existing) {
+                  // עדכן parent_id אם חסר
+                  db.run('UPDATE products SET parent_id = ? WHERE id = ? AND (parent_id IS NULL OR parent_id = 0)',
+                    [parentId, existing.id],
+                    () => insertVariant(combos[index + 1], index + 1)
+                  );
+                } else {
+                  db.run(
+                    `INSERT INTO products (sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, supplier_id, manufacturer_id, parent_id, meta_updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, datetime('now'))`,
+                    [variantSku, `${name} (${combo.join(' ')})`, name_he ? `${name_he} (${combo.join(' ')})` : null, name_pt ? `${name_pt} (${combo.join(' ')})` : null,
+                     description, category_id, subcategory_id||null, price, currency||'ILS', unit,
+                     min_quantity||0, supplier_id||null, manufacturer_id||null, parentId],
+                    () => insertVariant(combos[index + 1], index + 1)
+                  );
+                }
+              });
             };
             if (combos.length > 0) insertVariant(combos[0], 0);
           }
