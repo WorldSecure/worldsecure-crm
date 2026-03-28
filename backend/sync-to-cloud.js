@@ -127,7 +127,7 @@ async function syncLocalToCloud() {
     await syncEntityToCloud('categories',    'SELECT id, name, name_he, name_pt, description, updated_at FROM categories');
     await syncEntityToCloud('subcategories', 'SELECT id, category_id, name, name_he, name_pt, updated_at FROM subcategories');
     await syncEntityToCloud('customers',  'SELECT id, name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes, created_at, updated_at FROM customers');
-    await syncEntityToCloud('products',   'SELECT id, sku, name, name_he, name_pt, description, category_id, subcategory_id, supplier_id, manufacturer_id, price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at, is_parent FROM products');
+    await syncEntityToCloud('products',   'SELECT id, sku, name, name_he, name_pt, description, category_id, subcategory_id, supplier_id, manufacturer_id, price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at, is_parent, variant_attrs, parent_id FROM products');
     await syncEntityToCloud('suppliers',  'SELECT id, name, address, phone, email, tax_id, country, contact_person, notes, created_at, updated_at FROM suppliers');
     await syncEntityToCloud('manufacturers', 'SELECT id, name, address, phone, email, tax_id, country, contact_person, notes, created_at, updated_at FROM manufacturers');
     await syncEmailSignaturesToCloud();
@@ -253,6 +253,8 @@ async function syncProductsFromCloud() {
   await sqliteRun('ALTER TABLE products ADD COLUMN supplier_id INTEGER').catch(() => {});
   await sqliteRun('ALTER TABLE products ADD COLUMN manufacturer_id INTEGER').catch(() => {});
   await sqliteRun('ALTER TABLE products ADD COLUMN is_parent INTEGER DEFAULT 0').catch(() => {});
+  await sqliteRun('ALTER TABLE products ADD COLUMN variant_attrs TEXT').catch(() => {});
+  await sqliteRun('ALTER TABLE products ADD COLUMN parent_id INTEGER').catch(() => {});
 
   const normalizeTs = (v) => v ? String(v).replace(' ', 'T').slice(0, 19) : '';
 
@@ -279,13 +281,14 @@ async function syncProductsFromCloud() {
         INSERT OR IGNORE INTO products
           (id, sku, name, name_he, name_pt, description, category_id, subcategory_id,
            price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at,
-           supplier_id, manufacturer_id, is_parent)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           supplier_id, manufacturer_id, is_parent, variant_attrs, parent_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [p.id, p.sku, p.name, p.name_he||null, p.name_pt||null, p.description||null,
          p.category_id||null, p.subcategory_id||null,
          p.price||null, p.currency||'ILS', p.unit||'unit',
          finalQty, p.min_quantity||0, finalQtyTs, p.meta_updated_at||null,
-         p.supplier_id||null, p.manufacturer_id||null, p.is_parent ? 1 : 0]
+         p.supplier_id||null, p.manufacturer_id||null, p.is_parent ? 1 : 0,
+         p.variant_attrs||null, p.parent_id||null]
       ).catch(() => {});
     } else if (useCloudMeta) {
       await sqliteRun(`
@@ -293,6 +296,7 @@ async function syncProductsFromCloud() {
           sku=?, name=?, name_he=?, name_pt=?, description=?,
           category_id=?, subcategory_id=?, price=?, currency=?, unit=?,
           min_quantity=?, meta_updated_at=?, supplier_id=?, manufacturer_id=?, is_parent=?,
+          variant_attrs=?, parent_id=?,
           quantity=?, quantity_updated_at=?
         WHERE id=?`,
         [p.sku, p.name, p.name_he||null, p.name_pt||null, p.description||null,
@@ -303,6 +307,7 @@ async function syncProductsFromCloud() {
          (p.supplier_id != null ? p.supplier_id : (existing?.supplier_id ?? null)),
          (p.manufacturer_id != null ? p.manufacturer_id : (existing?.manufacturer_id ?? null)),
          p.is_parent ? 1 : 0,
+         p.variant_attrs||null, p.parent_id||null,
          finalQty, finalQtyTs, p.id]
       ).catch(() => {});
     } else {

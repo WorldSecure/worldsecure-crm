@@ -481,6 +481,7 @@ app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
 
 app.delete('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
   try {
+    await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS parent_id INTEGER').catch(() => {});
     await query('DELETE FROM products WHERE parent_id=$1', [req.params.id]);
     await query('DELETE FROM products WHERE id=$1', [req.params.id]);
     res.json({ message: 'Product deleted' });
