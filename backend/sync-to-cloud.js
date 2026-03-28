@@ -849,6 +849,32 @@ async function syncSettingsFromCloud() {
       }
     }
     localLogoPath = '/uploads/' + logoFilename;
+  } else if (s.logo_base64) {
+    // הענן שומר לוגו כ-base64 — שמור אותו כקובץ מקומית
+    try {
+      const matches = s.logo_base64.match(/^data:([^;]+);base64,(.+)$/);
+      if (matches) {
+        const mimeType = matches[1];
+        const ext = mimeType.includes('png') ? 'png' : mimeType.includes('svg') ? 'svg' : 'jpg';
+        const buffer = Buffer.from(matches[2], 'base64');
+        const localUploadsDir = path.join(__dirname, 'uploads');
+        if (!fs.existsSync(localUploadsDir)) fs.mkdirSync(localUploadsDir, { recursive: true });
+        const localPath = path.join(localUploadsDir, `logo_company.${ext}`);
+        fs.writeFileSync(localPath, buffer);
+        localLogoPath = `/uploads/logo_company.${ext}`;
+        log('  ↳ logo from base64 saved locally');
+      }
+    } catch (e) {
+      log('  ⚠ logo base64 save failed: ' + e.message);
+    }
+  }
+
+  // אם אין לוגו מהענן — שמור את הלוגו המקומי הקיים
+  if (!localLogoPath) {
+    const existing = await sqliteAll('SELECT logo_path FROM company_settings WHERE id=1').catch(() => []);
+    if (existing[0]?.logo_path) {
+      localLogoPath = existing[0].logo_path;
+    }
   }
 
   await sqliteRun(`
