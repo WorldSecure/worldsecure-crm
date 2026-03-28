@@ -863,7 +863,6 @@ app.get('/api/products/:id/variants', authenticateToken, (req, res) => {
     [req.params.id],
     (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
-      console.log(`[variants] parent_id=${req.params.id} → ${rows.length} rows`);
       res.json(rows);
     }
   );
@@ -1129,13 +1128,15 @@ app.put('/api/products/:id', authenticateToken, (req, res) => {
 
 app.delete('/api/products/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
-  
-  db.run('DELETE FROM products WHERE id = ?', [id], (err) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    logActivity(req.user.id, 'DELETE_PRODUCT', 'product', id, {});
-    res.json({ message: 'Product deleted' });
+  // מחק קודם את כל הדגמים של האב
+  db.run('DELETE FROM products WHERE parent_id = ?', [id], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    // מחק את האב עצמו
+    db.run('DELETE FROM products WHERE id = ?', [id], (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      logActivity(req.user.id, 'DELETE_PRODUCT', 'product', id, {});
+      res.json({ message: 'Product deleted' });
+    });
   });
 });
 
