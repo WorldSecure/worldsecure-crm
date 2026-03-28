@@ -725,6 +725,7 @@ db.run(`ALTER TABLE categories ADD COLUMN name_pt TEXT`, () => {});
 db.run(`ALTER TABLE products ADD COLUMN subcategory_id INTEGER`, () => {});
 db.run(`ALTER TABLE products ADD COLUMN quantity_updated_at TEXT`, () => {});
 db.run(`ALTER TABLE products ADD COLUMN is_parent INTEGER DEFAULT 0`, () => {});
+db.run(`ALTER TABLE products ADD COLUMN variant_attrs TEXT`, () => {});
 
 app.get('/api/categories', authenticateToken, (req, res) => {
   db.all('SELECT * FROM categories ORDER BY id', [], (err, rows) => {
@@ -962,12 +963,12 @@ app.post('/api/products/translate', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/products', authenticateToken, (req, res) => {
-  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent } = req.body;
+  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs } = req.body;
   
   db.run(
-    `INSERT INTO products (sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, meta_updated_at) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-    [sku, name, description, category_id, subcategory_id||null, price, currency || 'ILS', unit, quantity || 0, min_quantity || 0, name_he || null, name_pt || null, supplier_id||null, manufacturer_id||null, is_parent ? 1 : 0],
+    `INSERT INTO products (sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs, meta_updated_at) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+    [sku, name, description, category_id, subcategory_id||null, price, currency || 'ILS', unit, quantity || 0, min_quantity || 0, name_he || null, name_pt || null, supplier_id||null, manufacturer_id||null, is_parent ? 1 : 0, variant_attrs||null],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
       logActivity(req.user.id, 'CREATE_PRODUCT', 'product', this.lastID, { sku, name });
@@ -1016,13 +1017,13 @@ app.delete('/api/products/:id/price-history/:hid', authenticateToken, (req, res)
 
 app.put('/api/products/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
-  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent } = req.body;
+  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs } = req.body;
   
   db.run(
     `UPDATE products 
-     SET sku = ?, name = ?, description = ?, category_id = ?, subcategory_id = ?, price = ?, currency = ?, unit = ?, quantity = ?, min_quantity = ?, name_he = ?, name_pt = ?, supplier_id = ?, manufacturer_id = ?, is_parent = ?, quantity_updated_at = datetime('now'), meta_updated_at = datetime('now')
+     SET sku = ?, name = ?, description = ?, category_id = ?, subcategory_id = ?, price = ?, currency = ?, unit = ?, quantity = ?, min_quantity = ?, name_he = ?, name_pt = ?, supplier_id = ?, manufacturer_id = ?, is_parent = ?, variant_attrs = ?, quantity_updated_at = datetime('now'), meta_updated_at = datetime('now')
      WHERE id = ?`,
-    [sku, name, description, category_id, subcategory_id||null, price, currency || 'ILS', unit, quantity, min_quantity, name_he || null, name_pt || null, supplier_id||null, manufacturer_id||null, is_parent ? 1 : 0, id],
+    [sku, name, description, category_id, subcategory_id||null, price, currency || 'ILS', unit, quantity, min_quantity, name_he || null, name_pt || null, supplier_id||null, manufacturer_id||null, is_parent ? 1 : 0, variant_attrs||null, id],
     (err) => {
       if (err) return res.status(500).json({ error: err.message });
       autoResolveStockAlerts(id);

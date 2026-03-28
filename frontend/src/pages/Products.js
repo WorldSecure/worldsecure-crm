@@ -24,6 +24,13 @@ const formatNumber = (num) => {
   });
 };
 
+// מכפלה קרטזית לדגמים
+const cartesian = (arrays) => arrays.reduce((acc, arr) => {
+  const res = [];
+  acc.forEach(a => arr.forEach(b => res.push([...a, b])));
+  return res;
+}, [[]]);
+
 function Products() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
@@ -43,6 +50,11 @@ function Products() {
   const [manufacturers, setManufacturers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showVariantsModal, setShowVariantsModal] = useState(false);
+  const [variantAttrs, setVariantAttrs] = useState([
+    { name: '', values: [''] },
+    { name: '', values: [''] }
+  ]);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showSubcategoryModal, setShowSubcategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
@@ -647,6 +659,119 @@ function Products() {
         )}
       </div>
 
+      {showVariantsModal && (() => {
+        // חישוב category/subcategory prefix
+        const cat = categories.find(c => String(c.id) === String(formData.category_id));
+        const sub = subcategories.find(s => String(s.id) === String(formData.subcategory_id));
+        const extractCode = (name, fallback) => { const match = name?.match(/\(([^)]+)\)$/); return match ? match[1].toUpperCase() : (name || fallback).slice(0,3).toUpperCase(); };
+        const catCode = extractCode(cat?.name, 'CAT');
+        const subCode = extractCode(sub?.name, 'SUB');
+        const prefix = `${catCode}-${subCode}`;
+
+        // תצוגה מקדימה — מכפלה קרטזית
+        const filledAttrs = variantAttrs.filter(a => a.name.trim() && a.values.some(v => v.trim()));
+        const valueSets = filledAttrs.map(a => a.values.filter(v => v.trim()).map(v => v.trim().toUpperCase()));
+        const combos = valueSets.length > 0 ? cartesian(valueSets) : [];
+        const skuPreviews = combos.map(combo => {
+          const parts = filledAttrs.map((a, i) => combo[i]);
+          return `${prefix}-${parts.join('-')}`;
+        });
+
+        return (
+          <div className="modal-overlay" style={{ zIndex: 1100 }}>
+            <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '560px' }}>
+              <div className="modal-header">
+                <h3 className="modal-title">⭐ {t('variant_attrs_title') || 'הגדרת מאפייני דגמים'}</h3>
+                <button className="modal-close" onClick={() => setShowVariantsModal(false)}>×</button>
+              </div>
+              <div className="modal-body">
+                {/* דוגמה */}
+                <div style={{ background: '#f0f4ff', border: '1px solid #c7d7fa', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1.25rem', fontSize: '0.82rem', color: '#334' }}>
+                  <strong>📋 {t('example') || 'דוגמה'}:</strong><br/>
+                  <span style={{ fontFamily: 'monospace' }}>
+                    {t('variant_example_1') || 'צבע: BLK BLU GRN | מידה: UNI'}<br/>
+                    → {prefix}-BLK-UNI &nbsp; {prefix}-BLU-UNI &nbsp; {prefix}-GRN-UNI
+                  </span>
+                </div>
+
+                {/* שדות מאפיינים */}
+                {variantAttrs.map((attr, ai) => (
+                  <div key={ai} style={{ border: '1px solid #dee2e6', borderRadius: '8px', padding: '0.75rem', marginBottom: '0.75rem', background: '#fafafa' }}>
+                    <div style={{ marginBottom: '0.5rem' }}>
+                      <label className="form-label" style={{ fontSize: '0.8rem' }}>{t('attr_name') || 'שם מאפיין'} {ai + 1}</label>
+                      <input className="form-input" style={{ fontSize: '0.85rem' }}
+                        placeholder={ai === 0 ? (t('attr_name_placeholder_1') || 'למשל: צבע / Color') : (t('attr_name_placeholder_2') || 'למשל: מידה / Size')}
+                        value={attr.name}
+                        onChange={(e) => {
+                          const updated = [...variantAttrs];
+                          updated[ai] = { ...updated[ai], name: e.target.value };
+                          setVariantAttrs(updated);
+                        }} />
+                    </div>
+                    <label className="form-label" style={{ fontSize: '0.8rem' }}>{t('attr_values') || 'ערכים'}</label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                      {attr.values.map((val, vi) => (
+                        <div key={vi} style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                          <input className="form-input" style={{ width: '70px', fontSize: '0.85rem', fontFamily: 'monospace', textTransform: 'uppercase', padding: '0.3rem 0.4rem' }}
+                            placeholder="BLK"
+                            maxLength={5}
+                            value={val}
+                            onChange={(e) => {
+                              const updated = [...variantAttrs];
+                              updated[ai].values[vi] = e.target.value.toUpperCase();
+                              setVariantAttrs(updated);
+                            }} />
+                          {attr.values.length > 1 && (
+                            <button type="button" onClick={() => {
+                              const updated = [...variantAttrs];
+                              updated[ai].values = updated[ai].values.filter((_, i) => i !== vi);
+                              setVariantAttrs(updated);
+                            }} style={{ background: 'none', border: 'none', color: '#dc3545', cursor: 'pointer', fontSize: '1rem', lineHeight: 1 }}>×</button>
+                          )}
+                        </div>
+                      ))}
+                      <button type="button" onClick={() => {
+                        const updated = [...variantAttrs];
+                        updated[ai].values = [...updated[ai].values, ''];
+                        setVariantAttrs(updated);
+                      }} style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', border: '1px dashed #007bff', borderRadius: '4px', background: 'white', color: '#007bff', cursor: 'pointer' }}>
+                        + {t('add_value') || 'ערך'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* תצוגה מקדימה */}
+                {skuPreviews.length > 0 && (
+                  <div style={{ background: '#f0fff4', border: '1px solid #28a745', borderRadius: '8px', padding: '0.75rem 1rem', marginTop: '0.5rem' }}>
+                    <strong style={{ fontSize: '0.85rem' }}>👁️ {t('sku_preview') || 'תצוגה מקדימה'} ({skuPreviews.length} {t('variants') || 'דגמים'}):</strong>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.4rem' }}>
+                      {skuPreviews.map((sku, i) => (
+                        <span key={i} style={{ background: '#d4edda', borderRadius: '4px', padding: '0.2rem 0.5rem', fontFamily: 'monospace', fontSize: '0.8rem' }}>✅ {sku}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-primary" onClick={() => {
+                  if (filledAttrs.length === 0) { alert(t('variant_attrs_required') || 'יש להגדיר לפחות מאפיין אחד'); return; }
+                  // שמור את המאפיינים ב-formData
+                  const attrsStr = filledAttrs.map(a => `[${a.name}=${a.values.filter(v=>v.trim()).join(',')}]`).join('');
+                  setFormData(f => ({ ...f, variant_attrs: attrsStr }));
+                  setShowVariantsModal(false);
+                }}>
+                  💾 {t('save') || 'שמור'}
+                </button>
+                <button className="btn btn-secondary" onClick={() => setShowVariantsModal(false)}>
+                  {t('cancel') || 'ביטול'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {showModal && (
         <div className="modal-overlay">
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -669,13 +794,32 @@ function Products() {
                   <input
                     type="checkbox"
                     checked={formData.is_parent}
-                    onChange={(e) => setFormData({ ...formData, is_parent: e.target.checked })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, is_parent: e.target.checked, variant_attrs: '' });
+                      if (e.target.checked) {
+                        setVariantAttrs([{ name: '', values: [''] }, { name: '', values: [''] }]);
+                        setShowVariantsModal(true);
+                      }
+                    }}
                     style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                   />
                   <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>
                     ⭐ {t('is_parent_product') || 'מוצר אב (עם דגמים)'}
                   </span>
                 </label>
+                {formData.is_parent && (
+                  <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    {formData.variant_attrs && (
+                      <span style={{ fontFamily: 'monospace', fontSize: '0.82rem', background: '#f0fff4', border: '1px solid #28a745', borderRadius: '4px', padding: '0.2rem 0.5rem' }}>
+                        {formData.variant_attrs}
+                      </span>
+                    )}
+                    <button type="button" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.7rem' }}
+                      onClick={() => setShowVariantsModal(true)}>
+                      ✏️ {t('define_variants') || 'הגדר דגמים'}
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="form-row">
                 <div className="form-group">
@@ -683,10 +827,11 @@ function Products() {
                   <input
                     type="text"
                     className="form-input"
-                    style={{ fontFamily: 'monospace', letterSpacing: '0.05em' }}
+                    style={{ fontFamily: 'monospace', letterSpacing: '0.05em', background: formData.is_parent ? '#f0f0f0' : '', color: formData.is_parent ? '#999' : '' }}
                     value={formData.sku}
                     onChange={(e) => setFormData({...formData, sku: e.target.value.toUpperCase()})}
                     placeholder="ABC-123-XYZ-456"
+                    disabled={formData.is_parent}
                     required
                   />
                 </div>
@@ -942,8 +1087,10 @@ function Products() {
                   <input
                     type="number"
                     className="form-input"
-                    value={formData.quantity}
+                    style={{ background: formData.is_parent ? '#f0f0f0' : '', color: formData.is_parent ? '#999' : '' }}
+                    value={formData.is_parent ? 0 : formData.quantity}
                     onChange={(e) => setFormData({...formData, quantity: e.target.value})}
+                    disabled={formData.is_parent}
                   />
                 </div>
 
