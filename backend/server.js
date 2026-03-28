@@ -990,6 +990,8 @@ app.post('/api/products/translate', authenticateToken, async (req, res) => {
 
 app.post('/api/products', authenticateToken, (req, res) => {
   const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs } = req.body;
+
+  if (!sku || !sku.trim()) return res.status(400).json({ error: 'SKU is required' });
   
   db.run(
     `INSERT INTO products (sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs, meta_updated_at) 

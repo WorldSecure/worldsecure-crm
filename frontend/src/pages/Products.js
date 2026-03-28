@@ -279,6 +279,8 @@ function Products() {
 
   const getFilteredSortedProducts = () => {
     let filtered = products.filter(product => {
+      // הסתר דגמים (מוצרים עם parent_id) — הם מוצגים רק בתוך שורת האב
+      if (product.parent_id) return false;
       const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.sku.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesSku = !skuFilter || product.sku.toUpperCase().startsWith(skuFilter.toUpperCase());
@@ -333,7 +335,24 @@ function Products() {
 
       // name (אנגלית) תמיד נשמר
       const finalName = language === 'en' ? formData.name : name_en;
-      const payload = { ...formData, name: finalName, name_he, name_pt };
+
+      // בניית SKU למוצר אב אוטומטית
+      let finalSku = formData.sku;
+      if (formData.is_parent && !editingProduct) {
+        const cat = categories.find(c => String(c.id) === String(formData.category_id));
+        const sub = subcategories.find(s => String(s.id) === String(formData.subcategory_id));
+        const extractCode = (name, fallback) => {
+          const match = name?.match(/\(([^)]+)\)$/);
+          return match ? match[1].toUpperCase() : (name || fallback).slice(0,3).toUpperCase();
+        };
+        const catCode = extractCode(cat?.name, 'CAT');
+        const subCode = extractCode(sub?.name, 'SUB');
+        // מוסיף timestamp קצר למניעת כפילויות
+        const ts = Date.now().toString().slice(-4);
+        finalSku = `${catCode}-${subCode}-PAR-${ts}`;
+      }
+
+      const payload = { ...formData, sku: finalSku, name: finalName, name_he, name_pt };
 
       if (editingProduct) {
         await axios.put(`/api/products/${editingProduct.id}`, payload);
