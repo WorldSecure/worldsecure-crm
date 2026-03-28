@@ -151,11 +151,16 @@ function Settings() {
       reader.onloadend = async () => {
         const base64 = reader.result; // data:image/png;base64,...
         try {
-          await axios.post('/api/company/logo-base64', { logo_base64: base64 });
+          const response = await axios.post('/api/company/logo-base64', { logo_base64: base64 });
           alert(t('success'));
           setLogoFile(null);
-          setLogoPreview(base64);
-          setCompanyData(prev => ({ ...prev, logo_base64: base64 }));
+          // השתמש ב-path שחזר מהשרת — לא ב-base64 הגדול
+          const logoPath = response.data.path;
+          const previewUrl = logoPath
+            ? `${axios.defaults.baseURL}${logoPath}`
+            : base64;
+          setLogoPreview(previewUrl);
+          setCompanyData(prev => ({ ...prev, logo_path: logoPath, logo_base64: null }));
         } catch (error) {
           alert(t('error') + ': ' + (error.response?.data?.error || error.message));
         }
@@ -930,7 +935,7 @@ function Settings() {
                   <button type="button" title="Underline" onMouseDown={(e) => { e.preventDefault(); document.getElementById('sig-frame')?.contentDocument?.execCommand('underline'); }}
                     style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', textDecoration: 'underline', cursor: 'pointer' }}>U</button>
                   <div style={{ width: '1px', background: '#ccc', margin: '0 0.2rem' }} />
-                  <select onMouseDown={(e) => e.preventDefault()} onChange={(e) => { document.getElementById('sig-frame')?.contentDocument?.execCommand('fontSize', false, e.target.value); e.target.value = ''; }}
+                  <select onChange={(e) => { document.getElementById('sig-frame')?.contentDocument?.execCommand('fontSize', false, e.target.value); e.target.value = ''; }}
                     style={{ padding: '0.3rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.8rem' }}>
                     <option value="">גודל</option>
                     <option value="1">10px</option><option value="2">13px</option><option value="3">16px</option>
@@ -1100,7 +1105,7 @@ function Settings() {
                   <button type="button" onMouseDown={(e) => { e.preventDefault(); document.getElementById('out-sig-frame')?.contentDocument?.execCommand('underline'); }}
                     style={{ padding: '0.3rem 0.6rem', border: '1px solid #ccc', borderRadius: '4px', background: 'white', textDecoration: 'underline', cursor: 'pointer' }}>U</button>
                   <div style={{ width: '1px', background: '#ccc', margin: '0 0.2rem' }} />
-                  <select onMouseDown={(e) => e.preventDefault()} onChange={(e) => { document.getElementById('out-sig-frame')?.contentDocument?.execCommand('fontSize', false, e.target.value); e.target.value = ''; }}
+                  <select onChange={(e) => { document.getElementById('out-sig-frame')?.contentDocument?.execCommand('fontSize', false, e.target.value); e.target.value = ''; }}
                     style={{ padding: '0.3rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.8rem' }}>
                     <option value="">גודל</option>
                     <option value="1">10px</option><option value="2">13px</option><option value="3">16px</option>
