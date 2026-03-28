@@ -34,6 +34,7 @@ export const pt = {
   manufacturers: 'Fabricantes',
   add_manufacturer: 'Adicionar Fabricante',
   edit_manufacturer: 'Editar Fabricante',
+  is_parent_product: 'Produto Pai (com variantes)',
   customers: 'Clientes',
   reports: 'Relatórios',
   settings: 'Configurações',

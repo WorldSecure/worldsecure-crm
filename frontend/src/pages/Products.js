@@ -75,7 +75,8 @@ function Products() {
     quantity: 0,
     min_quantity: 0,
     supplier_id: '',
-    manufacturer_id: ''
+    manufacturer_id: '',
+    is_parent: false
   });
 
   useEffect(() => {
@@ -348,7 +349,8 @@ function Products() {
       quantity: product.quantity,
       min_quantity: product.min_quantity,
       supplier_id: product.supplier_id || '',
-      manufacturer_id: product.manufacturer_id || ''
+      manufacturer_id: product.manufacturer_id || '',
+      is_parent: product.is_parent ? true : false
     });
     setShowAddPrice(false);
     setNewPrice({ price: '', currency: product.currency || 'ILS', effective_date: new Date().toISOString().split('T')[0] });
@@ -530,6 +532,7 @@ function Products() {
                   {/* Row 1: Name + stock badge */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
                     <span style={{ fontWeight: '700', fontSize: '1rem' }}>
+                      {product.is_parent ? <span title={t('is_parent_product') || 'מוצר אב'}>⭐ </span> : null}
                       {getProductName(product, language)}
                     </span>
                     {product.quantity <= product.min_quantity ? (
@@ -601,7 +604,10 @@ function Products() {
                 sortedProducts.map(product => (
                   <tr key={product.id}>
                     <td>{product.sku}</td>
-                    <td>{getProductName(product, language)}</td>
+                    <td>
+                      {product.is_parent ? <span title={t('is_parent_product') || 'מוצר אב'}>⭐ </span> : null}
+                      {getProductName(product, language)}
+                    </td>
                     <td>{getCategoryName(product, language)}</td>
                     <td>
                       {product.quantity <= product.min_quantity ? (
@@ -657,6 +663,20 @@ function Products() {
             </div>
 
             <form onSubmit={handleSubmit}>
+              {/* מוצר אב */}
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', userSelect: 'none' }}>
+                  <input
+                    type="checkbox"
+                    checked={formData.is_parent}
+                    onChange={(e) => setFormData({ ...formData, is_parent: e.target.checked })}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                    ⭐ {t('is_parent_product') || 'מוצר אב (עם דגמים)'}
+                  </span>
+                </label>
+              </div>
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">{t('sku')} * <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: 400 }}>XXX-XXX-XXX-XXX</span></label>

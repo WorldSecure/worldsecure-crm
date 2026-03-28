@@ -34,6 +34,7 @@ export const he = {
   manufacturers: 'יצרנים',
   add_manufacturer: 'הוסף יצרן',
   edit_manufacturer: 'ערוך יצרן',
+  is_parent_product: 'מוצר אב (עם דגמים)',
   customers: 'לקוחות',
   reports: 'דוחות',
   settings: 'הגדרות',

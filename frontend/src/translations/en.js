@@ -34,6 +34,7 @@ export const en = {
   manufacturers: 'Manufacturers',
   add_manufacturer: 'Add Manufacturer',
   edit_manufacturer: 'Edit Manufacturer',
+  is_parent_product: 'Parent Product (with variants)',
   customers: 'Customers',
   reports: 'Reports',
   settings: 'Settings',
