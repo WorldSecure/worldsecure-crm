@@ -132,6 +132,7 @@ async function syncLocalToCloud() {
     await syncEntityToCloud('manufacturers', 'SELECT id, name, address, phone, email, tax_id, country, contact_person, notes, created_at, updated_at FROM manufacturers');
     await syncEmailSignaturesToCloud();
     await syncOutboundSignaturesToCloud();
+    await syncProformaSignaturesToCloud();
     await syncInboundToCloud();
     await syncOutboundToCloud();
     await syncSupportToCloud();
@@ -422,6 +423,7 @@ async function syncCloudToLocal() {
     await syncNotificationsFromCloud();
     await syncDocumentsFromCloud();
     await syncOutboundSignaturesFromCloud();
+    await syncProformaSignaturesFromCloud();
     log('✅ CLOUD → LOCAL complete');
   } catch (err) {
     log(`❌ CLOUD → LOCAL error: ${err.message}`);
@@ -960,6 +962,38 @@ async function syncOutboundSignaturesFromCloud() {
     ).catch(() => {});
   }
   if (rows.length > 0) log('  ↳ outbound-signatures from cloud: ' + rows.length + ' synced');
+}
+
+// ── Proforma Signatures סינק דו-כיווני ───────────────────────────────────────
+async function syncProformaSignaturesToCloud() {
+  const rows = await sqliteAll('SELECT * FROM proforma_signatures ORDER BY id').catch(() => []);
+  if (!rows.length) return;
+  const result = await apiRequest('POST', '/api/sync/proforma-signatures', { rows });
+  if (result.status === 200) log('  ↳ proforma-signatures to cloud: ' + rows.length + ' synced');
+  else log('  ⚠ proforma-signatures to cloud: ' + JSON.stringify(result.body));
+}
+
+async function syncProformaSignaturesFromCloud() {
+  const result = await apiRequest('GET', '/api/sync/pull/proforma-signatures');
+  if (result.status !== 200) { log('  ⚠ pull proforma-signatures: ' + JSON.stringify(result.body)); return; }
+  const rows = result.body || [];
+  await sqliteRun(`CREATE TABLE IF NOT EXISTS proforma_signatures (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    content TEXT NOT NULL,
+    lang TEXT DEFAULT 'he',
+    is_active INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`).catch(() => {});
+  await sqliteRun(`ALTER TABLE proforma_signatures ADD COLUMN lang TEXT DEFAULT 'he'`).catch(() => {});
+  await sqliteRun('DELETE FROM proforma_signatures').catch(() => {});
+  for (const r of rows) {
+    await sqliteRun(
+      'INSERT OR REPLACE INTO proforma_signatures (id, name, content, lang, is_active, created_at) VALUES (?,?,?,?,?,?)',
+      [r.id, r.name, r.content, r.lang || 'he', r.is_active ? 1 : 0, r.created_at || null]
+    ).catch(() => {});
+  }
+  if (rows.length > 0) log('  ↳ proforma-signatures from cloud: ' + rows.length + ' synced');
 }
 
 // ── Warehouse Alerts — דו-כיווני ─────────────────────────────────────────────
