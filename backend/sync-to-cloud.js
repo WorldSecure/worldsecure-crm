@@ -782,6 +782,33 @@ async function pullDeletionsFromCloud() {
         await sqliteRun('DELETE FROM deleted_outbound WHERE id = ?', [d.entity_id]).catch(() => {});
         handled.push(d);
         log(`  ↳ pulled deletion: outbound #${d.entity_id}`);
+      } else if (d.entity_type === 'product') {
+        // מחק קודם דגמים (variants) שתלויים באב, ואז את האב עצמו
+        await sqliteRun('DELETE FROM products WHERE parent_id = ?', [d.entity_id]).catch(() => {});
+        await sqliteRun('DELETE FROM products WHERE id = ?', [d.entity_id]).catch(() => {});
+        handled.push(d);
+        log(`  ↳ pulled deletion: product #${d.entity_id}`);
+      } else if (d.entity_type === 'customer') {
+        await sqliteRun('DELETE FROM customers WHERE id = ?', [d.entity_id]).catch(() => {});
+        handled.push(d);
+        log(`  ↳ pulled deletion: customer #${d.entity_id}`);
+      } else if (d.entity_type === 'supplier') {
+        await sqliteRun('DELETE FROM suppliers WHERE id = ?', [d.entity_id]).catch(() => {});
+        handled.push(d);
+        log(`  ↳ pulled deletion: supplier #${d.entity_id}`);
+      } else if (d.entity_type === 'manufacturer') {
+        await sqliteRun('DELETE FROM manufacturers WHERE id = ?', [d.entity_id]).catch(() => {});
+        handled.push(d);
+        log(`  ↳ pulled deletion: manufacturer #${d.entity_id}`);
+      } else if (d.entity_type === 'category') {
+        await sqliteRun('DELETE FROM subcategories WHERE category_id = ?', [d.entity_id]).catch(() => {});
+        await sqliteRun('DELETE FROM categories WHERE id = ?', [d.entity_id]).catch(() => {});
+        handled.push(d);
+        log(`  ↳ pulled deletion: category #${d.entity_id}`);
+      } else if (d.entity_type === 'subcategory') {
+        await sqliteRun('DELETE FROM subcategories WHERE id = ?', [d.entity_id]).catch(() => {});
+        handled.push(d);
+        log(`  ↳ pulled deletion: subcategory #${d.entity_id}`);
       }
     }
 

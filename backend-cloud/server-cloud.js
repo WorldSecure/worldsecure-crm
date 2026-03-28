@@ -302,6 +302,7 @@ app.delete('/api/categories/:id', authenticateToken, async (req, res) => {
   try {
     const used = await query('SELECT COUNT(*) as count FROM products WHERE category_id=$1', [req.params.id]);
     if (parseInt(used.rows[0].count) > 0) return res.status(400).json({ error: 'Cannot delete category with products' });
+    await query(`INSERT INTO pending_deletions (entity_type, entity_id, deleted_at) VALUES ('category', $1, NOW()) ON CONFLICT DO NOTHING`, [req.params.id]).catch(() => {});
     await query('DELETE FROM categories WHERE id=$1', [req.params.id]);
     res.json({ message: 'deleted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -352,6 +353,7 @@ app.delete('/api/subcategories/:id', authenticateToken, async (req, res) => {
   try {
     const used = await query('SELECT COUNT(*) as count FROM products WHERE subcategory_id=$1', [req.params.id]);
     if (parseInt(used.rows[0].count) > 0) return res.status(400).json({ error: 'Cannot delete subcategory with products' });
+    await query(`INSERT INTO pending_deletions (entity_type, entity_id, deleted_at) VALUES ('subcategory', $1, NOW()) ON CONFLICT DO NOTHING`, [req.params.id]).catch(() => {});
     await query('DELETE FROM subcategories WHERE id=$1', [req.params.id]);
     res.json({ message: 'deleted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -388,6 +390,7 @@ app.put('/api/customers/:id', authenticateToken, adminOnly, async (req, res) => 
 
 app.delete('/api/customers/:id', authenticateToken, adminOnly, async (req, res) => {
   try {
+    await query(`INSERT INTO pending_deletions (entity_type, entity_id, deleted_at) VALUES ('customer', $1, NOW()) ON CONFLICT DO NOTHING`, [req.params.id]).catch(() => {});
     await query('DELETE FROM customers WHERE id=$1', [req.params.id]);
     res.json({ message: 'Customer deleted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -482,6 +485,10 @@ app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
 app.delete('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
   try {
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS parent_id INTEGER').catch(() => {});
+    // שמור ב-pending_deletions כדי שהמקומי ימחק גם הוא (דו-כיווניות)
+    await query(`
+      INSERT INTO pending_deletions (entity_type, entity_id, deleted_at)
+      VALUES ('product', $1, NOW()) ON CONFLICT DO NOTHING`, [req.params.id]).catch(() => {});
     await query('DELETE FROM products WHERE parent_id=$1', [req.params.id]);
     await query('DELETE FROM products WHERE id=$1', [req.params.id]);
     res.json({ message: 'Product deleted' });
@@ -515,6 +522,7 @@ app.put('/api/suppliers/:id', authenticateToken, adminOnly, async (req, res) => 
 
 app.delete('/api/suppliers/:id', authenticateToken, adminOnly, async (req, res) => {
   try {
+    await query(`INSERT INTO pending_deletions (entity_type, entity_id, deleted_at) VALUES ('supplier', $1, NOW()) ON CONFLICT DO NOTHING`, [req.params.id]).catch(() => {});
     await query('DELETE FROM suppliers WHERE id=$1', [req.params.id]);
     res.json({ message: 'Supplier deleted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -559,6 +567,7 @@ app.put('/api/manufacturers/:id', authenticateToken, adminOnly, async (req, res)
 
 app.delete('/api/manufacturers/:id', authenticateToken, adminOnly, async (req, res) => {
   try {
+    await query(`INSERT INTO pending_deletions (entity_type, entity_id, deleted_at) VALUES ('manufacturer', $1, NOW()) ON CONFLICT DO NOTHING`, [req.params.id]).catch(() => {});
     await query('DELETE FROM manufacturers WHERE id=$1', [req.params.id]);
     res.json({ message: 'Manufacturer deleted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -2589,10 +2598,7 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
           [r.id, r.name, r.contact_person||null, r.address||null, r.phone||null, r.email||null,
            r.tax_id||null, r.country||null, r.is_sensitive ? true : false, r.notes||null, r.created_at, r.updated_at||null]);
       }
-      if (rows.length > 0) {
-        const ids = rows.map(r => r.id);
-        await client.query(`DELETE FROM customers WHERE id NOT IN (${ids.map((_,i)=>`$${i+1}`).join(',')})`, ids);
-      }
+      // ❌ הוסר DELETE NOT IN — מחיקות מנוהלות דרך pending_deletions בלבד
     }
 
     if (entity === 'products') {
@@ -2645,10 +2651,8 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
            qty, minQty, localQtyTs||null, localMetaTs||null, r.supplier_id||null, r.manufacturer_id||null,
            r.is_parent ? true : false, r.variant_attrs||null, r.parent_id||null, r.created_at]);
       }
-      if (rows.length > 0) {
-        const ids = rows.map(r => r.id);
-        await client.query(`DELETE FROM products WHERE id NOT IN (${ids.map((_,i)=>`$${i+1}`).join(',')})`, ids);
-      }
+      // ❌ הוסר DELETE WHERE id NOT IN — מחיקות מוצרים מנוהלות דרך pending_deletions בלבד
+      //    כדי לשמור על דו-כיווניות: מוצרים שנוצרו בענן לא יימחקו בסינק
     }
 
     if (entity === 'suppliers') {
@@ -2670,10 +2674,7 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
           [r.id, r.name, r.address||null, r.phone||null, r.email||null,
            r.tax_id||null, r.country||null, r.contact_person||null, r.notes||null, r.created_at, r.updated_at||null]);
       }
-      if (rows.length > 0) {
-        const ids = rows.map(r => r.id);
-        await client.query(`DELETE FROM suppliers WHERE id NOT IN (${ids.map((_,i)=>`$${i+1}`).join(',')})`, ids);
-      }
+      // ❌ הוסר DELETE NOT IN — מחיקות מנוהלות דרך pending_deletions בלבד
     }
 
     if (entity === 'manufacturers') {
@@ -2700,10 +2701,7 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
           [r.id, r.name, r.address||null, r.phone||null, r.email||null,
            r.tax_id||null, r.country||null, r.contact_person||null, r.notes||null, r.created_at, r.updated_at||null]);
       }
-      if (rows.length > 0) {
-        const ids = rows.map(r => r.id);
-        await client.query(`DELETE FROM manufacturers WHERE id NOT IN (${ids.map((_,i)=>`$${i+1}`).join(',')})`, ids);
-      }
+      // ❌ הוסר DELETE NOT IN — מחיקות מנוהלות דרך pending_deletions בלבד
       await client.query(`SELECT setval('manufacturers_id_seq', COALESCE((SELECT MAX(id) FROM manufacturers), 0) + 1, false)`).catch(() => {});
     }
 
