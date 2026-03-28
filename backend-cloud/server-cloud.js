@@ -224,8 +224,33 @@ app.get('/api/products', authenticateToken, async (req, res) => {
 
 app.get('/api/products/low-stock', authenticateToken, async (req, res) => {
   try {
-    const r = await query('SELECT * FROM products WHERE quantity <= min_quantity ORDER BY name');
+    const r = await query('SELECT * FROM products WHERE quantity <= min_quantity AND (parent_id IS NULL OR parent_id = 0) AND is_parent = FALSE ORDER BY name');
     res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Product Variants ──────────────────────────────────────────────────────────
+app.get('/api/products/:id/variants', authenticateToken, async (req, res) => {
+  try {
+    const r = await query('SELECT * FROM products WHERE parent_id=$1 ORDER BY sku', [req.params.id]);
+    res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/products/:id/quantity', authenticateToken, async (req, res) => {
+  const { quantity, price, unit, currency } = req.body;
+  const updates = [];
+  const params = [];
+  if (quantity !== undefined) { updates.push(`quantity=$${params.push(parseInt(quantity))}`); updates.push('quantity_updated_at=NOW()'); }
+  if (price !== undefined) { updates.push(`price=$${params.push(parseFloat(price))}`); }
+  if (unit !== undefined) { updates.push(`unit=$${params.push(unit)}`); }
+  if (currency !== undefined) { updates.push(`currency=$${params.push(currency)}`); }
+  if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update' });
+  updates.push('meta_updated_at=NOW()');
+  params.push(req.params.id);
+  try {
+    await query(`UPDATE products SET ${updates.join(', ')} WHERE id=$${params.length}`, params);
+    res.json({ message: 'Updated' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -370,36 +395,84 @@ app.delete('/api/customers/:id', authenticateToken, adminOnly, async (req, res) 
 
 // ── Products write ────────────────────────────────────────────────────────────
 app.post('/api/products', authenticateToken, adminOnly, async (req, res) => {
-  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent } = req.body;
+  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs, variant_sku_prefix } = req.body;
   try {
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS meta_updated_at TIMESTAMPTZ').catch(() => {});
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier_id INTEGER').catch(() => {});
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS manufacturer_id INTEGER').catch(() => {});
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS is_parent BOOLEAN DEFAULT FALSE').catch(() => {});
+    await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS variant_attrs TEXT').catch(() => {});
+    await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS parent_id INTEGER').catch(() => {});
+
+    // בנה SKU ייחודי לאב עם counter
+    let finalSku = sku;
+    if (is_parent) {
+      const cnt = await query(`SELECT COUNT(*) as cnt FROM products WHERE sku LIKE $1 AND is_parent = TRUE`, [`${sku}%`]);
+      const num = String(parseInt(cnt.rows[0]?.cnt || 0) + 1).padStart(3, '0');
+      finalSku = `${sku}-${num}`;
+    }
+
     const r = await query(
-      'INSERT INTO products (sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, meta_updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW()) RETURNING *',
-      [sku, name, description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null, quantity||0, min_quantity||0, name_he||null, name_pt||null, supplier_id||null, manufacturer_id||null, is_parent ? true : false]
+      'INSERT INTO products (sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs, meta_updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW()) RETURNING *',
+      [finalSku, name, description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null, quantity||0, min_quantity||0, name_he||null, name_pt||null, supplier_id||null, manufacturer_id||null, is_parent ? true : false, variant_attrs||null]
     );
-    res.json(r.rows[0]);
+    const parentId = r.rows[0].id;
+
+    // יצירת דגמים אוטומטית
+    if (is_parent && variant_attrs) {
+      try {
+        const attrPattern = /\[([^\]=]+)=([^\]]+)\]/g;
+        const attrs = [];
+        let match;
+        while ((match = attrPattern.exec(variant_attrs)) !== null) {
+          attrs.push({ name: match[1].trim(), values: match[2].split(',').map(v => v.trim()).filter(Boolean) });
+        }
+        if (attrs.length > 0) {
+          const cartesian = (arrays) => arrays.reduce((acc, arr) => {
+            const res = []; acc.forEach(a => arr.forEach(b => res.push([...a, b]))); return res;
+          }, [[]]);
+          const combos = cartesian(attrs.map(a => a.values));
+          const skuBase = variant_sku_prefix || finalSku;
+          for (const combo of combos) {
+            const variantSku = `${skuBase}-${combo.join('-')}`;
+            const existing = await query('SELECT id FROM products WHERE sku=$1', [variantSku]);
+            if (existing.rows.length > 0) {
+              await query('UPDATE products SET parent_id=$1 WHERE id=$2 AND (parent_id IS NULL OR parent_id=0)', [parentId, existing.rows[0].id]);
+            } else {
+              await query(
+                `INSERT INTO products (sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, supplier_id, manufacturer_id, parent_id, meta_updated_at)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,$11,$12,$13,$14,NOW())`,
+                [variantSku, `${name} (${combo.join(' ')})`, name_he ? `${name_he} (${combo.join(' ')})` : null, name_pt ? `${name_pt} (${combo.join(' ')})` : null,
+                 description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null,
+                 min_quantity||0, supplier_id||null, manufacturer_id||null, parentId]
+              );
+            }
+          }
+        }
+      } catch (e) { console.error('Error creating variants:', e.message); }
+    }
+
+    res.json({ ...r.rows[0], sku: finalSku });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
-  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, _skip_quantity } = req.body;
+  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs, _skip_quantity } = req.body;
   try {
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS meta_updated_at TIMESTAMPTZ').catch(() => {});
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier_id INTEGER').catch(() => {});
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS manufacturer_id INTEGER').catch(() => {});
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS is_parent BOOLEAN DEFAULT FALSE').catch(() => {});
+    await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS variant_attrs TEXT').catch(() => {});
     if (_skip_quantity) {
       await query(
-        'UPDATE products SET sku=$1, name=$2, description=$3, category_id=$4, subcategory_id=$5, price=$6, currency=$7, unit=$8, min_quantity=$9, name_he=$10, name_pt=$11, supplier_id=$12, manufacturer_id=$13, is_parent=$14, meta_updated_at=$15 WHERE id=$16',
-        [sku, name, description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null, min_quantity||0, name_he||null, name_pt||null, supplier_id||null, manufacturer_id||null, is_parent ? true : false, req.body.meta_updated_at||null, req.params.id]
+        'UPDATE products SET sku=$1, name=$2, description=$3, category_id=$4, subcategory_id=$5, price=$6, currency=$7, unit=$8, min_quantity=$9, name_he=$10, name_pt=$11, supplier_id=$12, manufacturer_id=$13, is_parent=$14, variant_attrs=$15, meta_updated_at=$16 WHERE id=$17',
+        [sku, name, description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null, min_quantity||0, name_he||null, name_pt||null, supplier_id||null, manufacturer_id||null, is_parent ? true : false, variant_attrs||null, req.body.meta_updated_at||null, req.params.id]
       );
     } else {
       await query(
-        'UPDATE products SET sku=$1, name=$2, description=$3, category_id=$4, subcategory_id=$5, price=$6, currency=$7, unit=$8, quantity=$9, min_quantity=$10, name_he=$11, name_pt=$12, supplier_id=$13, manufacturer_id=$14, is_parent=$15, quantity_updated_at=NOW(), meta_updated_at=NOW() WHERE id=$16',
-        [sku, name, description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null, quantity||0, min_quantity||0, name_he||null, name_pt||null, supplier_id||null, manufacturer_id||null, is_parent ? true : false, req.params.id]
+        'UPDATE products SET sku=$1, name=$2, description=$3, category_id=$4, subcategory_id=$5, price=$6, currency=$7, unit=$8, quantity=$9, min_quantity=$10, name_he=$11, name_pt=$12, supplier_id=$13, manufacturer_id=$14, is_parent=$15, variant_attrs=$16, quantity_updated_at=NOW(), meta_updated_at=NOW() WHERE id=$17',
+        [sku, name, description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null, quantity||0, min_quantity||0, name_he||null, name_pt||null, supplier_id||null, manufacturer_id||null, is_parent ? true : false, variant_attrs||null, req.params.id]
       );
     }
     res.json({ message: 'Product updated' });
@@ -408,6 +481,7 @@ app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
 
 app.delete('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
   try {
+    await query('DELETE FROM products WHERE parent_id=$1', [req.params.id]);
     await query('DELETE FROM products WHERE id=$1', [req.params.id]);
     res.json({ message: 'Product deleted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
