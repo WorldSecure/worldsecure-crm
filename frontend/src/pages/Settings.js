@@ -940,8 +940,8 @@ function Settings() {
                     border: `2px solid ${sig.is_active ? '#28a745' : '#dee2e6'}`,
                     borderRadius: '8px', padding: '1rem', background: sig.is_active ? '#f0fff4' : 'white'
                   }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ marginBottom: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
                         <strong>{sig.name}</strong>
                         {sig.is_active && <span className="badge badge-success">✓ {t('active') || 'פעילה'}</span>}
                       </div>
@@ -1101,8 +1101,8 @@ function Settings() {
                   const langLabel = sig.lang === 'en' ? 'EN' : sig.lang === 'pt' ? 'PT' : 'HE';
                   return (
                   <div key={sig.id} style={{ border: sig.is_active ? '2px solid #27ae60' : '1px solid #dee2e6', borderRadius: '8px', padding: '0.75rem', background: sig.is_active ? '#f0fff4' : 'white' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ marginBottom: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
                         <span style={{ fontSize: '1.2rem' }}>{langFlag}</span>
                         <span style={{ background: '#e9ecef', borderRadius: '4px', padding: '0.1rem 0.4rem', fontSize: '0.72rem', fontWeight: 700, color: '#555' }}>{langLabel}</span>
                         <strong>{sig.name}</strong>
@@ -1262,8 +1262,8 @@ function Settings() {
                   const langLabel = sig.lang === 'en' ? 'EN' : sig.lang === 'pt' ? 'PT' : 'HE';
                   return (
                   <div key={sig.id} style={{ border: sig.is_active ? '2px solid #27ae60' : '1px solid #dee2e6', borderRadius: '8px', padding: '0.75rem', background: sig.is_active ? '#f0fff4' : 'white' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ marginBottom: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
                         <span style={{ fontSize: '1.2rem' }}>{langFlag}</span>
                         <span style={{ background: '#e9ecef', borderRadius: '4px', padding: '0.1rem 0.4rem', fontSize: '0.72rem', fontWeight: 700, color: '#555' }}>{langLabel}</span>
                         <strong>{sig.name}</strong>
