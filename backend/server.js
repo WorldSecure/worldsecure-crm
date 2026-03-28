@@ -1052,24 +1052,44 @@ app.post('/api/products', authenticateToken, (req, res) => {
             const insertVariant = (combo, index) => {
               if (index >= combos.length) return;
               const baseVariantSku = `${skuBase}-${combo.join('-')}`;
-              // בדוק אם SKU כבר קיים — אם כן, צור SKU ייחודי עם suffix
-              db.all('SELECT sku FROM products WHERE sku LIKE ?', [`${baseVariantSku}%`], (err, rows) => {
-                let variantSku = baseVariantSku;
-                if (rows && rows.length > 0) {
-                  const suffixes = ['A','B','C','D','E','F','G','H'];
-                  for (const s of suffixes) {
-                    const candidate = `${baseVariantSku}-${s}`;
-                    if (!rows.find(r => r.sku === candidate)) { variantSku = candidate; break; }
-                  }
+              // בדוק אם SKU כבר קיים — אם כן, צור SKU ייחודי עם suffix מספרי (1,2,3...)
+              db.get('SELECT id, parent_id FROM products WHERE sku = ?', [baseVariantSku], (err, existing) => {
+                if (existing && existing.parent_id && existing.parent_id !== parentId) {
+                  // SKU תפוס על ידי אב אחר — מצא suffix פנוי
+                  let suffix = 1;
+                  const findSuffix = () => {
+                    const candidate = `${baseVariantSku}${suffix}`;
+                    db.get('SELECT id FROM products WHERE sku = ?', [candidate], (err, row) => {
+                      if (row) { suffix++; findSuffix(); return; }
+                      db.run(
+                        `INSERT INTO products (sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, supplier_id, manufacturer_id, parent_id, meta_updated_at)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, datetime('now'))`,
+                        [candidate, `${name} (${combo.join(' ')})`, name_he ? `${name_he} (${combo.join(' ')})` : null, name_pt ? `${name_pt} (${combo.join(' ')})` : null,
+                         description, category_id, subcategory_id||null, price, currency||'ILS', unit,
+                         min_quantity||0, supplier_id||null, manufacturer_id||null, parentId],
+                        () => insertVariant(combos[index + 1], index + 1)
+                      );
+                    });
+                  };
+                  findSuffix();
+                } else if (existing && !existing.parent_id) {
+                  // SKU קיים בלי אב — קשר לאב הנוכחי
+                  db.run('UPDATE products SET parent_id=? WHERE id=?', [parentId, existing.id],
+                    () => insertVariant(combos[index + 1], index + 1));
+                } else if (!existing) {
+                  // SKU לא קיים — צור חדש
+                  db.run(
+                    `INSERT INTO products (sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, supplier_id, manufacturer_id, parent_id, meta_updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, datetime('now'))`,
+                    [baseVariantSku, `${name} (${combo.join(' ')})`, name_he ? `${name_he} (${combo.join(' ')})` : null, name_pt ? `${name_pt} (${combo.join(' ')})` : null,
+                     description, category_id, subcategory_id||null, price, currency||'ILS', unit,
+                     min_quantity||0, supplier_id||null, manufacturer_id||null, parentId],
+                    () => insertVariant(combos[index + 1], index + 1)
+                  );
+                } else {
+                  // כבר קיים ומקושר לאב הזה — דלג
+                  insertVariant(combos[index + 1], index + 1);
                 }
-                db.run(
-                  `INSERT INTO products (sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, supplier_id, manufacturer_id, parent_id, meta_updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, datetime('now'))`,
-                  [variantSku, `${name} (${combo.join(' ')})`, name_he ? `${name_he} (${combo.join(' ')})` : null, name_pt ? `${name_pt} (${combo.join(' ')})` : null,
-                   description, category_id, subcategory_id||null, price, currency||'ILS', unit,
-                   min_quantity||0, supplier_id||null, manufacturer_id||null, parentId],
-                  () => insertVariant(combos[index + 1], index + 1)
-                );
               });
             };
             if (combos.length > 0) insertVariant(combos[0], 0);
