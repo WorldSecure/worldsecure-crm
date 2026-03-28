@@ -997,8 +997,52 @@ app.post('/api/products', authenticateToken, (req, res) => {
     [sku, name, description, category_id, subcategory_id||null, price, currency || 'ILS', unit, quantity || 0, min_quantity || 0, name_he || null, name_pt || null, supplier_id||null, manufacturer_id||null, is_parent ? 1 : 0, variant_attrs||null],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
-      logActivity(req.user.id, 'CREATE_PRODUCT', 'product', this.lastID, { sku, name });
-      res.json({ id: this.lastID, ...req.body });
+      const parentId = this.lastID;
+      logActivity(req.user.id, 'CREATE_PRODUCT', 'product', parentId, { sku, name });
+
+      // יצירת דגמים אוטומטית אם מוצר אב עם variant_attrs
+      if (is_parent && variant_attrs) {
+        try {
+          // פרסור: [color=BLK,GRN][size=M,L] → [{name:'color', values:['BLK','GRN']}, ...]
+          const attrPattern = /\[([^\]=]+)=([^\]]+)\]/g;
+          const attrs = [];
+          let match;
+          while ((match = attrPattern.exec(variant_attrs)) !== null) {
+            attrs.push({ name: match[1].trim(), values: match[2].split(',').map(v => v.trim()).filter(Boolean) });
+          }
+
+          if (attrs.length > 0) {
+            // מכפלה קרטזית
+            const cartesian = (arrays) => arrays.reduce((acc, arr) => {
+              const res = [];
+              acc.forEach(a => arr.forEach(b => res.push([...a, b])));
+              return res;
+            }, [[]]);
+
+            const valueSets = attrs.map(a => a.values);
+            const combos = cartesian(valueSets);
+
+            // בניית SKU לכל דגם: sku-של-האב + ערכי הדגם
+            const insertVariant = (combo, index) => {
+              if (index >= combos.length) return;
+              const variantSku = `${sku}-${combo.join('-')}`;
+              db.run(
+                `INSERT INTO products (sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, supplier_id, manufacturer_id, parent_id, meta_updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, datetime('now'))`,
+                [variantSku, `${name} (${combo.join(' ')})`, name_he ? `${name_he} (${combo.join(' ')})` : null, name_pt ? `${name_pt} (${combo.join(' ')})` : null,
+                 description, category_id, subcategory_id||null, price, currency||'ILS', unit,
+                 min_quantity||0, supplier_id||null, manufacturer_id||null, parentId],
+                () => insertVariant(combos[index + 1], index + 1)
+              );
+            };
+            if (combos.length > 0) insertVariant(combos[0], 0);
+          }
+        } catch (e) {
+          console.error('Error creating variants:', e.message);
+        }
+      }
+
+      res.json({ id: parentId, ...req.body });
     }
   );
 });
