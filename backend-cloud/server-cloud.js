@@ -438,19 +438,21 @@ app.post('/api/products', authenticateToken, adminOnly, async (req, res) => {
           const skuBase = variant_sku_prefix || sku;
           for (const combo of combos) {
             const baseVariantSku = `${skuBase}-${combo.join('-')}`;
-            // בדוק אם SKU כבר קיים — אם כן, צור SKU ייחודי עם suffix (A,B,C...)
-            const existingSkus = await query('SELECT id, sku FROM products WHERE sku LIKE $1', [`${baseVariantSku}%`]);
+            const existing = await query('SELECT id, parent_id FROM products WHERE sku=$1', [baseVariantSku]);
             let variantSku = baseVariantSku;
-            const existingById = existingSkus.rows.find(r => r.sku === baseVariantSku);
-            if (existingById) {
-              // SKU קיים — בדוק אם כבר שייך לאב הזה
-              const alreadyLinked = await query('SELECT id FROM products WHERE sku=$1 AND parent_id=$2', [baseVariantSku, parentId]);
-              if (alreadyLinked.rows.length > 0) continue; // כבר קיים ומקושר
-              // שייך לאב אחר — צור suffix חדש
-              const suffixes = ['A','B','C','D','E','F','G','H'];
-              for (const s of suffixes) {
-                const candidate = `${baseVariantSku}-${s}`;
-                if (!existingSkus.rows.find(r => r.sku === candidate)) { variantSku = candidate; break; }
+            if (existing.rows.length > 0) {
+              if (!existing.rows[0].parent_id) {
+                // SKU קיים בלי אב — קשר לאב הנוכחי ודלג
+                await query('UPDATE products SET parent_id=$1 WHERE id=$2', [parentId, existing.rows[0].id]);
+                continue;
+              }
+              // SKU תפוס על ידי אב אחר — הוסף suffix מספרי
+              let suffix = 1;
+              while (true) {
+                const candidate = `${baseVariantSku}${suffix}`;
+                const taken = await query('SELECT id FROM products WHERE sku=$1', [candidate]);
+                if (taken.rows.length === 0) { variantSku = candidate; break; }
+                suffix++;
               }
             }
             await query(
@@ -460,6 +462,7 @@ app.post('/api/products', authenticateToken, adminOnly, async (req, res) => {
                description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null,
                min_quantity||0, supplier_id||null, manufacturer_id||null, parentId]
             );
+          }
         }
       } catch (e) { console.error('Error creating variants:', e.message); }
     }
