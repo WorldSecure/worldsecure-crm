@@ -76,6 +76,9 @@ function Products() {
   const [expandedParents, setExpandedParents] = useState({});
   const [variantsCache, setVariantsCache] = useState({});
   const [editingQty, setEditingQty] = useState({}); // { variantId: newQty }
+  const [editingPrice, setEditingPrice] = useState({}); // { variantId: newPrice }
+  const [editingUnit, setEditingUnit] = useState({}); // { variantId: unit }
+  const [editingCurrency, setEditingCurrency] = useState({}); // { variantId: currency }
   const [newPrice, setNewPrice] = useState({ price: '', currency: 'ILS', effective_date: new Date().toISOString().split('T')[0] });
   
   const [formData, setFormData] = useState({
@@ -338,6 +341,7 @@ function Products() {
 
       // בניית SKU למוצר אב אוטומטית
       let finalSku = formData.sku;
+      let variantSkuPrefix = '';
       if (formData.is_parent && !editingProduct) {
         const cat = categories.find(c => String(c.id) === String(formData.category_id));
         const sub = subcategories.find(s => String(s.id) === String(formData.subcategory_id));
@@ -347,12 +351,11 @@ function Products() {
         };
         const catCode = extractCode(cat?.name, 'CAT');
         const subCode = extractCode(sub?.name, 'SUB');
-        // מוסיף timestamp קצר למניעת כפילויות
-        const ts = Date.now().toString().slice(-4);
-        finalSku = `${catCode}-${subCode}-PAR-${ts}`;
+        variantSkuPrefix = `${catCode}-${subCode}`;
+        finalSku = `${variantSkuPrefix}-PAR`;
       }
 
-      const payload = { ...formData, sku: finalSku, name: finalName, name_he, name_pt };
+      const payload = { ...formData, sku: finalSku, name: finalName, name_he, name_pt, variant_sku_prefix: variantSkuPrefix };
 
       if (editingProduct) {
         await axios.put(`/api/products/${editingProduct.id}`, payload);
@@ -412,25 +415,41 @@ function Products() {
       setExpandedParents(p => ({ ...p, [parentId]: false }));
       return;
     }
-    if (!variantsCache[parentId]) {
-      try {
-        const res = await axios.get(`/api/products/${parentId}/variants`);
-        setVariantsCache(c => ({ ...c, [parentId]: res.data }));
-      } catch (e) { return; }
-    }
+    // תמיד מושך מהשרת (גם אם cache קיים אבל ריק)
+    try {
+      const res = await axios.get(`/api/products/${parentId}/variants`);
+      setVariantsCache(c => ({ ...c, [parentId]: res.data }));
+    } catch (e) { return; }
     setExpandedParents(p => ({ ...p, [parentId]: true }));
   };
 
   const saveVariantQty = async (variantId, parentId) => {
     const qty = editingQty[variantId];
-    if (qty === undefined || qty === '') return;
+    const price = editingPrice[variantId];
+    const unit = editingUnit[variantId];
+    const currency = editingCurrency[variantId];
+    if (qty === undefined && price === undefined && unit === undefined && currency === undefined) return;
     try {
-      await axios.patch(`/api/products/${variantId}/quantity`, { quantity: parseInt(qty) });
+      await axios.patch(`/api/products/${variantId}/quantity`, {
+        ...(qty !== undefined ? { quantity: parseInt(qty) } : {}),
+        ...(price !== undefined ? { price: parseFloat(price) } : {}),
+        ...(unit !== undefined ? { unit } : {}),
+        ...(currency !== undefined ? { currency } : {})
+      });
       setVariantsCache(c => ({
         ...c,
-        [parentId]: c[parentId].map(v => v.id === variantId ? { ...v, quantity: parseInt(qty) } : v)
+        [parentId]: c[parentId].map(v => v.id === variantId ? {
+          ...v,
+          ...(qty !== undefined ? { quantity: parseInt(qty) } : {}),
+          ...(price !== undefined ? { price: parseFloat(price) } : {}),
+          ...(unit !== undefined ? { unit } : {}),
+          ...(currency !== undefined ? { currency } : {})
+        } : v)
       }));
       setEditingQty(q => { const n = { ...q }; delete n[variantId]; return n; });
+      setEditingPrice(p => { const n = { ...p }; delete n[variantId]; return n; });
+      setEditingUnit(u => { const n = { ...u }; delete n[variantId]; return n; });
+      setEditingCurrency(c => { const n = { ...c }; delete n[variantId]; return n; });
     } catch (e) {
       alert(t('error') + ': ' + e.message);
     }
@@ -586,8 +605,8 @@ function Products() {
               sortedProducts.map(product => (
                 <React.Fragment key={product.id}>
                 <div style={{
-                  background: product.is_parent ? '#fffbf0' : '#fff',
-                  border: product.is_parent ? '1px solid #ffc107' : '1px solid #e0e0e0',
+                  background: !!product.is_parent ? '#fffbf0' : '#fff',
+                  border: !!product.is_parent ? '1px solid #ffc107' : '1px solid #e0e0e0',
                   borderRadius: '10px',
                   padding: '1rem',
                   marginBottom: '0.75rem',
@@ -596,15 +615,15 @@ function Products() {
                   {/* Row 1: Name + stock badge */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
                     <span style={{ fontWeight: '700', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      {product.is_parent && (
+                      {!!product.is_parent && (
                         <button onClick={() => toggleExpand(product.id)} style={{ background: 'none', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', padding: '0.1rem 0.4rem', fontSize: '0.8rem' }}>
                           {expandedParents[product.id] ? '▼' : '▶'}
                         </button>
                       )}
-                      {product.is_parent ? <span>⭐ </span> : null}
+                      {!!product.is_parent ? <span>⭐ </span> : null}
                       {getProductName(product, language)}
                     </span>
-                    {product.is_parent ? (
+                    {!!product.is_parent ? (
                       <span style={{ color: '#999', fontSize: '0.8rem' }}>—</span>
                     ) : product.quantity <= product.min_quantity ? (
                       <span className="badge badge-danger">{product.quantity}</span>
@@ -642,22 +661,52 @@ function Products() {
                 </div>
 
                 {/* כרטיסי דגמים */}
-                {product.is_parent && expandedParents[product.id] && (variantsCache[product.id] || []).map(variant => (
+                {!!product.is_parent && expandedParents[product.id] && (variantsCache[product.id] || []).map(variant => (
                   <div key={variant.id} style={{ background: '#f9f9f9', border: '1px solid #dee2e6', borderLeft: '4px solid #ffc107', borderRadius: '8px', padding: '0.6rem 0.75rem', marginBottom: '0.5rem', marginRight: '1rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontFamily: 'monospace', fontSize: '0.82rem', color: '#555' }}>└ {variant.sku}</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                        <input
-                          type="number"
+                    <div style={{ fontFamily: 'monospace', fontSize: '0.82rem', color: '#555', marginBottom: '0.5rem' }}>└ {variant.sku}</div>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                        <input type="number" min="0"
                           style={{ width: '65px', padding: '0.2rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.85rem' }}
-                          value={editingQty[variant.id] !== undefined ? editingQty[variant.id] : variant.quantity}
+                          value={editingQty[variant.id] !== undefined ? editingQty[variant.id] : (variant.quantity ?? 0)}
                           onChange={(e) => setEditingQty(q => ({ ...q, [variant.id]: e.target.value }))}
                         />
-                        {editingQty[variant.id] !== undefined && (
-                          <button onClick={() => saveVariantQty(variant.id, product.id)}
-                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>✓</button>
-                        )}
+                        <span style={{ fontSize: '0.72rem', color: '#888' }}>{t('quantity') || 'כמות'}</span>
                       </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                        <select style={{ padding: '0.2rem 0.3rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.82rem' }}
+                          value={editingUnit[variant.id] !== undefined ? editingUnit[variant.id] : (variant.unit ?? 'unit')}
+                          onChange={(e) => setEditingUnit(u => ({ ...u, [variant.id]: e.target.value }))}>
+                          <option value="unit">{t('unit_piece')}</option>
+                          <option value="box">{t('unit_box')}</option>
+                          <option value="carton">{t('unit_carton')}</option>
+                          <option value="kg">{t('unit_kg')}</option>
+                          <option value="liter">{t('unit_liter')}</option>
+                          <option value="meter">{t('unit_meter')}</option>
+                        </select>
+                        <span style={{ fontSize: '0.72rem', color: '#888' }}>{t('unit') || 'יחידה'}</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                        <div style={{ display: 'flex', gap: '0.2rem' }}>
+                          <input type="number" min="0" step="0.01"
+                            style={{ width: '70px', padding: '0.2rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.85rem' }}
+                            value={editingPrice[variant.id] !== undefined ? editingPrice[variant.id] : (variant.price ?? 0)}
+                            onChange={(e) => setEditingPrice(p => ({ ...p, [variant.id]: e.target.value }))}
+                          />
+                          <select style={{ padding: '0.2rem 0.3rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.82rem' }}
+                            value={editingCurrency[variant.id] !== undefined ? editingCurrency[variant.id] : (variant.currency ?? 'ILS')}
+                            onChange={(e) => setEditingCurrency(c => ({ ...c, [variant.id]: e.target.value }))}>
+                            <option value="ILS">ILS</option>
+                            <option value="USD">USD</option>
+                            <option value="EUR">EUR</option>
+                          </select>
+                        </div>
+                        <span style={{ fontSize: '0.72rem', color: '#888' }}>{t('price') || 'מחיר'}</span>
+                      </div>
+                      {(editingQty[variant.id] !== undefined || editingPrice[variant.id] !== undefined || editingUnit[variant.id] !== undefined || editingCurrency[variant.id] !== undefined) && (
+                        <button onClick={() => saveVariantQty(variant.id, product.id)}
+                          style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', alignSelf: 'flex-end' }}>✓</button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -696,10 +745,10 @@ function Products() {
               ) : (
                 sortedProducts.map(product => (
                   <React.Fragment key={product.id}>
-                  <tr key={product.id} style={{ background: product.is_parent ? '#fffbf0' : '' }}>
+                  <tr key={product.id} style={{ background: !!product.is_parent ? '#fffbf0' : '' }}>
                     <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{product.sku}</td>
                     <td>
-                      {product.is_parent ? (
+                      {!!!!product.is_parent ? (
                         <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                           <button onClick={() => toggleExpand(product.id)} style={{ background: 'none', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', padding: '0.1rem 0.4rem', fontSize: '0.8rem', lineHeight: 1 }}>
                             {expandedParents[product.id] ? '▼' : '▶'}
@@ -710,7 +759,7 @@ function Products() {
                     </td>
                     <td>{getCategoryName(product, language)}</td>
                     <td>
-                      {product.is_parent ? (
+                      {!!!!product.is_parent ? (
                         <span style={{ color: '#999', fontSize: '0.8rem' }}>—</span>
                       ) : product.quantity <= product.min_quantity ? (
                         <span className="badge badge-danger">{product.quantity}</span>
@@ -731,7 +780,7 @@ function Products() {
                     </td>
                   </tr>
                   {/* שורות דגמים */}
-                  {product.is_parent && expandedParents[product.id] && (variantsCache[product.id] || []).map(variant => (
+                  {!!product.is_parent && expandedParents[product.id] && (variantsCache[product.id] || []).map(variant => (
                     <tr key={variant.id} style={{ background: '#f9f9f9', borderLeft: '3px solid #ffc107' }}>
                       <td style={{ fontFamily: 'monospace', fontSize: '0.82rem', paddingLeft: '2rem', color: '#555' }}>
                         └ {variant.sku}
@@ -739,20 +788,53 @@ function Products() {
                       <td style={{ fontSize: '0.85rem', color: '#444', paddingLeft: '1rem' }}>{getProductName(variant, language) || variant.sku}</td>
                       <td>—</td>
                       <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                          <input
-                            type="number"
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                          <input type="number" min="0"
                             style={{ width: '65px', padding: '0.2rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.85rem' }}
-                            value={editingQty[variant.id] !== undefined ? editingQty[variant.id] : variant.quantity}
+                            value={editingQty[variant.id] !== undefined ? editingQty[variant.id] : (variant.quantity ?? 0)}
                             onChange={(e) => setEditingQty(q => ({ ...q, [variant.id]: e.target.value }))}
                           />
-                          {editingQty[variant.id] !== undefined && (
-                            <button onClick={() => saveVariantQty(variant.id, product.id)}
-                              style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>✓</button>
-                          )}
+                          <span style={{ fontSize: '0.72rem', color: '#888' }}>{t('quantity') || 'כמות'}</span>
                         </div>
                       </td>
-                      <td colSpan="4"></td>
+                      <td>
+                        <select style={{ padding: '0.2rem 0.3rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.82rem' }}
+                          value={editingUnit[variant.id] !== undefined ? editingUnit[variant.id] : (variant.unit ?? 'unit')}
+                          onChange={(e) => setEditingUnit(u => ({ ...u, [variant.id]: e.target.value }))}>
+                          <option value="unit">{t('unit_piece')}</option>
+                          <option value="box">{t('unit_box')}</option>
+                          <option value="carton">{t('unit_carton')}</option>
+                          <option value="kg">{t('unit_kg')}</option>
+                          <option value="liter">{t('unit_liter')}</option>
+                          <option value="meter">{t('unit_meter')}</option>
+                        </select>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <input type="number" min="0" step="0.01"
+                              style={{ width: '75px', padding: '0.2rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.85rem' }}
+                              value={editingPrice[variant.id] !== undefined ? editingPrice[variant.id] : (variant.price ?? 0)}
+                              onChange={(e) => setEditingPrice(p => ({ ...p, [variant.id]: e.target.value }))}
+                            />
+                            <select style={{ padding: '0.2rem 0.3rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.82rem' }}
+                              value={editingCurrency[variant.id] !== undefined ? editingCurrency[variant.id] : (variant.currency ?? 'ILS')}
+                              onChange={(e) => setEditingCurrency(c => ({ ...c, [variant.id]: e.target.value }))}>
+                              <option value="ILS">ILS</option>
+                              <option value="USD">USD</option>
+                              <option value="EUR">EUR</option>
+                            </select>
+                          </div>
+                          <span style={{ fontSize: '0.72rem', color: '#888' }}>{t('price') || 'מחיר'}</span>
+                        </div>
+                      </td>
+                      <td>—</td>
+                      <td>
+                        {(editingQty[variant.id] !== undefined || editingPrice[variant.id] !== undefined || editingUnit[variant.id] !== undefined || editingCurrency[variant.id] !== undefined) && (
+                          <button onClick={() => saveVariantQty(variant.id, product.id)}
+                            style={{ padding: '0.2rem 0.6rem', fontSize: '0.8rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>✓ {t('save') || 'שמור'}</button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   </React.Fragment>
@@ -1008,6 +1090,8 @@ function Products() {
                     className="form-select"
                     value={formData.unit}
                     onChange={(e) => setFormData({...formData, unit: e.target.value})}
+                    disabled={formData.is_parent}
+                    style={{ background: formData.is_parent ? '#f0f0f0' : '', color: formData.is_parent ? '#999' : '' }}
                   >
                     <option value="unit">{t('unit_piece')}</option>
                     <option value="box">{t('unit_box')}</option>
@@ -1065,7 +1149,8 @@ function Products() {
                           }
                         }}
                         placeholder="0.00"
-                        style={{ textAlign: 'right', fontFamily: 'monospace', flex: 2 }}
+                        disabled={formData.is_parent}
+                        style={{ textAlign: 'right', fontFamily: 'monospace', flex: 2, background: formData.is_parent ? '#f0f0f0' : '', color: formData.is_parent ? '#999' : '' }}
                       />
                       <select
                         className="form-select"

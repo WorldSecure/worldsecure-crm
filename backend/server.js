@@ -863,20 +863,30 @@ app.get('/api/products/:id/variants', authenticateToken, (req, res) => {
     [req.params.id],
     (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
+      console.log(`[variants] parent_id=${req.params.id} → ${rows.length} rows`);
       res.json(rows);
     }
   );
 });
 
 app.patch('/api/products/:id/quantity', authenticateToken, (req, res) => {
-  const { quantity } = req.body;
+  const { quantity, price, unit, currency } = req.body;
+  const updates = [];
+  const params = [];
+  if (quantity !== undefined) { updates.push('quantity = ?'); params.push(parseInt(quantity)); updates.push("quantity_updated_at = datetime('now')"); }
+  if (price !== undefined) { updates.push('price = ?'); params.push(parseFloat(price)); }
+  if (unit !== undefined) { updates.push('unit = ?'); params.push(unit); }
+  if (currency !== undefined) { updates.push('currency = ?'); params.push(currency); }
+  if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update' });
+  updates.push("meta_updated_at = datetime('now')");
+  params.push(req.params.id);
   db.run(
-    `UPDATE products SET quantity = ?, quantity_updated_at = datetime('now'), meta_updated_at = datetime('now') WHERE id = ?`,
-    [quantity, req.params.id],
+    `UPDATE products SET ${updates.join(', ')} WHERE id = ?`,
+    params,
     (err) => {
       if (err) return res.status(500).json({ error: err.message });
-      logActivity(req.user.id, 'UPDATE_PRODUCT_QTY', 'product', req.params.id, { quantity });
-      res.json({ message: 'Quantity updated' });
+      logActivity(req.user.id, 'UPDATE_PRODUCT_QTY', 'product', req.params.id, { quantity, price, unit, currency });
+      res.json({ message: 'Updated' });
     }
   );
 });
@@ -989,7 +999,7 @@ app.post('/api/products/translate', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/products', authenticateToken, (req, res) => {
-  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs } = req.body;
+  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs, variant_sku_prefix } = req.body;
 
   if (!sku || !sku.trim()) return res.status(400).json({ error: 'SKU is required' });
   
@@ -1024,10 +1034,11 @@ app.post('/api/products', authenticateToken, (req, res) => {
             const valueSets = attrs.map(a => a.values);
             const combos = cartesian(valueSets);
 
-            // בניית SKU לכל דגם: sku-של-האב + ערכי הדגם
+            // בניית SKU לכל דגם: prefix (CAT-SUB) + ערכי הדגם
+            const skuBase = variant_sku_prefix || sku;
             const insertVariant = (combo, index) => {
               if (index >= combos.length) return;
-              const variantSku = `${sku}-${combo.join('-')}`;
+              const variantSku = `${skuBase}-${combo.join('-')}`;
               // בדוק אם SKU כבר קיים — אם כן, עדכן parent_id בלבד
               db.get('SELECT id FROM products WHERE sku = ?', [variantSku], (err, existing) => {
                 if (existing) {
