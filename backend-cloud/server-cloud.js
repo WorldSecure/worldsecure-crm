@@ -2606,8 +2606,7 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
       for (const r of rows) {
         const qty    = (r.quantity    != null) ? parseInt(r.quantity)    : 0;
         const minQty = (r.min_quantity != null) ? parseInt(r.min_quantity) : 0;
-        // מחק כפילות sku עם id שונה
-        await client.query(`DELETE FROM products WHERE sku=$1 AND id<>$2`, [r.sku, r.id]);
+        // ❌ הוסר DELETE כפילות SKU — שובר דו-כיווניות (מוחק מוצרי ענן עם SKU דומה)
         // בדוק timestamps לכמות ול-meta (SKU/name/unit/category)
         const existing = await client.query('SELECT quantity_updated_at, meta_updated_at FROM products WHERE id=$1', [r.id]);
         const cloudQtyTs  = existing.rows[0]?.quantity_updated_at;
