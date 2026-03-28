@@ -593,6 +593,14 @@ app.delete('/api/outbound-signatures/:id', authenticateToken, async (req, res) =
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Proforma Signatures CRUD ──────────────────────────────────────────────────
+app.get('/api/proforma-signatures', authenticateToken, async (req, res) => {
+  try {
+    const r = await query('SELECT * FROM proforma_signatures ORDER BY created_at DESC');
+    res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── GET/PUT: Email Signature (legacy) ────────────────────────────────────────
 app.get('/api/company/email-signature', authenticateToken, async (req, res) => {
   try {
