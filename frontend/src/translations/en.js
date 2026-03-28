@@ -489,6 +489,8 @@ export const en = {
   // QR Code
   qr_code: 'QR CODE',
   email_signature: 'Email Signature',
+  outbound_signature: 'Outbound Signature',
+  proforma_signature: 'Proforma Signature',
   add_signature: 'New Signature',
   edit_signature: 'Edit Signature',
   new_signature: 'New Signature',

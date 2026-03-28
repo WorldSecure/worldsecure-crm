@@ -484,6 +484,8 @@ export const pt = {
   more_reports_coming: '➕ Mais relatórios em breve',
   amount: 'Valor',
   email_signature: 'Assinatura de Email',
+  outbound_signature: 'Assinatura de Nota de Entrega',
+  proforma_signature: 'Assinatura de Proforma',
   add_signature: 'Nova Assinatura',
   edit_signature: 'Editar Assinatura',
   new_signature: 'Nova Assinatura',

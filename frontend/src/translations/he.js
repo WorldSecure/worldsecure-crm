@@ -470,6 +470,8 @@ export const he = {
   
   // QR Code
     email_signature: 'חתימת מייל',
+    outbound_signature: 'חתימת תעודת משלוח',
+    proforma_signature: 'חתימת פרופורמה',
   add_signature: 'חתימה חדשה',
   edit_signature: 'עריכת חתימה',
   new_signature: 'חתימה חדשה',

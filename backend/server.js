@@ -661,6 +661,44 @@ app.delete('/api/outbound-signatures/:id', authenticateToken, (req, res) => {
   });
 });
 
+// ============ PROFORMA SIGNATURES ============
+app.get('/api/proforma-signatures', authenticateToken, (req, res) => {
+  db.all('SELECT * FROM proforma_signatures ORDER BY created_at DESC', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+app.post('/api/proforma-signatures', authenticateToken, (req, res) => {
+  const { name, content, is_active, lang = 'he' } = req.body;
+  const run = () => db.run('INSERT INTO proforma_signatures (name, content, lang, is_active) VALUES (?,?,?,?)',
+    [name, content, lang, is_active ? 1 : 0],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ id: this.lastID, name, content, lang, is_active: is_active ? 1 : 0 });
+    });
+  if (is_active) db.run('UPDATE proforma_signatures SET is_active=0 WHERE lang=?', [lang], run);
+  else run();
+});
+app.put('/api/proforma-signatures/:id', authenticateToken, (req, res) => {
+  const { name, content, is_active, lang } = req.body;
+  db.get('SELECT lang FROM proforma_signatures WHERE id=?', [req.params.id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    const actualLang = lang || row?.lang || 'he';
+    const run = () => db.run('UPDATE proforma_signatures SET name=?, content=?, lang=?, is_active=? WHERE id=?',
+      [name, content, actualLang, is_active ? 1 : 0, req.params.id],
+      (err) => { if (err) return res.status(500).json({ error: err.message }); res.json({ message: 'Updated' }); });
+    if (is_active) db.run('UPDATE proforma_signatures SET is_active=0 WHERE lang=?', [actualLang], run);
+    else run();
+  });
+});
+app.delete('/api/proforma-signatures/:id', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  db.run('DELETE FROM proforma_signatures WHERE id=?', [req.params.id], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'Deleted' });
+  });
+});
+
 // ============ EMAIL SIGNATURE ROUTES (legacy) ============
 
 app.get('/api/company/email-signature', authenticateToken, (req, res) => {
@@ -4109,6 +4147,14 @@ app.get('/api/quotes/:id/proforma', async (req, res) => {
       });
     });
 
+    // טען חתימת פרופורמה פעילה לפי שפה
+    const proformaSig = await new Promise((resolve) => {
+      db.get('SELECT content FROM proforma_signatures WHERE is_active=1 AND lang=? LIMIT 1', [lang], (err, row) => {
+        resolve(row || null);
+      });
+    });
+    const proformaSignatureHtml = proformaSig ? proformaSig.content : '';
+
     const formatDate = (dateString) => {
       const date = new Date(dateString);
       const day = String(date.getDate()).padStart(2, '0');
@@ -4387,22 +4433,8 @@ app.get('/api/quotes/:id/proforma', async (req, res) => {
     </p>
   </div>
 
-  <div class="footer-section">
-    <h3>${t.observationsTitle}</h3>
-    <ul>
-      <li>${t.validity}</li>
-      <li>${t.pricesCIF}</li>
-    </ul>
-
-    ${quote.notes ? `<p style="margin-top: 10px;"><strong>${lang === 'he' ? 'הערות נוספות' : lang === 'en' ? 'Additional notes' : 'Notas adicionais'}:</strong> ${quote.notes}</p>` : ''}
-
-    <div class="bank-details">
-      <p><strong>${t.bankName}:</strong> Bank Leumi LE Israel B.M. Concord Branch</p>
-      <p><strong>${t.bankAddress}:</strong> David Ben Gurion 9, 18th Floor, Bnei Brak, Israel</p>
-      <p><strong>${t.swiftCode}:</strong> LUMIILITTLV</p>
-      <p><strong>IBAN:</strong> IL60 0108 5500 0003 7690 096</p>
-    </div>
-  </div>
+  ${quote.notes ? `<div class="footer-section"><p><strong>${lang === 'he' ? 'הערות נוספות' : lang === 'en' ? 'Additional notes' : 'Notas adicionais'}:</strong> ${quote.notes}</p></div>` : ''}
+  ${proformaSignatureHtml ? `<div class="footer-section" style="margin-top:20px;">${proformaSignatureHtml}</div>` : ''}
 
 
   <div class="email-modal-overlay no-print" id="emailModal">
@@ -4617,6 +4649,14 @@ app.get('/api/quotes/:id/proforma-invoice', async (req, res) => {
       });
     });
 
+    // טען חתימת פרופורמה פעילה לפי שפה
+    const proformaSig = await new Promise((resolve) => {
+      db.get('SELECT content FROM proforma_signatures WHERE is_active=1 AND lang=? LIMIT 1', [lang], (err, row) => {
+        resolve(row || null);
+      });
+    });
+    const proformaSignatureHtml = proformaSig ? proformaSig.content : '';
+
     const formatDate = (d) => {
       const date = new Date(d);
       return `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${date.getFullYear()}`;
@@ -4764,17 +4804,8 @@ app.get('/api/quotes/:id/proforma-invoice', async (req, res) => {
   <div style="text-align:${t.dir==='rtl'?'left':'right'}; margin:20px 0;">
     <p style="font-size:14pt; font-weight:bold;">${t.total} (${getCurrencyName(quote.currency)}): ${formatCurrency(quote.total, quote.currency)}</p>
   </div>
-  <div class="footer-section">
-    <h3>${t.observationsTitle}</h3>
-    <ul><li>${t.validity}</li><li>${t.pricesCIF}</li></ul>
-    ${quote.notes ? `<p><strong>${lang==='he'?'הערות':'Notes'}:</strong> ${quote.notes}</p>` : ''}
-    <div class="bank-details" style="margin-top:15px;">
-      <p><strong>${t.bankName}:</strong> Bank Leumi LE Israel B.M. Concord Branch</p>
-      <p><strong>${t.bankAddress}:</strong> David Ben Gurion 9, 18th Floor, Bnei Brak, Israel</p>
-      <p><strong>${t.swiftCode}:</strong> LUMIILITTLV</p>
-      <p><strong>IBAN:</strong> IL60 0108 5500 0003 7690 096</p>
-    </div>
-  </div>
+  ${quote.notes ? `<div class="footer-section"><p><strong>${lang==='he'?'הערות':'Notes'}:</strong> ${quote.notes}</p></div>` : ''}
+  ${proformaSignatureHtml ? `<div class="footer-section" style="margin-top:20px;">${proformaSignatureHtml}</div>` : ''}
 
   <div class="email-modal-overlay no-print" id="emailModal">
     <div class="email-modal-box">
@@ -5454,6 +5485,14 @@ db.run(`CREATE TABLE IF NOT EXISTS outbound_signatures (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`, () => {});
 db.run(`ALTER TABLE outbound_signatures ADD COLUMN lang TEXT DEFAULT 'he'`, () => {});
+db.run(`CREATE TABLE IF NOT EXISTS proforma_signatures (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  content TEXT NOT NULL,
+  lang TEXT DEFAULT 'he',
+  is_active INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`, () => {});
 db.run(`CREATE TABLE IF NOT EXISTS email_signatures (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
