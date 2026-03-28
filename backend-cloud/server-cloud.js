@@ -435,7 +435,7 @@ app.post('/api/products', authenticateToken, adminOnly, async (req, res) => {
             const res = []; acc.forEach(a => arr.forEach(b => res.push([...a, b]))); return res;
           }, [[]]);
           const combos = cartesian(attrs.map(a => a.values));
-          const skuBase = variant_sku_prefix || finalSku;
+          const skuBase = variant_sku_prefix || sku;
           for (const combo of combos) {
             const variantSku = `${skuBase}-${combo.join('-')}`;
             const existing = await query('SELECT id FROM products WHERE sku=$1', [variantSku]);
