@@ -634,9 +634,9 @@ function Products() {
                       boxShadow: '0 4px 16px rgba(0,0,0,0.12)', minWidth: '200px', overflow: 'hidden'
                     }}>
                       {[
-                        { icon: '📂', label: t('edit_categories') || 'Edit Categories', action: () => { setShowCategoryModal(true); setShowActionsMenu(false); } },
-                        { icon: '📁', label: t('edit_subcategories') || 'Edit Subcategories', action: () => { setSelectedCategoryFilter(categories[0]?.id?.toString() || ''); setShowSubcategoryModal(true); setShowActionsMenu(false); } },
-                        { icon: '🏷️', label: t('edit_variant_attr_types') || 'Variant Attributes', action: () => { openAddAttrType(); setShowActionsMenu(false); } },
+                        { icon: '📂', label: t('edit_categories') || 'Categories', action: () => { setShowCategoryModal(true); setShowActionsMenu(false); } },
+                        { icon: '📁', label: t('edit_subcategories') || 'Subcategories', action: () => { setSelectedCategoryFilter(categories[0]?.id?.toString() || ''); setShowSubcategoryModal(true); setShowActionsMenu(false); } },
+                        { icon: '🏷️', label: t('edit_variant_attr_types') || 'Attributes', action: () => { openAddAttrType(); setShowActionsMenu(false); } },
                       ].map((item, i) => (
                         <button key={i} onClick={item.action} style={{
                           display: 'flex', alignItems: 'center', gap: '0.6rem',
@@ -662,17 +662,17 @@ function Products() {
               <>
                 {isAdmin && (
                 <button className="btn btn-secondary" onClick={() => setShowCategoryModal(true)}>
-                  📂 {t('edit_categories') || 'ערוך קטגוריות'}
+                  📂 {t('edit_categories') || 'Categories'}
                 </button>
                 )}
                 {isAdmin && (
                 <button className="btn btn-secondary" onClick={() => openAddAttrType()}>
-                  🏷️ {t('edit_variant_attr_types') || 'מאפייני דגמים'}
+                  🏷️ {t('edit_variant_attr_types') || 'Attributes'}
                 </button>
                 )}
                 {isAdmin && (
                 <button className="btn btn-secondary" onClick={() => { setSelectedCategoryFilter(categories[0]?.id?.toString() || ''); setShowSubcategoryModal(true); }}>
-                  📁 {t('edit_subcategories') || 'ערוך סאב-קטגוריות'}
+                  📁 {t('edit_subcategories') || 'Subcategories'}
                 </button>
                 )}
                 {isAdmin && (
