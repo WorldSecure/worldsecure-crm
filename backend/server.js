@@ -897,7 +897,7 @@ app.get('/api/products/low-stock', authenticateToken, (req, res) => {
      AND (
        (parent_id IS NULL AND quantity <= min_quantity)
        OR
-       (parent_id IS NOT NULL AND min_quantity > 0 AND quantity < min_quantity)
+       (parent_id IS NOT NULL AND (quantity < 0 OR (min_quantity > 0 AND quantity < min_quantity)))
      )
      ORDER BY name`,
     [],

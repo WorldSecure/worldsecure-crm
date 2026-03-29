@@ -228,11 +228,11 @@ app.get('/api/products/low-stock', authenticateToken, async (req, res) => {
       SELECT * FROM products
       WHERE is_parent = FALSE
       AND (
-        -- מוצר רגיל (ללא אב): quantity <= min_quantity
+        -- מוצר רגיל: quantity <= min_quantity
         (parent_id IS NULL AND quantity <= min_quantity)
         OR
-        -- דגם (עם אב): quantity < min_quantity בלבד (strict, לא כולל 0)
-        (parent_id IS NOT NULL AND min_quantity > 0 AND quantity < min_quantity)
+        -- דגם: quantity שלילי, או quantity < min_quantity כשהוגדר
+        (parent_id IS NOT NULL AND (quantity < 0 OR (min_quantity > 0 AND quantity < min_quantity)))
       )
       ORDER BY name
     `);
