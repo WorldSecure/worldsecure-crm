@@ -124,8 +124,8 @@ async function syncLocalToCloud() {
   try {
     await syncUsersToCloud();
     await syncQrToCloud();
-    await syncEntityToCloud('categories',    'SELECT id, name, name_he, name_pt, description, updated_at FROM categories');
-    await syncEntityToCloud('subcategories', 'SELECT id, category_id, name, name_he, name_pt, updated_at FROM subcategories');
+    await syncEntityToCloud('categories',    'SELECT id, name, name_he, name_pt, description, code, updated_at FROM categories');
+    await syncEntityToCloud('subcategories', 'SELECT id, category_id, name, name_he, name_pt, code, updated_at FROM subcategories');
     await syncEntityToCloud('customers',  'SELECT id, name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes, created_at, updated_at FROM customers');
     await syncEntityToCloud('variant_attribute_types', 'SELECT id, name, name_he, name_pt, created_at FROM variant_attribute_types');
     await syncEntityToCloud('product_type_codes', 'SELECT id, code, name, name_he, name_pt, created_at FROM product_type_codes');
@@ -526,23 +526,23 @@ async function syncCategoriesFromCloud() {
   const rows = result.body || [];
   // migration
   await sqliteRun('ALTER TABLE categories ADD COLUMN updated_at TEXT').catch(() => {});
+  await sqliteRun('ALTER TABLE categories ADD COLUMN code TEXT').catch(() => {});
   const normalizeTs = (v) => v ? String(v).replace(' ', 'T').slice(0, 19) : '';
   let count = 0;
   for (const r of rows) {
     const existing = await sqliteGet('SELECT id, updated_at FROM categories WHERE id=?', [r.id]).catch(() => null);
     const cloudTs = normalizeTs(r.updated_at);
     const localTs = normalizeTs(existing?.updated_at);
-    // ענן חדש יותר (או לא קיים מקומית) → עדכן
     if (!existing) {
       await sqliteRun(
-        'INSERT OR IGNORE INTO categories (id, name, name_he, name_pt, description, updated_at) VALUES (?,?,?,?,?,?)',
-        [r.id, r.name, r.name_he||null, r.name_pt||null, r.description||null, r.updated_at||null]
+        'INSERT OR IGNORE INTO categories (id, name, name_he, name_pt, description, code, updated_at) VALUES (?,?,?,?,?,?,?)',
+        [r.id, r.name, r.name_he||null, r.name_pt||null, r.description||null, r.code||null, r.updated_at||null]
       ).catch(() => {});
       count++;
     } else if (cloudTs && cloudTs > localTs) {
       await sqliteRun(
-        'UPDATE categories SET name=?, name_he=?, name_pt=?, description=?, updated_at=? WHERE id=?',
-        [r.name, r.name_he||null, r.name_pt||null, r.description||null, r.updated_at||null, r.id]
+        'UPDATE categories SET name=?, name_he=?, name_pt=?, description=?, code=?, updated_at=? WHERE id=?',
+        [r.name, r.name_he||null, r.name_pt||null, r.description||null, r.code||null, r.updated_at||null, r.id]
       ).catch(() => {});
       count++;
     }
@@ -561,9 +561,11 @@ async function syncSubcategoriesFromCloud() {
     name TEXT NOT NULL,
     name_he TEXT,
     name_pt TEXT,
+    code TEXT,
     updated_at TEXT
   )`).catch(() => {});
   await sqliteRun('ALTER TABLE subcategories ADD COLUMN updated_at TEXT').catch(() => {});
+  await sqliteRun('ALTER TABLE subcategories ADD COLUMN code TEXT').catch(() => {});
   const normalizeTs = (v) => v ? String(v).replace(' ', 'T').slice(0, 19) : '';
   let count = 0;
   for (const r of rows) {
@@ -572,14 +574,14 @@ async function syncSubcategoriesFromCloud() {
     const localTs = normalizeTs(existing?.updated_at);
     if (!existing) {
       await sqliteRun(
-        'INSERT OR IGNORE INTO subcategories (id, category_id, name, name_he, name_pt, updated_at) VALUES (?,?,?,?,?,?)',
-        [r.id, r.category_id, r.name, r.name_he||null, r.name_pt||null, r.updated_at||null]
+        'INSERT OR IGNORE INTO subcategories (id, category_id, name, name_he, name_pt, code, updated_at) VALUES (?,?,?,?,?,?,?)',
+        [r.id, r.category_id, r.name, r.name_he||null, r.name_pt||null, r.code||null, r.updated_at||null]
       ).catch(() => {});
       count++;
     } else if (cloudTs && cloudTs > localTs) {
       await sqliteRun(
-        'UPDATE subcategories SET category_id=?, name=?, name_he=?, name_pt=?, updated_at=? WHERE id=?',
-        [r.category_id, r.name, r.name_he||null, r.name_pt||null, r.updated_at||null, r.id]
+        'UPDATE subcategories SET category_id=?, name=?, name_he=?, name_pt=?, code=?, updated_at=? WHERE id=?',
+        [r.category_id, r.name, r.name_he||null, r.name_pt||null, r.code||null, r.updated_at||null, r.id]
       ).catch(() => {});
       count++;
     }

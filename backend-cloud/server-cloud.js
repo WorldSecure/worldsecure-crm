@@ -381,31 +381,42 @@ app.get('/api/categories', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/categories', authenticateToken, async (req, res) => {
-  const { name, name_he, name_pt, description } = req.body;
+  const { name, name_he, name_pt, description, code } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
   try {
     await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_he TEXT').catch(() => {});
     await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_pt TEXT').catch(() => {});
     await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()').catch(() => {});
+    await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS code TEXT').catch(() => {});
+    const catCode = (code || name.slice(0,3)).toUpperCase().replace(/[^A-Z]/g,'').slice(0,3);
     const r = await query(
-      'INSERT INTO categories (name, name_he, name_pt, description, updated_at) VALUES ($1,$2,$3,$4,NOW()) RETURNING *',
-      [name, name_he||null, name_pt||null, description||null]
+      'INSERT INTO categories (name, name_he, name_pt, description, code, updated_at) VALUES ($1,$2,$3,$4,$5,NOW()) RETURNING *',
+      [name, name_he||null, name_pt||null, description||null, catCode]
     );
     res.json(r.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.put('/api/categories/:id', authenticateToken, async (req, res) => {
-  const { name, name_he, name_pt, description } = req.body;
+  const { name, name_he, name_pt, description, code } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
   try {
     await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_he TEXT').catch(() => {});
     await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_pt TEXT').catch(() => {});
     await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()').catch(() => {});
-    await query(
-      'UPDATE categories SET name=$1, name_he=$2, name_pt=$3, description=$4, updated_at=NOW() WHERE id=$5',
-      [name, name_he||null, name_pt||null, description||null, req.params.id]
-    );
+    await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS code TEXT').catch(() => {});
+    const catCode = code ? code.toUpperCase().replace(/[^A-Z]/g,'').slice(0,3) : null;
+    if (catCode) {
+      await query(
+        'UPDATE categories SET name=$1, name_he=$2, name_pt=$3, description=$4, code=$5, updated_at=NOW() WHERE id=$6',
+        [name, name_he||null, name_pt||null, description||null, catCode, req.params.id]
+      );
+    } else {
+      await query(
+        'UPDATE categories SET name=$1, name_he=$2, name_pt=$3, description=$4, updated_at=NOW() WHERE id=$5',
+        [name, name_he||null, name_pt||null, description||null, req.params.id]
+      );
+    }
     res.json({ message: 'updated' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -426,7 +437,7 @@ app.get('/api/subcategories', authenticateToken, async (req, res) => {
   try {
     await query(`CREATE TABLE IF NOT EXISTS subcategories (
       id SERIAL PRIMARY KEY, category_id INTEGER NOT NULL,
-      name TEXT NOT NULL, name_he TEXT, name_pt TEXT,
+      name TEXT NOT NULL, name_he TEXT, name_pt TEXT, code TEXT,
       FOREIGN KEY (category_id) REFERENCES categories(id)
     )`).catch(() => {});
     const { category_id } = req.query;
@@ -438,25 +449,34 @@ app.get('/api/subcategories', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/subcategories', authenticateToken, async (req, res) => {
-  const { category_id, name, name_he, name_pt } = req.body;
+  const { category_id, name, name_he, name_pt, code } = req.body;
   if (!category_id || !name) return res.status(400).json({ error: 'category_id and name required' });
   try {
     await query('ALTER TABLE subcategories ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()').catch(() => {});
+    await query('ALTER TABLE subcategories ADD COLUMN IF NOT EXISTS code TEXT').catch(() => {});
+    const subCode = (code || name.slice(0,3)).toUpperCase().replace(/[^A-Z]/g,'').slice(0,3);
     const r = await query(
-      'INSERT INTO subcategories (category_id, name, name_he, name_pt, updated_at) VALUES ($1,$2,$3,$4,NOW()) RETURNING *',
-      [category_id, name, name_he||null, name_pt||null]
+      'INSERT INTO subcategories (category_id, name, name_he, name_pt, code, updated_at) VALUES ($1,$2,$3,$4,$5,NOW()) RETURNING *',
+      [category_id, name, name_he||null, name_pt||null, subCode]
     );
     res.json(r.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.put('/api/subcategories/:id', authenticateToken, async (req, res) => {
-  const { name, name_he, name_pt } = req.body;
+  const { name, name_he, name_pt, code } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
   try {
     await query('ALTER TABLE subcategories ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()').catch(() => {});
-    await query('UPDATE subcategories SET name=$1, name_he=$2, name_pt=$3, updated_at=NOW() WHERE id=$4',
-      [name, name_he||null, name_pt||null, req.params.id]);
+    await query('ALTER TABLE subcategories ADD COLUMN IF NOT EXISTS code TEXT').catch(() => {});
+    const subCode = code ? code.toUpperCase().replace(/[^A-Z]/g,'').slice(0,3) : null;
+    if (subCode) {
+      await query('UPDATE subcategories SET name=$1, name_he=$2, name_pt=$3, code=$4, updated_at=NOW() WHERE id=$5',
+        [name, name_he||null, name_pt||null, subCode, req.params.id]);
+    } else {
+      await query('UPDATE subcategories SET name=$1, name_he=$2, name_pt=$3, updated_at=NOW() WHERE id=$4',
+        [name, name_he||null, name_pt||null, req.params.id]);
+    }
     res.json({ message: 'updated' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -2692,7 +2712,7 @@ app.post('/api/sync/warehouse-alerts', authenticateToken, async (req, res) => {
 app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
   const { entity } = req.params;
   const { rows } = req.body;
-  const allowed = ['customers', 'products', 'suppliers', 'manufacturers', 'settings', 'inbound', 'outbound', 'support', 'categories', 'subcategories'];
+  const allowed = ['customers', 'products', 'suppliers', 'manufacturers', 'settings', 'inbound', 'outbound', 'support', 'categories', 'subcategories', 'variant_attribute_types', 'product_type_codes'];
   if (!allowed.includes(entity)) return res.status(400).json({ error: 'Invalid entity' });
   if (!rows || !Array.isArray(rows)) return res.status(400).json({ error: 'rows array required' });
 
@@ -2704,17 +2724,28 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
       await client.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_he TEXT').catch(() => {});
       await client.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_pt TEXT').catch(() => {});
       await client.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ').catch(() => {});
+      await client.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS code TEXT').catch(() => {});
+      // מיגרציה: חלץ code מהשם הישן אם עדיין ריק
+      await client.query(`UPDATE categories SET
+        code = CASE
+          WHEN name ~ '\\(([A-Z]+)\\)$' THEN UPPER(SUBSTRING(name FROM '\\(([A-Z]+)\\)$'))
+          ELSE UPPER(LEFT(TRIM(name),3))
+        END
+        WHERE code IS NULL OR code = ''`).catch(() => {});
       for (const r of rows) {
+        const catCode = r.code ? r.code.toUpperCase().replace(/[^A-Z]/g,'').slice(0,3)
+          : (r.name || '').slice(0,3).toUpperCase().replace(/[^A-Z]/g,'');
         await client.query(`
-          INSERT INTO categories (id, name, name_he, name_pt, description, updated_at)
-          VALUES ($1,$2,$3,$4,$5,$6)
+          INSERT INTO categories (id, name, name_he, name_pt, description, code, updated_at)
+          VALUES ($1,$2,$3,$4,$5,$6,$7)
           ON CONFLICT (id) DO UPDATE SET
-            name        = CASE WHEN $6::text IS NOT NULL AND ($6::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $2 ELSE categories.name END,
-            name_he     = CASE WHEN $6::text IS NOT NULL AND ($6::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $3 ELSE categories.name_he END,
-            name_pt     = CASE WHEN $6::text IS NOT NULL AND ($6::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $4 ELSE categories.name_pt END,
-            description = CASE WHEN $6::text IS NOT NULL AND ($6::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $5 ELSE categories.description END,
-            updated_at  = CASE WHEN $6::text IS NOT NULL AND ($6::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $6::timestamptz ELSE categories.updated_at END`,
-          [r.id, r.name, r.name_he||null, r.name_pt||null, r.description||null, r.updated_at||null]);
+            name        = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $2 ELSE categories.name END,
+            name_he     = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $3 ELSE categories.name_he END,
+            name_pt     = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $4 ELSE categories.name_pt END,
+            description = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $5 ELSE categories.description END,
+            code        = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $6 ELSE categories.code END,
+            updated_at  = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $7::timestamptz ELSE categories.updated_at END`,
+          [r.id, r.name, r.name_he||null, r.name_pt||null, r.description||null, catCode, r.updated_at||null]);
       }
       // אפס את ה-sequence
       await client.query(`SELECT setval('categories_id_seq', COALESCE((SELECT MAX(id) FROM categories), 0) + 1, false)`).catch(() => {});
@@ -2723,27 +2754,75 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
     if (entity === 'subcategories') {
       await client.query(`CREATE TABLE IF NOT EXISTS subcategories (
         id SERIAL PRIMARY KEY, category_id INTEGER NOT NULL,
-        name TEXT NOT NULL, name_he TEXT, name_pt TEXT,
+        name TEXT NOT NULL, name_he TEXT, name_pt TEXT, code TEXT,
         updated_at TIMESTAMPTZ,
         FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
       )`).catch(() => {});
       await client.query('ALTER TABLE subcategories ADD COLUMN IF NOT EXISTS name_he TEXT').catch(() => {});
       await client.query('ALTER TABLE subcategories ADD COLUMN IF NOT EXISTS name_pt TEXT').catch(() => {});
+      await client.query('ALTER TABLE subcategories ADD COLUMN IF NOT EXISTS code TEXT').catch(() => {});
       await client.query('ALTER TABLE subcategories ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ').catch(() => {});
+      // מיגרציה: חלץ code מהשם הישן אם עדיין ריק
+      await client.query(`UPDATE subcategories SET
+        code = CASE
+          WHEN name ~ '\\(([A-Z]+)\\)$' THEN UPPER(SUBSTRING(name FROM '\\(([A-Z]+)\\)$'))
+          ELSE UPPER(LEFT(TRIM(name),3))
+        END
+        WHERE code IS NULL OR code = ''`).catch(() => {});
       for (const r of rows) {
+        const subCode = r.code ? r.code.toUpperCase().replace(/[^A-Z]/g,'').slice(0,3)
+          : (r.name || '').slice(0,3).toUpperCase().replace(/[^A-Z]/g,'');
         await client.query(`
-          INSERT INTO subcategories (id, category_id, name, name_he, name_pt, updated_at)
-          VALUES ($1,$2,$3,$4,$5,$6)
+          INSERT INTO subcategories (id, category_id, name, name_he, name_pt, code, updated_at)
+          VALUES ($1,$2,$3,$4,$5,$6,$7)
           ON CONFLICT (id) DO UPDATE SET
-            category_id = CASE WHEN $6::text IS NOT NULL AND ($6::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $2 ELSE subcategories.category_id END,
-            name        = CASE WHEN $6::text IS NOT NULL AND ($6::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $3 ELSE subcategories.name END,
-            name_he     = CASE WHEN $6::text IS NOT NULL AND ($6::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $4 ELSE subcategories.name_he END,
-            name_pt     = CASE WHEN $6::text IS NOT NULL AND ($6::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $5 ELSE subcategories.name_pt END,
-            updated_at  = CASE WHEN $6::text IS NOT NULL AND ($6::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $6::timestamptz ELSE subcategories.updated_at END`,
-          [r.id, r.category_id, r.name, r.name_he||null, r.name_pt||null, r.updated_at||null]);
+            category_id = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $2 ELSE subcategories.category_id END,
+            name        = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $3 ELSE subcategories.name END,
+            name_he     = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $4 ELSE subcategories.name_he END,
+            name_pt     = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $5 ELSE subcategories.name_pt END,
+            code        = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $6 ELSE subcategories.code END,
+            updated_at  = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $7::timestamptz ELSE subcategories.updated_at END`,
+          [r.id, r.category_id, r.name, r.name_he||null, r.name_pt||null, subCode, r.updated_at||null]);
       }
       // אפס את ה-sequence
       await client.query(`SELECT setval('subcategories_id_seq', COALESCE((SELECT MAX(id) FROM subcategories), 0) + 1, false)`).catch(() => {});
+    }
+
+    if (entity === 'variant_attribute_types') {
+      await client.query(`CREATE TABLE IF NOT EXISTS variant_attribute_types (
+        id SERIAL PRIMARY KEY, name TEXT NOT NULL, name_he TEXT, name_pt TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )`).catch(() => {});
+      for (const r of rows) {
+        await client.query(`
+          INSERT INTO variant_attribute_types (id, name, name_he, name_pt)
+          VALUES ($1,$2,$3,$4)
+          ON CONFLICT (id) DO UPDATE SET
+            name    = EXCLUDED.name,
+            name_he = EXCLUDED.name_he,
+            name_pt = EXCLUDED.name_pt`,
+          [r.id, r.name, r.name_he||null, r.name_pt||null]);
+      }
+      await client.query(`SELECT setval('variant_attribute_types_id_seq', COALESCE((SELECT MAX(id) FROM variant_attribute_types), 0) + 1, false)`).catch(() => {});
+    }
+
+    if (entity === 'product_type_codes') {
+      await client.query(`CREATE TABLE IF NOT EXISTS product_type_codes (
+        id SERIAL PRIMARY KEY, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+        name_he TEXT, name_pt TEXT, created_at TIMESTAMPTZ DEFAULT NOW()
+      )`).catch(() => {});
+      for (const r of rows) {
+        await client.query(`
+          INSERT INTO product_type_codes (id, code, name, name_he, name_pt)
+          VALUES ($1,$2,$3,$4,$5)
+          ON CONFLICT (id) DO UPDATE SET
+            code    = EXCLUDED.code,
+            name    = EXCLUDED.name,
+            name_he = EXCLUDED.name_he,
+            name_pt = EXCLUDED.name_pt`,
+          [r.id, r.code, r.name, r.name_he||null, r.name_pt||null]);
+      }
+      await client.query(`SELECT setval('product_type_codes_id_seq', COALESCE((SELECT MAX(id) FROM product_type_codes), 0) + 1, false)`).catch(() => {});
     }
 
     if (entity === 'customers') {

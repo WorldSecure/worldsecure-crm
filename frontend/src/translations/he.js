@@ -107,6 +107,8 @@ export const he = {
   add_category: 'הוסף קטגוריה',
   edit_category: 'ערוך קטגוריה',
   existing_categories: 'קטגוריות קיימות',
+  category_code: 'קוד קטגוריה',
+  subcategory_code: 'קוד סאב-קטגוריה',
   name_en: 'שם באנגלית',
   name_he: 'שם בעברית',
   name_pt: 'שם בפורטוגזית',

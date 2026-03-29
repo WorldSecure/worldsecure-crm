@@ -107,6 +107,8 @@ export const pt = {
   add_category: 'Adicionar Categoria',
   edit_category: 'Editar Categoria',
   existing_categories: 'Categorias Existentes',
+  category_code: 'Código de Categoria',
+  subcategory_code: 'Código de Subcategoria',
   name_en: 'Nome em Inglês',
   name_he: 'Nome em Hebraico',
   name_pt: 'Nome em Português',

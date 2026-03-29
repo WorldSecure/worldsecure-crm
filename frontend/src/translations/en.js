@@ -107,6 +107,8 @@ export const en = {
   add_category: 'Add Category',
   edit_category: 'Edit Category',
   existing_categories: 'Existing Categories',
+  category_code: 'Category Code',
+  subcategory_code: 'Subcategory Code',
   name_en: 'Name in English',
   name_he: 'Name in Hebrew',
   name_pt: 'Name in Portuguese',

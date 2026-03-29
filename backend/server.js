@@ -719,9 +719,40 @@ app.put('/api/company/email-signature', authenticateToken, (req, res) => {
 
 // ============ CATEGORIES ROUTES ============
 
-// migration — הוסף עמודות שפה אם לא קיימות
+// migration — הוסף עמודות שפה ו-code אם לא קיימות
 db.run(`ALTER TABLE categories ADD COLUMN name_he TEXT`, () => {});
 db.run(`ALTER TABLE categories ADD COLUMN name_pt TEXT`, () => {});
+db.run(`ALTER TABLE categories ADD COLUMN code TEXT`, () => {
+  // מיגרציה: חלץ קוד ושם נקי מהנתון הקיים
+  // "Maritime Equipment (ME)" → code=ME, name=Maritime Equipment
+  // "Maritime Equipment" → code=MAR, name=Maritime Equipment (3 אותיות ראשונות)
+  db.run(`UPDATE categories SET
+    code = CASE
+      WHEN name LIKE '%(%)%' THEN
+        UPPER(TRIM(SUBSTR(name, INSTR(name,'(')+1, INSTR(name,')')-INSTR(name,'(')-1)))
+      ELSE
+        UPPER(SUBSTR(TRIM(name),1,3))
+    END,
+    name = CASE
+      WHEN name LIKE '%(%)%' THEN TRIM(SUBSTR(name,1,INSTR(name,'(')-1))
+      ELSE TRIM(name)
+    END
+    WHERE code IS NULL`, () => {});
+});
+db.run(`ALTER TABLE subcategories ADD COLUMN code TEXT`, () => {
+  db.run(`UPDATE subcategories SET
+    code = CASE
+      WHEN name LIKE '%(%)%' THEN
+        UPPER(TRIM(SUBSTR(name, INSTR(name,'(')+1, INSTR(name,')')-INSTR(name,'(')-1)))
+      ELSE
+        UPPER(SUBSTR(TRIM(name),1,3))
+    END,
+    name = CASE
+      WHEN name LIKE '%(%)%' THEN TRIM(SUBSTR(name,1,INSTR(name,'(')-1))
+      ELSE TRIM(name)
+    END
+    WHERE code IS NULL`, () => {});
+});
 db.run(`ALTER TABLE products ADD COLUMN subcategory_id INTEGER`, () => {});
 db.run(`ALTER TABLE products ADD COLUMN quantity_updated_at TEXT`, () => {});
 db.run(`ALTER TABLE products ADD COLUMN is_parent INTEGER DEFAULT 0`, () => {});
@@ -757,25 +788,31 @@ app.get('/api/categories', authenticateToken, (req, res) => {
 });
 
 app.post('/api/categories', authenticateToken, (req, res) => {
-  const { name, name_he, name_pt, description } = req.body;
+  const { name, name_he, name_pt, description, code } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
+  const catCode = (code || name.slice(0,3)).toUpperCase().replace(/[^A-Z]/g,'').slice(0,3);
   db.run(
-    `INSERT INTO categories (name, name_he, name_pt, description, updated_at) VALUES (?, ?, ?, ?, datetime('now'))`,
-    [name, name_he||null, name_pt||null, description||null],
+    `INSERT INTO categories (name, name_he, name_pt, description, code, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+    [name, name_he||null, name_pt||null, description||null, catCode],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
       logActivity(req.user.id, 'CREATE_CATEGORY', 'category', this.lastID, { name });
-      res.json({ id: this.lastID, name, name_he: name_he||null, name_pt: name_pt||null, description });
+      res.json({ id: this.lastID, name, name_he: name_he||null, name_pt: name_pt||null, description, code: catCode });
     }
   );
 });
 
 app.put('/api/categories/:id', authenticateToken, (req, res) => {
-  const { name, name_he, name_pt, description } = req.body;
+  const { name, name_he, name_pt, description, code } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
+  const catCode = code ? code.toUpperCase().replace(/[^A-Z]/g,'').slice(0,3) : null;
+  const updateCode = catCode ? `code=?,` : '';
+  const params = catCode
+    ? [name, name_he||null, name_pt||null, description||null, catCode, req.params.id]
+    : [name, name_he||null, name_pt||null, description||null, req.params.id];
   db.run(
-    `UPDATE categories SET name=?, name_he=?, name_pt=?, description=?, updated_at=datetime('now') WHERE id=?`,
-    [name, name_he||null, name_pt||null, description||null, req.params.id],
+    `UPDATE categories SET name=?, name_he=?, name_pt=?, description=?, ${updateCode} updated_at=datetime('now') WHERE id=?`,
+    params,
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
       logActivity(req.user.id, 'UPDATE_CATEGORY', 'category', req.params.id, { name });
@@ -805,6 +842,7 @@ db.run(`CREATE TABLE IF NOT EXISTS subcategories (
   name TEXT NOT NULL,
   name_he TEXT,
   name_pt TEXT,
+  code TEXT,
   updated_at TEXT,
   FOREIGN KEY (category_id) REFERENCES categories(id)
 )`, () => {});
@@ -823,24 +861,30 @@ app.get('/api/subcategories', authenticateToken, (req, res) => {
 });
 
 app.post('/api/subcategories', authenticateToken, (req, res) => {
-  const { category_id, name, name_he, name_pt } = req.body;
+  const { category_id, name, name_he, name_pt, code } = req.body;
   if (!category_id || !name) return res.status(400).json({ error: 'category_id and name required' });
+  const subCode = (code || name.slice(0,3)).toUpperCase().replace(/[^A-Z]/g,'').slice(0,3);
   db.run(
-    `INSERT INTO subcategories (category_id, name, name_he, name_pt, updated_at) VALUES (?,?,?,?,datetime('now'))`,
-    [category_id, name, name_he||null, name_pt||null],
+    `INSERT INTO subcategories (category_id, name, name_he, name_pt, code, updated_at) VALUES (?,?,?,?,?,datetime('now'))`,
+    [category_id, name, name_he||null, name_pt||null, subCode],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
-      res.json({ id: this.lastID, category_id, name, name_he: name_he||null, name_pt: name_pt||null });
+      res.json({ id: this.lastID, category_id, name, name_he: name_he||null, name_pt: name_pt||null, code: subCode });
     }
   );
 });
 
 app.put('/api/subcategories/:id', authenticateToken, (req, res) => {
-  const { name, name_he, name_pt } = req.body;
+  const { name, name_he, name_pt, code } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
+  const subCode = code ? code.toUpperCase().replace(/[^A-Z]/g,'').slice(0,3) : null;
+  const updateCode = subCode ? `code=?,` : '';
+  const params = subCode
+    ? [name, name_he||null, name_pt||null, subCode, req.params.id]
+    : [name, name_he||null, name_pt||null, req.params.id];
   db.run(
-    `UPDATE subcategories SET name=?, name_he=?, name_pt=?, updated_at=datetime('now') WHERE id=?`,
-    [name, name_he||null, name_pt||null, req.params.id],
+    `UPDATE subcategories SET name=?, name_he=?, name_pt=?, ${updateCode} updated_at=datetime('now') WHERE id=?`,
+    params,
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ message: 'updated' });
