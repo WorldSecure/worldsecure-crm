@@ -477,9 +477,9 @@ function Inbound() {
                       onChange={(e) => setCurrentItem({...currentItem, product_id: e.target.value})}
                     >
                       <option value="">{t('select_product')}</option>
-                      {products.map(product => (
+                      {products.filter(p => !p.is_parent && (p.is_active === 1 || p.is_active === true || p.is_active == null)).map(product => (
                         <option key={product.id} value={product.id}>
-                          {product.sku} - {getProductName(product)} ({t('quantity')}: {product.quantity})
+                          {getProductName(product)} {product.quantity > 0 ? `🟢 ${product.quantity}` : `🔴 ${product.quantity}`}
                         </option>
                       ))}
                     </select>

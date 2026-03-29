@@ -253,7 +253,7 @@ function SupportCaseManagementModal({ ticket, customers, products, users, onClos
                     setForm(f => ({...f, product_id: e.target.value, product_name: p?.name||''}));
                   }}>
                     <option value="">{t('select_product')}</option>
-                    {products.map(p => <option key={p.id} value={p.id}>{p.name} {p.sku ? `(${p.sku})` : ''}</option>)}
+                    {products.filter(p => !p.is_parent && (p.is_active === 1 || p.is_active === true || p.is_active == null)).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </div>
               </div>
@@ -488,7 +488,7 @@ function SupportCaseManagementModal({ ticket, customers, products, users, onClos
                   setSendProductForm(f => ({...f, product_id: e.target.value, product_name: p?.name||''}));
                 }}>
                 <option value="">{t('select_product')||'בחר מוצר'}</option>
-                {products.map(p => <option key={p.id} value={p.id}>{p.name} {p.sku ? `(${p.sku})` : ''}</option>)}
+                {products.filter(p => !p.is_parent && (p.is_active === 1 || p.is_active === true || p.is_active == null)).map(p => <option key={p.id} value={p.id}>{p.name} {p.quantity > 0 ? `🟢 ${p.quantity}` : `🔴 ${p.quantity}`}</option>)}
               </select>
             </div>
             <div className="form-group">
