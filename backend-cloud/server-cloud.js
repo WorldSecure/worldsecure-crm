@@ -668,6 +668,69 @@ app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
       }
     }
 
+    // ── סנכרון דגמים אם מוצר אב עם variant_attrs ──────────────────────
+    if (is_parent && variant_attrs) {
+      try {
+        // פרסור variant_attrs → combinations חדשות
+        const attrPattern = /\[([^\]=]+)=([^\]]+)\]/g;
+        const attrs = [];
+        let match;
+        while ((match = attrPattern.exec(variant_attrs)) !== null) {
+          attrs.push({ name: match[1].trim(), values: match[2].split(',').map(v => v.trim()).filter(Boolean) });
+        }
+
+        if (attrs.length > 0) {
+          const cartesian = (arrays) => arrays.reduce((acc, arr) => {
+            const res = [];
+            acc.forEach(a => arr.forEach(b => res.push([...a, b])));
+            return res;
+          }, [[]]);
+
+          const valueSets = attrs.map(a => a.values);
+          const combos = cartesian(valueSets);
+
+          // חלץ prefix מה-SKU של האב
+          const skuBase = finalSku.replace(/-PAR-\d+$/, '').replace(/-PAR$/, '');
+          const expectedSkus = combos.map(combo => `${skuBase}-${combo.join('-')}`);
+
+          // טען דגמים קיימים
+          const existingResult = await query('SELECT id, sku FROM products WHERE parent_id=$1', [req.params.id]);
+          const existingVariants = existingResult.rows;
+          const existingSkus = existingVariants.map(v => v.sku);
+
+          // מחק דגמים שלא נמצאים יותר בהגדרה החדשה
+          for (const v of existingVariants) {
+            if (!expectedSkus.includes(v.sku)) {
+              await query('DELETE FROM products WHERE id=$1', [v.id]);
+            }
+          }
+
+          // צור דגמים חדשים שלא קיימים עדיין
+          for (const combo of combos) {
+            const baseVariantSku = `${skuBase}-${combo.join('-')}`;
+            if (!existingSkus.includes(baseVariantSku)) {
+              const existing = await query('SELECT id FROM products WHERE sku=$1', [baseVariantSku]);
+              if (existing.rows.length === 0) {
+                await query(
+                  `INSERT INTO products (sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, supplier_id, manufacturer_id, parent_id, meta_updated_at)
+                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,$11,$12,$13,$14,NOW())`,
+                  [baseVariantSku,
+                   `${name} (${combo.join(' ')})`,
+                   name_he ? `${name_he} (${combo.join(' ')})` : null,
+                   name_pt ? `${name_pt} (${combo.join(' ')})` : null,
+                   description||null, category_id||null, subcategory_id||null,
+                   price||null, currency||'ILS', unit||null,
+                   min_quantity||0, supplier_id||null, manufacturer_id||null, req.params.id]
+                );
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error syncing variants on update:', e.message);
+      }
+    }
+
     res.json({ message: 'Product updated', sku: finalSku });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
