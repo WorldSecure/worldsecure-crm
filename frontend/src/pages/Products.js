@@ -37,6 +37,7 @@ function Products() {
   const isAdmin = user?.role === 'admin';
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
@@ -118,6 +119,14 @@ function Products() {
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
   }, [showModal]);
+
+  // סגירת תפריט Actions בלחיצה מחוץ
+  useEffect(() => {
+    if (!showActionsMenu) return;
+    const handleClickOutside = () => setShowActionsMenu(false);
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, [showActionsMenu]);
 
 
   const fetchData = async () => {
@@ -606,38 +615,72 @@ function Products() {
       <div className="card">
         <div className="card-header">
           <h3 className="card-title">{t('products')}</h3>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            {isAdmin && (
-            <button 
-              className="btn btn-secondary"
-              onClick={() => setShowCategoryModal(true)}
-            >
-              📂 {t('edit_categories') || 'ערוך קטגוריות'}
-            </button>
-            )}
-            {isAdmin && (
-            <button
-              className="btn btn-secondary"
-              onClick={() => openAddAttrType()}
-            >
-              🏷️ {t('edit_variant_attr_types') || 'מאפייני דגמים'}
-            </button>
-            )}
-            {isAdmin && (
-            <button 
-              className="btn btn-secondary"
-              onClick={() => { setSelectedCategoryFilter(categories[0]?.id?.toString() || ''); setShowSubcategoryModal(true); }}
-            >
-              📁 {t('edit_subcategories') || 'ערוך סאב-קטגוריות'}
-            </button>
-            )}
-            {isAdmin && (
-            <button 
-              className="btn btn-primary"
-              onClick={() => { resetForm(); setShowModal(true); }}
-            >
-              {t('add_product')}
-            </button>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'flex-end' }}>
+            {isAdmin && isMobile ? (
+              // מובייל — dropdown אחד + Add Product
+              <>
+                <div style={{ position: 'relative' }}>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => setShowActionsMenu(m => !m)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                  >
+                    ⚙️ {showActionsMenu ? '▲' : '▼'}
+                  </button>
+                  {showActionsMenu && (
+                    <div style={{
+                      position: 'absolute', top: '110%', right: 0, zIndex: 999,
+                      background: 'white', border: '1px solid #dee2e6', borderRadius: '8px',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.12)', minWidth: '200px', overflow: 'hidden'
+                    }}>
+                      {[
+                        { icon: '📂', label: t('edit_categories') || 'Edit Categories', action: () => { setShowCategoryModal(true); setShowActionsMenu(false); } },
+                        { icon: '📁', label: t('edit_subcategories') || 'Edit Subcategories', action: () => { setSelectedCategoryFilter(categories[0]?.id?.toString() || ''); setShowSubcategoryModal(true); setShowActionsMenu(false); } },
+                        { icon: '🏷️', label: t('edit_variant_attr_types') || 'Variant Attributes', action: () => { openAddAttrType(); setShowActionsMenu(false); } },
+                      ].map((item, i) => (
+                        <button key={i} onClick={item.action} style={{
+                          display: 'flex', alignItems: 'center', gap: '0.6rem',
+                          width: '100%', padding: '0.75rem 1rem', background: 'none',
+                          border: 'none', borderBottom: i < 2 ? '1px solid #f0f0f0' : 'none',
+                          cursor: 'pointer', fontSize: '0.9rem', textAlign: 'right'
+                        }}>
+                          <span>{item.icon}</span> {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => { resetForm(); setShowModal(true); }}
+                >
+                  + {t('add_product')}
+                </button>
+              </>
+            ) : (
+              // דסקטופ — כפתורים רגילים
+              <>
+                {isAdmin && (
+                <button className="btn btn-secondary" onClick={() => setShowCategoryModal(true)}>
+                  📂 {t('edit_categories') || 'ערוך קטגוריות'}
+                </button>
+                )}
+                {isAdmin && (
+                <button className="btn btn-secondary" onClick={() => openAddAttrType()}>
+                  🏷️ {t('edit_variant_attr_types') || 'מאפייני דגמים'}
+                </button>
+                )}
+                {isAdmin && (
+                <button className="btn btn-secondary" onClick={() => { setSelectedCategoryFilter(categories[0]?.id?.toString() || ''); setShowSubcategoryModal(true); }}>
+                  📁 {t('edit_subcategories') || 'ערוך סאב-קטגוריות'}
+                </button>
+                )}
+                {isAdmin && (
+                <button className="btn btn-primary" onClick={() => { resetForm(); setShowModal(true); }}>
+                  {t('add_product')}
+                </button>
+                )}
+              </>
             )}
           </div>
         </div>
