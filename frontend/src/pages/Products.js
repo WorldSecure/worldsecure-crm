@@ -38,6 +38,7 @@ function Products() {
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [showDiscontinued, setShowDiscontinued] = useState(false);
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
@@ -154,6 +155,13 @@ function Products() {
       console.error('Error fetching products:', error);
       setLoading(false);
     }
+  };
+
+  const fetchProducts = async (discontinued = false) => {
+    try {
+      const res = await axios.get(`/api/products${discontinued ? '?discontinued=true' : ''}`);
+      setProducts(res.data);
+    } catch (e) { console.error(e); }
   };
 
   const fetchAttrTypes = async () => {
@@ -492,6 +500,20 @@ function Products() {
     }
   };
 
+  const handleDiscontinue = async (product) => {
+    const isActive = product.is_active === 1 || product.is_active === true;
+    const msg = isActive
+      ? (t('confirm_discontinue') || `להפסיק את שיווק "${product.name}"? המוצר יוסתר אך ישמר בהיסטוריה.`)
+      : (t('confirm_restore') || `לשחזר את "${product.name}"?`);
+    if (!window.confirm(msg)) return;
+    try {
+      await axios.patch(`/api/products/${product.id}/discontinue`, { is_active: !isActive });
+      fetchProducts(showDiscontinued);
+    } catch (e) {
+      alert(t('error') + ': ' + (e.response?.data?.error || e.message));
+    }
+  };
+
   const toggleExpand = async (parentId) => {
     if (expandedParents[parentId]) {
       setExpandedParents(p => ({ ...p, [parentId]: false }));
@@ -718,6 +740,19 @@ function Products() {
               </optgroup>
             ))}
           </select>
+          {isAdmin && (
+            <button
+              className={`btn ${showDiscontinued ? 'btn-warning' : 'btn-secondary'}`}
+              style={{ whiteSpace: 'nowrap', fontSize: '0.85rem', ...(showDiscontinued ? { background: '#fd7e14', border: 'none', color: 'white' } : {}) }}
+              onClick={() => {
+                const next = !showDiscontinued;
+                setShowDiscontinued(next);
+                fetchProducts(next);
+              }}
+            >
+              {showDiscontinued ? `👁️ ${t('hide_discontinued') || 'הסתר מוסתרים'}` : `🚫 ${t('show_discontinued') || 'הצג מוסתרים'}`}
+            </button>
+          )}
         </div>
 
         {isMobile ? (
@@ -746,6 +781,11 @@ function Products() {
                       )}
                       {!!product.is_parent ? <span>⭐ </span> : null}
                       {getProductName(product, language)}
+                      {(product.is_active === 0 || product.is_active === false) && (
+                        <span style={{ fontSize: '0.7rem', background: '#6c757d', color: 'white', borderRadius: '4px', padding: '0.1rem 0.4rem' }}>
+                          {t('discontinued') || 'מוסתר'}
+                        </span>
+                      )}
                     </span>
                     {!!product.is_parent ? (
                       <span style={{ color: '#999', fontSize: '0.8rem' }}>—</span>
@@ -776,6 +816,19 @@ function Products() {
                         style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem', flex: 1 }}>
                         ✏️ {t('edit')}
                       </button>
+                      {(product.is_active === 1 || product.is_active === true || product.is_active == null) ? (
+                        <button className="btn btn-warning" onClick={() => handleDiscontinue(product)}
+                          style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem', background: '#fd7e14', border: 'none', color: 'white' }}
+                          title={t('discontinue') || 'הפסק שיווק'}>
+                          🚫
+                        </button>
+                      ) : (
+                        <button className="btn btn-success" onClick={() => handleDiscontinue(product)}
+                          style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}
+                          title={t('restore_product') || 'שחזר'}>
+                          ✅
+                        </button>
+                      )}
                       <button className="btn btn-danger" onClick={() => handleDelete(product.id)}
                         style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}>
                         🗑️
@@ -878,8 +931,18 @@ function Products() {
                             {expandedParents[product.id] ? '▼' : '▶'}
                           </button>
                           <span>⭐ {getProductName(product, language)}</span>
+                          {(product.is_active === 0 || product.is_active === false) && (
+                            <span style={{ fontSize: '0.7rem', background: '#6c757d', color: 'white', borderRadius: '4px', padding: '0.1rem 0.4rem' }}>{t('discontinued') || 'מוסתר'}</span>
+                          )}
                         </span>
-                      ) : getProductName(product, language)}
+                      ) : (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          {getProductName(product, language)}
+                          {(product.is_active === 0 || product.is_active === false) && (
+                            <span style={{ fontSize: '0.7rem', background: '#6c757d', color: 'white', borderRadius: '4px', padding: '0.1rem 0.4rem' }}>{t('discontinued') || 'מוסתר'}</span>
+                          )}
+                        </span>
+                      )}
                     </td>
                     <td>{getCategoryName(product, language)}</td>
                     <td>
@@ -898,6 +961,18 @@ function Products() {
                       {isAdmin && (
                       <div className="table-actions">
                         <button className="btn btn-secondary" onClick={() => handleEdit(product)}>{t('edit')}</button>
+                        {(product.is_active === 1 || product.is_active === true || product.is_active == null) ? (
+                          <button className="btn btn-warning" onClick={() => handleDiscontinue(product)}
+                            style={{ background: '#fd7e14', border: 'none', color: 'white' }}
+                            title={t('discontinue') || 'הפסק שיווק'}>
+                            🚫 {t('discontinue') || 'הפסק'}
+                          </button>
+                        ) : (
+                          <button className="btn btn-success" onClick={() => handleDiscontinue(product)}
+                            title={t('restore_product') || 'שחזר'}>
+                            ✅ {t('restore_product') || 'שחזר'}
+                          </button>
+                        )}
                         <button className="btn btn-danger" onClick={() => handleDelete(product.id)}>{t('delete')}</button>
                       </div>
                       )}

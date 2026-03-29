@@ -203,6 +203,7 @@ app.get('/api/products', authenticateToken, async (req, res) => {
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS quantity_updated_at TIMESTAMPTZ').catch(() => {});
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier_id INTEGER').catch(() => {});
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS manufacturer_id INTEGER').catch(() => {});
+    await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE').catch(() => {});
     await query(`CREATE TABLE IF NOT EXISTS manufacturers (
       id SERIAL PRIMARY KEY, name TEXT NOT NULL, address TEXT, phone TEXT,
       email TEXT, tax_id TEXT, country TEXT, notes TEXT, contact_person TEXT,
@@ -212,6 +213,7 @@ app.get('/api/products', authenticateToken, async (req, res) => {
       id SERIAL PRIMARY KEY, name TEXT NOT NULL, name_he TEXT, name_pt TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`).catch(() => {});
+    const showDiscontinued = req.query.discontinued === 'true';
     const r = await query(`
       SELECT p.*, c.name as category_name, c.name_he as category_name_he, c.name_pt as category_name_pt,
              s.name as subcategory_name, s.name_he as subcategory_name_he, s.name_pt as subcategory_name_pt,
@@ -220,9 +222,22 @@ app.get('/api/products', authenticateToken, async (req, res) => {
       LEFT JOIN subcategories s ON p.subcategory_id = s.id
       LEFT JOIN suppliers sup ON p.supplier_id = sup.id
       LEFT JOIN manufacturers man ON p.manufacturer_id = man.id
+      WHERE (p.is_active = true OR p.is_active IS NULL ${showDiscontinued ? 'OR 1=1' : ''})
       ORDER BY p.name
     `);
     res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Discontinue / Restore product
+app.patch('/api/products/:id/discontinue', authenticateToken, adminOnly, async (req, res) => {
+  const { is_active } = req.body;
+  try {
+    await query(
+      'UPDATE products SET is_active=$1, meta_updated_at=NOW() WHERE id=$2 OR parent_id=$2',
+      [is_active ? true : false, req.params.id]
+    );
+    res.json({ message: is_active ? 'Product restored' : 'Product discontinued' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -268,7 +283,8 @@ app.get('/api/products/low-stock', authenticateToken, async (req, res) => {
   try {
     const r = await query(`
       SELECT * FROM products
-      WHERE is_parent = FALSE
+      WHERE (is_active = TRUE OR is_active IS NULL)
+      AND is_parent = FALSE
       AND (
         -- מוצר רגיל: quantity <= min_quantity
         (parent_id IS NULL AND quantity <= min_quantity)

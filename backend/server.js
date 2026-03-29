@@ -727,6 +727,7 @@ db.run(`ALTER TABLE products ADD COLUMN quantity_updated_at TEXT`, () => {});
 db.run(`ALTER TABLE products ADD COLUMN is_parent INTEGER DEFAULT 0`, () => {});
 db.run(`ALTER TABLE products ADD COLUMN variant_attrs TEXT`, () => {});
 db.run(`ALTER TABLE products ADD COLUMN parent_id INTEGER`, () => {});
+db.run(`ALTER TABLE products ADD COLUMN is_active INTEGER DEFAULT 1`, () => {});
 
 // טבלת סוגי מאפייני דגמים
 db.run(`CREATE TABLE IF NOT EXISTS variant_attribute_types (
@@ -848,6 +849,7 @@ app.delete('/api/subcategories/:id', authenticateToken, (req, res) => {
 });
 
 app.get('/api/products', authenticateToken, (req, res) => {
+  const showDiscontinued = req.query.discontinued === 'true';
   const query = `
     SELECT p.*, c.name as category_name, c.name_he as category_name_he, c.name_pt as category_name_pt,
            s.name as subcategory_name, s.name_he as subcategory_name_he, s.name_pt as subcategory_name_pt,
@@ -857,12 +859,27 @@ app.get('/api/products', authenticateToken, (req, res) => {
     LEFT JOIN subcategories s ON p.subcategory_id = s.id
     LEFT JOIN suppliers sup ON p.supplier_id = sup.id
     LEFT JOIN manufacturers man ON p.manufacturer_id = man.id
+    WHERE (p.is_active = 1 OR p.is_active IS NULL OR ${showDiscontinued ? '1=1' : '0=1'})
     ORDER BY p.name
   `;
   db.all(query, [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
+});
+
+// Discontinue / Restore product
+app.patch('/api/products/:id/discontinue', authenticateToken, (req, res) => {
+  const { is_active } = req.body;
+  db.run(
+    `UPDATE products SET is_active=?, meta_updated_at=datetime('now') WHERE id=? OR parent_id=?`,
+    [is_active ? 1 : 0, req.params.id, req.params.id],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      logActivity(req.user.id, is_active ? 'RESTORE_PRODUCT' : 'DISCONTINUE_PRODUCT', 'product', req.params.id, {});
+      res.json({ message: is_active ? 'Product restored' : 'Product discontinued' });
+    }
+  );
 });
 
 // ── Product Variants ──────────────────────────────────────────────────────────
@@ -938,7 +955,8 @@ app.delete('/api/variant-attribute-types/:id', authenticateToken, (req, res) => 
 app.get('/api/products/low-stock', authenticateToken, (req, res) => {
   db.all(
     `SELECT * FROM products
-     WHERE is_parent = 0
+     WHERE (is_active = 1 OR is_active IS NULL)
+     AND is_parent = 0
      AND (
        (parent_id IS NULL AND quantity <= min_quantity)
        OR
