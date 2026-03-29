@@ -418,12 +418,16 @@ app.post('/api/products', authenticateToken, adminOnly, async (req, res) => {
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS variant_attrs TEXT').catch(() => {});
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS parent_id INTEGER').catch(() => {});
 
-    // בנה SKU ייחודי לאב עם counter
+    // בנה SKU ייחודי לאב — מצא את המספר הבא הפנוי (לא COUNT, כדי לטפל במחיקות)
     let finalSku = sku;
     if (is_parent) {
-      const cnt = await query(`SELECT COUNT(*) as cnt FROM products WHERE sku LIKE $1 AND is_parent = TRUE`, [`${sku}%`]);
-      const num = String(parseInt(cnt.rows[0]?.cnt || 0) + 1).padStart(3, '0');
-      finalSku = `${sku}-${num}`;
+      let num = 1;
+      while (true) {
+        const candidate = `${sku}-${String(num).padStart(3, '0')}`;
+        const existing = await query(`SELECT id FROM products WHERE sku = $1`, [candidate]);
+        if (existing.rows.length === 0) { finalSku = candidate; break; }
+        num++;
+      }
     }
 
     const r = await query(

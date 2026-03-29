@@ -1012,14 +1012,16 @@ app.post('/api/products', authenticateToken, (req, res) => {
   // אם מוצר אב — בנה SKU ייחודי עם counter
   const buildParentSku = (baseSku, callback) => {
     if (!is_parent) return callback(sku);
-    db.get(
-      `SELECT COUNT(*) as cnt FROM products WHERE sku LIKE ? AND is_parent = 1`,
-      [`${baseSku}%`],
-      (err, row) => {
-        const num = String((row?.cnt || 0) + 1).padStart(3, '0');
-        callback(`${baseSku}-${num}`);
-      }
-    );
+    // מצא את המספר הבא הפנוי (לא סתם COUNT — כדי לטפל במחיקות)
+    let num = 1;
+    const findNext = () => {
+      const candidate = `${baseSku}-${String(num).padStart(3, '0')}`;
+      db.get(`SELECT id FROM products WHERE sku = ?`, [candidate], (err, row) => {
+        if (row) { num++; findNext(); }
+        else callback(candidate);
+      });
+    };
+    findNext();
   };
   
   buildParentSku(sku, (finalSku) => {
