@@ -52,11 +52,15 @@ function Products() {
   const [showModal, setShowModal] = useState(false);
   const [showVariantsModal, setShowVariantsModal] = useState(false);
   const [variantAttrs, setVariantAttrs] = useState([
-    { name: '', values: [''] },
     { name: '', values: [''] }
   ]);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showSubcategoryModal, setShowSubcategoryModal] = useState(false);
+  const [showAttrTypesModal, setShowAttrTypesModal] = useState(false);
+  const [attrTypes, setAttrTypes] = useState([]);
+  const [editingAttrType, setEditingAttrType] = useState(null);
+  const [attrTypeForm, setAttrTypeForm] = useState({ name: '' });
+  const [savingAttrType, setSavingAttrType] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
   const [categoryForm, setCategoryForm] = useState({ value: '' });
   const [savingCategory, setSavingCategory] = useState(false);
@@ -118,12 +122,13 @@ function Products() {
 
   const fetchData = async () => {
     try {
-      const [productsRes, categoriesRes, subcategoriesRes, suppliersRes, manufacturersRes] = await Promise.all([
+      const [productsRes, categoriesRes, subcategoriesRes, suppliersRes, manufacturersRes, attrTypesRes] = await Promise.all([
         axios.get('/api/products'),
         axios.get('/api/categories'),
         axios.get('/api/subcategories'),
         axios.get('/api/suppliers'),
-        axios.get('/api/manufacturers')
+        axios.get('/api/manufacturers'),
+        axios.get('/api/variant-attribute-types')
       ]);
       
       setProducts(productsRes.data);
@@ -131,11 +136,59 @@ function Products() {
       setSubcategories(subcategoriesRes.data);
       setSuppliers(suppliersRes.data);
       setManufacturers(manufacturersRes.data);
+      setAttrTypes(attrTypesRes.data || []);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching products:', error);
       setLoading(false);
     }
+  };
+
+  const fetchAttrTypes = async () => {
+    try {
+      const res = await axios.get('/api/variant-attribute-types');
+      setAttrTypes(res.data || []);
+    } catch (e) { console.error(e); }
+  };
+
+  // ── Variant Attribute Types management ───────────────────────────────────────
+  const openAddAttrType = () => { setEditingAttrType(null); setAttrTypeForm({ name: '' }); setShowAttrTypesModal(true); };
+  const openEditAttrType = (at) => { setEditingAttrType(at); setAttrTypeForm({ name: '' }); setShowAttrTypesModal(true); };
+
+  const handleSaveAttrType = async () => {
+    if (!attrTypeForm.name.trim()) return;
+    setSavingAttrType(true);
+    try {
+      // תרגום אוטומטי
+      const lang = localStorage.getItem('language') || 'he';
+      let name = attrTypeForm.name.trim();
+      let name_he = name, name_en = name, name_pt = name;
+      try {
+        const transRes = await axios.post('/api/products/translate', { name, sourceLang: lang });
+        name_he = transRes.data.he || name;
+        name_en = transRes.data.en || name;
+        name_pt = transRes.data.pt || name;
+      } catch(e) {}
+
+      const payload = { name: name_en, name_he, name_pt };
+      if (editingAttrType) {
+        await axios.put(`/api/variant-attribute-types/${editingAttrType.id}`, payload);
+      } else {
+        await axios.post('/api/variant-attribute-types', payload);
+      }
+      await fetchAttrTypes();
+      setAttrTypeForm({ name: '' });
+      setEditingAttrType(null);
+    } catch(e) { console.error(e); }
+    setSavingAttrType(false);
+  };
+
+  const handleDeleteAttrType = async (id) => {
+    if (!window.confirm(t('confirm_delete') || 'למחוק?')) return;
+    try {
+      await axios.delete(`/api/variant-attribute-types/${id}`);
+      await fetchAttrTypes();
+    } catch(e) { console.error(e); }
   };
 
   // ── Category management ───────────────────────────────────────────────────
@@ -548,6 +601,14 @@ function Products() {
             </button>
             )}
             {isAdmin && (
+            <button
+              className="btn btn-secondary"
+              onClick={() => openAddAttrType()}
+            >
+              🏷️ {t('edit_variant_attr_types') || 'מאפייני דגמים'}
+            </button>
+            )}
+            {isAdmin && (
             <button 
               className="btn btn-secondary"
               onClick={() => { setSelectedCategoryFilter(categories[0]?.id?.toString() || ''); setShowSubcategoryModal(true); }}
@@ -920,9 +981,31 @@ function Products() {
                 {/* שדות מאפיינים */}
                 {variantAttrs.map((attr, ai) => (
                   <div key={ai} style={{ border: '1px solid #dee2e6', borderRadius: '8px', padding: '0.75rem', marginBottom: '0.75rem', background: '#fafafa' }}>
-                    <div style={{ marginBottom: '0.5rem' }}>
-                      <label className="form-label" style={{ fontSize: '0.8rem' }}>{t('attr_name') || 'שם מאפיין'} {ai + 1}</label>
-                      <input className="form-input" style={{ fontSize: '0.85rem' }}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <label className="form-label" style={{ fontSize: '0.8rem', margin: 0 }}>{t('attr_name') || 'שם מאפיין'} {ai + 1}</label>
+                      {variantAttrs.length > 1 && (
+                        <button type="button" onClick={() => {
+                          setVariantAttrs(variantAttrs.filter((_, i) => i !== ai));
+                        }} style={{ background: 'none', border: 'none', color: '#dc3545', cursor: 'pointer', fontSize: '1.1rem', lineHeight: 1 }} title="הסר מאפיין">×</button>
+                      )}
+                    </div>
+                    {attrTypes.length > 0 ? (
+                      <select className="form-input" style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}
+                        value={attr.name}
+                        onChange={(e) => {
+                          const updated = [...variantAttrs];
+                          updated[ai] = { ...updated[ai], name: e.target.value };
+                          setVariantAttrs(updated);
+                        }}>
+                        <option value="">{t('select_attr_type') || 'בחר מאפיין...'}</option>
+                        {attrTypes.map(at => {
+                          const lang = localStorage.getItem('language') || 'he';
+                          const label = lang === 'he' ? (at.name_he || at.name) : lang === 'pt' ? (at.name_pt || at.name) : at.name;
+                          return <option key={at.id} value={at.name}>{label}</option>;
+                        })}
+                      </select>
+                    ) : (
+                      <input className="form-input" style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}
                         placeholder={ai === 0 ? (t('attr_name_placeholder_1') || 'למשל: צבע / Color') : (t('attr_name_placeholder_2') || 'למשל: מידה / Size')}
                         value={attr.name}
                         onChange={(e) => {
@@ -930,7 +1013,7 @@ function Products() {
                           updated[ai] = { ...updated[ai], name: e.target.value };
                           setVariantAttrs(updated);
                         }} />
-                    </div>
+                    )}
                     <label className="form-label" style={{ fontSize: '0.8rem' }}>{t('attr_values') || 'ערכים'}</label>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
                       {attr.values.map((val, vi) => (
@@ -963,6 +1046,13 @@ function Products() {
                     </div>
                   </div>
                 ))}
+
+                {/* כפתור הוספת מאפיין */}
+                <button type="button" onClick={() => {
+                  setVariantAttrs([...variantAttrs, { name: '', values: [''] }]);
+                }} style={{ width: '100%', padding: '0.5rem', fontSize: '0.85rem', border: '1px dashed #6c757d', borderRadius: '8px', background: 'white', color: '#6c757d', cursor: 'pointer', marginBottom: '0.75rem' }}>
+                  + {t('add_attribute') || 'הוסף מאפיין'}
+                </button>
 
                 {/* תצוגה מקדימה */}
                 {skuPreviews.length > 0 && (
@@ -1020,7 +1110,7 @@ function Products() {
                     onChange={(e) => {
                       setFormData({ ...formData, is_parent: e.target.checked, variant_attrs: '' });
                       if (e.target.checked) {
-                        setVariantAttrs([{ name: '', values: [''] }, { name: '', values: [''] }]);
+                        setVariantAttrs([{ name: '', values: [''] }]);
                         setShowVariantsModal(true);
                       }
                     }}
@@ -1517,6 +1607,74 @@ function Products() {
                 disabled={savingSubcategory || !subcategoryForm.value.trim() || !selectedCategoryFilter}
                 onClick={handleSaveSubcategory}>
                 {savingSubcategory ? '...' : (editingSubcategory ? t('save') : `➕ ${t('add_subcategory') || 'הוסף'}`)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      )}
+
+      {/* ── מודל ניהול מאפייני דגמים ───────────────────────────────────────── */}
+      {showAttrTypesModal && (
+        <div className="modal-overlay">
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px', width: '95%' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">🏷️ {t('variant_attr_types_title') || 'ניהול מאפייני דגמים'}</h3>
+              <button className="modal-close" onClick={() => { setShowAttrTypesModal(false); setEditingAttrType(null); setAttrTypeForm({ name: '' }); }}>×</button>
+            </div>
+            <div className="modal-body">
+              {/* רשימת מאפיינים קיימים */}
+              {attrTypes.length > 0 && (
+                <div style={{ marginBottom: '1.25rem' }}>
+                  {attrTypes.map(at => {
+                    const lang = localStorage.getItem('language') || 'he';
+                    const label = lang === 'he' ? (at.name_he || at.name) : lang === 'pt' ? (at.name_pt || at.name) : at.name;
+                    return (
+                      <div key={at.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', borderRadius: '6px', background: '#f8f9fa', marginBottom: '0.4rem', border: '1px solid #e2e8f0' }}>
+                        <span style={{ fontWeight: 500 }}>{label}</span>
+                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                          <button className="btn btn-secondary" style={{ padding: '0.2rem 0.6rem', fontSize: '0.8rem' }}
+                            onClick={() => openEditAttrType(at)}>✏️</button>
+                          <button className="btn btn-danger" style={{ padding: '0.2rem 0.6rem', fontSize: '0.8rem' }}
+                            onClick={() => handleDeleteAttrType(at.id)}>🗑️</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* טופס הוספה/עריכה */}
+              <div style={{ borderTop: attrTypes.length > 0 ? '1px solid #e2e8f0' : 'none', paddingTop: attrTypes.length > 0 ? '1.2rem' : '0' }}>
+                <h4 style={{ marginBottom: '0.75rem', fontSize: '0.95rem', color: '#374151' }}>
+                  {editingAttrType ? `✏️ ${t('edit_variant_attr_type') || 'ערוך מאפיין'}` : `➕ ${t('add_variant_attr_type') || 'הוסף מאפיין'}`}
+                </h4>
+                <div className="form-group" style={{ marginBottom: '0' }}>
+                  <label className="form-label">
+                    {language === 'he' ? '🇮🇱 ' : language === 'pt' ? '🇵🇹 ' : '🇬🇧 '}
+                    {t('variant_attr_type_name') || 'שם מאפיין'} *
+                  </label>
+                  <input className="form-input" type="text" value={attrTypeForm.name}
+                    onChange={e => setAttrTypeForm({ name: e.target.value })}
+                    placeholder={language === 'he' ? 'למשל: צבע' : language === 'pt' ? 'ex: Cor' : 'e.g. Color'} />
+                  <small style={{ color: '#6c757d', fontSize: '0.78rem' }}>
+                    {language === 'he' ? 'יתורגם אוטומטית לכל השפות ✨' : language === 'pt' ? 'Será traduzido automaticamente ✨' : 'Will be auto-translated to all languages ✨'}
+                  </small>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              {editingAttrType && (
+                <button type="button" className="btn btn-secondary"
+                  onClick={() => { setEditingAttrType(null); setAttrTypeForm({ name: '' }); }}>
+                  {t('cancel')}
+                </button>
+              )}
+              <button type="button" className="btn btn-primary"
+                disabled={savingAttrType || !attrTypeForm.name.trim()}
+                onClick={handleSaveAttrType}>
+                {savingAttrType ? '...' : (editingAttrType ? t('save') : `➕ ${t('add_variant_attr_type') || 'הוסף'}`)}
               </button>
             </div>
           </div>

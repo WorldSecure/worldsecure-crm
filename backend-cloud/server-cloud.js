@@ -208,6 +208,10 @@ app.get('/api/products', authenticateToken, async (req, res) => {
       email TEXT, tax_id TEXT, country TEXT, notes TEXT, contact_person TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`).catch(() => {});
+    await query(`CREATE TABLE IF NOT EXISTS variant_attribute_types (
+      id SERIAL PRIMARY KEY, name TEXT NOT NULL, name_he TEXT, name_pt TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`).catch(() => {});
     const r = await query(`
       SELECT p.*, c.name as category_name, c.name_he as category_name_he, c.name_pt as category_name_pt,
              s.name as subcategory_name, s.name_he as subcategory_name_he, s.name_pt as subcategory_name_pt,
@@ -219,6 +223,44 @@ app.get('/api/products', authenticateToken, async (req, res) => {
       ORDER BY p.name
     `);
     res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Variant Attribute Types CRUD ──────────────────────────────────────────────
+app.get('/api/variant-attribute-types', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM variant_attribute_types ORDER BY name');
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/variant-attribute-types', authenticateToken, async (req, res) => {
+  const { name, name_he, name_pt } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name required' });
+  try {
+    const result = await pool.query(
+      'INSERT INTO variant_attribute_types (name, name_he, name_pt) VALUES ($1,$2,$3) RETURNING *',
+      [name, name_he||null, name_pt||null]
+    );
+    res.json(result.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/variant-attribute-types/:id', authenticateToken, async (req, res) => {
+  const { name, name_he, name_pt } = req.body;
+  try {
+    await pool.query(
+      'UPDATE variant_attribute_types SET name=$1, name_he=$2, name_pt=$3 WHERE id=$4',
+      [name, name_he||null, name_pt||null, req.params.id]
+    );
+    res.json({ message: 'updated' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/variant-attribute-types/:id', authenticateToken, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM variant_attribute_types WHERE id=$1', [req.params.id]);
+    res.json({ message: 'deleted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

@@ -728,6 +728,15 @@ db.run(`ALTER TABLE products ADD COLUMN is_parent INTEGER DEFAULT 0`, () => {});
 db.run(`ALTER TABLE products ADD COLUMN variant_attrs TEXT`, () => {});
 db.run(`ALTER TABLE products ADD COLUMN parent_id INTEGER`, () => {});
 
+// טבלת סוגי מאפייני דגמים
+db.run(`CREATE TABLE IF NOT EXISTS variant_attribute_types (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  name_he TEXT,
+  name_pt TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`, () => {});
+
 app.get('/api/categories', authenticateToken, (req, res) => {
   db.all('SELECT * FROM categories ORDER BY id', [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -888,6 +897,42 @@ app.patch('/api/products/:id/quantity', authenticateToken, (req, res) => {
       res.json({ message: 'Updated' });
     }
   );
+});
+
+// ── Variant Attribute Types CRUD ──────────────────────────────────────────────
+app.get('/api/variant-attribute-types', authenticateToken, (req, res) => {
+  db.all('SELECT * FROM variant_attribute_types ORDER BY name', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.post('/api/variant-attribute-types', authenticateToken, (req, res) => {
+  const { name, name_he, name_pt } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name required' });
+  db.run('INSERT INTO variant_attribute_types (name, name_he, name_pt) VALUES (?,?,?)',
+    [name, name_he||null, name_pt||null],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      db.get('SELECT * FROM variant_attribute_types WHERE id=?', [this.lastID], (err, row) => res.json(row));
+    });
+});
+
+app.put('/api/variant-attribute-types/:id', authenticateToken, (req, res) => {
+  const { name, name_he, name_pt } = req.body;
+  db.run('UPDATE variant_attribute_types SET name=?, name_he=?, name_pt=? WHERE id=?',
+    [name, name_he||null, name_pt||null, req.params.id],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'updated' });
+    });
+});
+
+app.delete('/api/variant-attribute-types/:id', authenticateToken, (req, res) => {
+  db.run('DELETE FROM variant_attribute_types WHERE id=?', [req.params.id], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'deleted' });
+  });
 });
 
 app.get('/api/products/low-stock', authenticateToken, (req, res) => {
