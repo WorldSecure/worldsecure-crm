@@ -1172,6 +1172,10 @@ app.put('/api/products/:id', authenticateToken, (req, res) => {
 
 app.delete('/api/products/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
+  // צור טבלת deleted_products אם לא קיימת
+  db.run(`CREATE TABLE IF NOT EXISTS deleted_products (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)`, () => {});
+  // שמור ב-deleted_products לפני המחיקה (לסינק לענן)
+  db.run(`INSERT OR IGNORE INTO deleted_products (id) VALUES (?)`, [id], () => {});
   // מחק קודם את כל הדגמים של האב
   db.run('DELETE FROM products WHERE parent_id = ?', [id], (err) => {
     if (err) return res.status(500).json({ error: err.message });

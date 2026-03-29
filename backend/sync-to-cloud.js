@@ -127,6 +127,7 @@ async function syncLocalToCloud() {
     await syncEntityToCloud('categories',    'SELECT id, name, name_he, name_pt, description, updated_at FROM categories');
     await syncEntityToCloud('subcategories', 'SELECT id, category_id, name, name_he, name_pt, updated_at FROM subcategories');
     await syncEntityToCloud('customers',  'SELECT id, name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes, created_at, updated_at FROM customers');
+    await syncDeletedProductsToCloud();
     await syncEntityToCloud('products',   'SELECT id, sku, name, name_he, name_pt, description, category_id, subcategory_id, supplier_id, manufacturer_id, price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at, is_parent, variant_attrs, parent_id FROM products');
     await syncEntityToCloud('suppliers',  'SELECT id, name, address, phone, email, tax_id, country, contact_person, notes, created_at, updated_at FROM suppliers');
     await syncEntityToCloud('manufacturers', 'SELECT id, name, address, phone, email, tax_id, country, contact_person, notes, created_at, updated_at FROM manufacturers');
@@ -157,6 +158,17 @@ async function syncEntityToCloud(entityName, sql) {
   const result = await apiRequest('POST', `/api/sync/${entityName}`, { rows });
   if (result.status === 200) log(`  ↳ ${entityName}: ${rows.length} synced`);
   else log(`  ⚠ ${entityName}: ${JSON.stringify(result.body)}`);
+}
+
+async function syncDeletedProductsToCloud() {
+  await sqliteRun('CREATE TABLE IF NOT EXISTS deleted_products (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
+  const deleted = await sqliteAll('SELECT id FROM deleted_products').catch(() => []);
+  if (deleted.length === 0) return;
+  for (const d of deleted) {
+    await apiRequest('DELETE', `/api/products/${d.id}`).catch(() => {});
+  }
+  await sqliteRun('DELETE FROM deleted_products').catch(() => {});
+  log(`  ↳ product deletions pushed to cloud: ${deleted.length}`);
 }
 
 async function syncInboundToCloud() {
@@ -258,8 +270,15 @@ async function syncProductsFromCloud() {
 
   const normalizeTs = (v) => v ? String(v).replace(' ', 'T').slice(0, 19) : '';
 
+  // טען רשימת מוצרים שנמחקו מקומית — לא להחזירם
+  await sqliteRun('CREATE TABLE IF NOT EXISTS deleted_products (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
+  const locallyDeleted = await sqliteAll('SELECT id FROM deleted_products').catch(() => []);
+  const deletedIds = new Set(locallyDeleted.map(r => r.id));
+
   let count = 0;
   for (const p of products) {
+    // דלג על מוצרים שנמחקו מקומית
+    if (deletedIds.has(p.id)) continue;
     const existing = await sqliteGet(
       'SELECT quantity, quantity_updated_at, meta_updated_at, subcategory_id, supplier_id, manufacturer_id FROM products WHERE id=?', [p.id]
     ).catch(() => null);
