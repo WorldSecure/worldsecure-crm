@@ -443,8 +443,22 @@ function Products() {
       min_quantity: product.min_quantity,
       supplier_id: product.supplier_id || '',
       manufacturer_id: product.manufacturer_id || '',
-      is_parent: product.is_parent ? true : false
+      is_parent: product.is_parent ? true : false,
+      variant_attrs: product.variant_attrs || ''
     });
+
+    // פרסור variant_attrs חזרה למבנה [{ name, values }]
+    if (product.is_parent && product.variant_attrs) {
+      const attrPattern = /\[([^\]=]+)=([^\]]+)\]/g;
+      const parsed = [];
+      let match;
+      while ((match = attrPattern.exec(product.variant_attrs)) !== null) {
+        parsed.push({ name: match[1].trim(), values: match[2].split(',').map(v => v.trim()).filter(Boolean) });
+      }
+      setVariantAttrs(parsed.length > 0 ? parsed : [{ name: '', values: [''] }]);
+    } else {
+      setVariantAttrs([{ name: '', values: [''] }]);
+    }
     setShowAddPrice(false);
     setNewPrice({ price: '', currency: product.currency || 'ILS', effective_date: new Date().toISOString().split('T')[0] });
     try {
