@@ -166,11 +166,16 @@ async function syncDeletedProductsToCloud() {
   await sqliteRun('CREATE TABLE IF NOT EXISTS deleted_products (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
   const deleted = await sqliteAll('SELECT id FROM deleted_products').catch(() => []);
   if (deleted.length === 0) return;
+  let successCount = 0;
   for (const d of deleted) {
-    await apiRequest('DELETE', `/api/products/${d.id}`).catch(() => {});
+    const result = await apiRequest('DELETE', `/api/products/${d.id}`).catch(() => ({ status: 500 }));
+    // 200 = מחוק, 404 = לא קיים בענן — בשני המקרים ניתן לנקות מקומית
+    if (result.status === 200 || result.status === 404) {
+      await sqliteRun('DELETE FROM deleted_products WHERE id=?', [d.id]).catch(() => {});
+      successCount++;
+    }
   }
-  await sqliteRun('DELETE FROM deleted_products').catch(() => {});
-  log(`  ↳ product deletions pushed to cloud: ${deleted.length}`);
+  if (successCount > 0) log(`  ↳ product deletions pushed to cloud: ${successCount}`);
 }
 
 async function syncInboundToCloud() {
@@ -460,6 +465,15 @@ async function syncVariantAttrTypesFromCloud() {
       count++;
     }
   }
+  // מחק מקומית רשומות שנמחקו בענן
+  const cloudIds = rows.map(r => r.id);
+  const localRows = await sqliteAll('SELECT id FROM variant_attribute_types').catch(() => []);
+  for (const local of localRows) {
+    if (!cloudIds.includes(local.id)) {
+      await sqliteRun('DELETE FROM variant_attribute_types WHERE id=?', [local.id]).catch(() => {});
+      log(`  ↳ deleted local variant_attribute_type #${local.id} (removed from cloud)`);
+    }
+  }
   if (count > 0) log(`  ↳ variant_attribute_types from cloud: ${count} synced`);
 }
 
@@ -486,6 +500,15 @@ async function syncProductTypeCodesFromCloud() {
         [r.code, r.name, r.name_he||null, r.name_pt||null, r.id]
       ).catch(() => {});
       count++;
+    }
+  }
+  // מחק מקומית רשומות שנמחקו בענן
+  const cloudIds = rows.map(r => r.id);
+  const localRows = await sqliteAll('SELECT id FROM product_type_codes').catch(() => []);
+  for (const local of localRows) {
+    if (!cloudIds.includes(local.id)) {
+      await sqliteRun('DELETE FROM product_type_codes WHERE id=?', [local.id]).catch(() => {});
+      log(`  ↳ deleted local product_type_code #${local.id} (removed from cloud)`);
     }
   }
   if (count > 0) log(`  ↳ product_type_codes from cloud: ${count} synced`);
@@ -893,6 +916,14 @@ async function pullDeletionsFromCloud() {
         await sqliteRun('DELETE FROM subcategories WHERE id = ?', [d.entity_id]).catch(() => {});
         handled.push(d);
         log(`  ↳ pulled deletion: subcategory #${d.entity_id}`);
+      } else if (d.entity_type === 'variant_attribute_type') {
+        await sqliteRun('DELETE FROM variant_attribute_types WHERE id = ?', [d.entity_id]).catch(() => {});
+        handled.push(d);
+        log(`  ↳ pulled deletion: variant_attribute_type #${d.entity_id}`);
+      } else if (d.entity_type === 'product_type_code') {
+        await sqliteRun('DELETE FROM product_type_codes WHERE id = ?', [d.entity_id]).catch(() => {});
+        handled.push(d);
+        log(`  ↳ pulled deletion: product_type_code #${d.entity_id}`);
       }
     }
 

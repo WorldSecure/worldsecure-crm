@@ -279,6 +279,7 @@ app.put('/api/product-type-codes/:id', authenticateToken, async (req, res) => {
 
 app.delete('/api/product-type-codes/:id', authenticateToken, async (req, res) => {
   try {
+    await pool.query(`INSERT INTO pending_deletions (entity_type, entity_id, deleted_at) VALUES ('product_type_code', $1, NOW()) ON CONFLICT DO NOTHING`, [req.params.id]).catch(() => {});
     await pool.query('DELETE FROM product_type_codes WHERE id=$1', [req.params.id]);
     res.json({ message: 'deleted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -317,6 +318,7 @@ app.put('/api/variant-attribute-types/:id', authenticateToken, async (req, res) 
 
 app.delete('/api/variant-attribute-types/:id', authenticateToken, async (req, res) => {
   try {
+    await pool.query(`INSERT INTO pending_deletions (entity_type, entity_id, deleted_at) VALUES ('variant_attribute_type', $1, NOW()) ON CONFLICT DO NOTHING`, [req.params.id]).catch(() => {});
     await pool.query('DELETE FROM variant_attribute_types WHERE id=$1', [req.params.id]);
     res.json({ message: 'deleted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
