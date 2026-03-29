@@ -224,7 +224,18 @@ app.get('/api/products', authenticateToken, async (req, res) => {
 
 app.get('/api/products/low-stock', authenticateToken, async (req, res) => {
   try {
-    const r = await query('SELECT * FROM products WHERE quantity <= min_quantity AND (parent_id IS NULL OR parent_id = 0) AND is_parent = FALSE ORDER BY name');
+    const r = await query(`
+      SELECT * FROM products
+      WHERE is_parent = FALSE
+      AND (
+        -- מוצר רגיל (ללא אב): quantity <= min_quantity
+        (parent_id IS NULL AND quantity <= min_quantity)
+        OR
+        -- דגם (עם אב): quantity < min_quantity בלבד (strict, לא כולל 0)
+        (parent_id IS NOT NULL AND min_quantity > 0 AND quantity < min_quantity)
+      )
+      ORDER BY name
+    `);
     res.json(r.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
