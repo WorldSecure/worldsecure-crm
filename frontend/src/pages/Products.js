@@ -123,9 +123,12 @@ function Products() {
   // סגירת תפריט Actions בלחיצה מחוץ
   useEffect(() => {
     if (!showActionsMenu) return;
-    const handleClickOutside = () => setShowActionsMenu(false);
-    window.addEventListener('click', handleClickOutside);
-    return () => window.removeEventListener('click', handleClickOutside);
+    const handleClickOutside = (e) => setShowActionsMenu(false);
+    // timeout קצר כדי לא לבטל את הלחיצה על הכפתור עצמו
+    const timer = setTimeout(() => {
+      window.addEventListener('click', handleClickOutside);
+    }, 10);
+    return () => { clearTimeout(timer); window.removeEventListener('click', handleClickOutside); };
   }, [showActionsMenu]);
 
 
