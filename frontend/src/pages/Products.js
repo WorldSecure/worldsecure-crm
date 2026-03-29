@@ -68,6 +68,8 @@ function Products() {
   const [editingProductType, setEditingProductType] = useState(null);
   const [productTypeForm, setProductTypeForm] = useState({ code: '', name: '' });
   const [savingProductType, setSavingProductType] = useState(false);
+  const [importingCsv, setImportingCsv] = useState(false);
+  const [importCsvResult, setImportCsvResult] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
   const [categoryForm, setCategoryForm] = useState({ value: '' });
   const [savingCategory, setSavingCategory] = useState(false);
@@ -262,6 +264,53 @@ function Products() {
       await axios.delete(`/api/product-type-codes/${id}`);
       await fetchProductTypeCodes();
     } catch(e) { console.error(e); }
+  };
+
+  const handleImportCsv = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setImportingCsv(true);
+    setImportCsvResult(null);
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      // דלג על שורת כותרת אם קיימת
+      const dataLines = lines[0]?.toLowerCase().startsWith('code') ? lines.slice(1) : lines;
+      const lang = localStorage.getItem('language') || 'he';
+      let success = 0, skipped = 0, errors = [];
+
+      for (const line of dataLines) {
+        const [rawCode, ...nameParts] = line.split(',');
+        const code = (rawCode || '').trim().toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
+        const name = nameParts.join(',').trim().replace(/^"|"$/g, '');
+        if (!code || code.length !== 3 || !name) { skipped++; continue; }
+
+        try {
+          // תרגום אוטומטי
+          let name_en = name, name_he = name, name_pt = name;
+          try {
+            const transRes = await axios.post('/api/products/translate', { name, sourceLang: lang });
+            name_he = transRes.data.he || name;
+            name_en = transRes.data.en || name;
+            name_pt = transRes.data.pt || name;
+          } catch(e) {}
+          await axios.post('/api/product-type-codes', { code, name: name_en, name_he, name_pt });
+          success++;
+        } catch(e) {
+          if (e.response?.status === 500 && e.response?.data?.error?.includes('UNIQUE')) {
+            skipped++; // קוד כבר קיים
+          } else {
+            errors.push(code);
+          }
+        }
+      }
+      await fetchProductTypeCodes();
+      setImportCsvResult({ success, skipped, errors });
+    } catch(e) {
+      setImportCsvResult({ error: e.message });
+    }
+    setImportingCsv(false);
   };
 
   // ── Category management ───────────────────────────────────────────────────
@@ -1903,6 +1952,27 @@ function Products() {
               <button className="modal-close" onClick={() => { setShowProductTypeModal(false); setEditingProductType(null); setProductTypeForm({ code: '', name: '' }); }}>×</button>
             </div>
             <div className="modal-body">
+              {/* כפתור Import CSV */}
+              <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <label style={{ cursor: importingCsv ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: '#17a2b8', color: 'white', border: 'none', borderRadius: '6px', padding: '0.4rem 0.9rem', fontSize: '0.85rem', fontWeight: 500, opacity: importingCsv ? 0.6 : 1 }}>
+                  {importingCsv ? '⏳ ...' : '📥 Import CSV'}
+                  <input type="file" accept=".csv,.txt" style={{ display: 'none' }} onChange={handleImportCsv} disabled={importingCsv} />
+                </label>
+                <small style={{ color: '#6c757d', fontSize: '0.78rem' }}>
+                  {language === 'he' ? 'פורמט: code,שם (לדוגמה: CYL,בלון)' : 'Format: code,name (e.g. CYL,Cylinder)'}
+                </small>
+              </div>
+              {importCsvResult && (
+                <div style={{ marginBottom: '1rem', padding: '0.6rem 0.9rem', borderRadius: '6px', fontSize: '0.83rem',
+                  background: importCsvResult.error ? '#fff3f3' : '#f0fff4',
+                  border: `1px solid ${importCsvResult.error ? '#dc3545' : '#28a745'}`,
+                  color: importCsvResult.error ? '#dc3545' : '#155724' }}>
+                  {importCsvResult.error ? `❌ ${importCsvResult.error}` :
+                    `✅ ${importCsvResult.success} ${language === 'he' ? 'נוספו' : 'imported'} · ${importCsvResult.skipped} ${language === 'he' ? 'דולגו' : 'skipped'}${importCsvResult.errors?.length ? ` · ❌ שגיאה: ${importCsvResult.errors.join(', ')}` : ''}`
+                  }
+                </div>
+              )}
+
               {/* רשימה קיימת */}
               {productTypeCodes.length > 0 && (
                 <div style={{ marginBottom: '1.25rem' }}>
