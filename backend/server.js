@@ -1323,7 +1323,6 @@ app.put('/api/products/:id', authenticateToken, (req, res) => {
 
         // עדכן SKU הדגמים אם ה-SKU של האב השתנה
         if (oldSku && oldSku !== finalSku) {
-          // חלץ את ה-prefix הישן של הדגמים (ללא -PAR-001)
           const oldBase = oldSku.replace(/-PAR-\d+$/, '').replace(/-PAR$/, '');
           const newBase = finalSku.replace(/-PAR-\d+$/, '').replace(/-PAR$/, '');
           db.all('SELECT id, sku FROM products WHERE parent_id = ?', [id], (err, variants) => {
@@ -1333,6 +1332,78 @@ app.put('/api/products/:id', authenticateToken, (req, res) => {
               db.run('UPDATE products SET sku=?, meta_updated_at=datetime("now") WHERE id=?', [newVariantSku, v.id]);
             });
           });
+        }
+
+        // ── סנכרון דגמים אם מוצר אב עם variant_attrs ──────────────────────
+        if (is_parent && variant_attrs) {
+          try {
+            // פרסור variant_attrs → combinations חדשות
+            const attrPattern = /\[([^\]=]+)=([^\]]+)\]/g;
+            const attrs = [];
+            let match;
+            while ((match = attrPattern.exec(variant_attrs)) !== null) {
+              attrs.push({ name: match[1].trim(), values: match[2].split(',').map(v => v.trim()).filter(Boolean) });
+            }
+
+            if (attrs.length > 0) {
+              const cartesian = (arrays) => arrays.reduce((acc, arr) => {
+                const res = [];
+                acc.forEach(a => arr.forEach(b => res.push([...a, b])));
+                return res;
+              }, [[]]);
+
+              const valueSets = attrs.map(a => a.values);
+              const combos = cartesian(valueSets);
+
+              // חלץ את ה-prefix מה-SKU של האב (ללא -PAR-001)
+              const skuBase = finalSku.replace(/-PAR-\d+$/, '').replace(/-PAR$/, '');
+
+              // חשב SKU צפויים לפי הקומבינציות החדשות
+              const expectedSkus = combos.map(combo => `${skuBase}-${combo.join('-')}`);
+
+              // מחק דגמים שה-SKU שלהם לא בצפויים (= הוסרו מהמאפיינים)
+              db.all('SELECT id, sku FROM products WHERE parent_id = ?', [id], (err, existingVariants) => {
+                if (err || !existingVariants) return;
+
+                const toDelete = existingVariants.filter(v => !expectedSkus.includes(v.sku));
+                const existingSkus = existingVariants.map(v => v.sku);
+
+                // מחק דגמים שלא נמצאים יותר בהגדרה החדשה
+                toDelete.forEach(v => {
+                  db.run('DELETE FROM products WHERE id=?', [v.id]);
+                });
+
+                // צור דגמים חדשים שלא קיימים עדיין
+                const toCreate = combos.filter(combo => !existingSkus.includes(`${skuBase}-${combo.join('-')}`));
+
+                const insertNext = (index) => {
+                  if (index >= toCreate.length) return;
+                  const combo = toCreate[index];
+                  const baseVariantSku = `${skuBase}-${combo.join('-')}`;
+                  db.get('SELECT id FROM products WHERE sku = ?', [baseVariantSku], (err, existing) => {
+                    if (!existing) {
+                      db.run(
+                        `INSERT INTO products (sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, supplier_id, manufacturer_id, parent_id, meta_updated_at)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, datetime('now'))`,
+                        [baseVariantSku,
+                         `${name} (${combo.join(' ')})`,
+                         name_he ? `${name_he} (${combo.join(' ')})` : null,
+                         name_pt ? `${name_pt} (${combo.join(' ')})` : null,
+                         description, category_id, subcategory_id||null, price, currency||'ILS', unit,
+                         min_quantity||0, supplier_id||null, manufacturer_id||null, id],
+                        () => insertNext(index + 1)
+                      );
+                    } else {
+                      insertNext(index + 1);
+                    }
+                  });
+                };
+                if (toCreate.length > 0) insertNext(0);
+              });
+            }
+          } catch (e) {
+            console.error('Error syncing variants on update:', e.message);
+          }
         }
 
         res.json({ message: 'Product updated', sku: finalSku });

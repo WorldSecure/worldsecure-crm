@@ -532,6 +532,11 @@ function Products() {
       alert(t('success'));
       setShowModal(false);
       resetForm();
+      // נקה cache של הדגמים לאב הזה כדי שיטען מחדש מהשרת
+      if (editingProduct?.id) {
+        setVariantsCache(c => { const n = { ...c }; delete n[editingProduct.id]; return n; });
+        setExpandedParents(p => ({ ...p, [editingProduct.id]: false }));
+      }
       fetchData();
     } catch (error) {
       alert(t('error') + ': ' + (error.response?.data?.error || error.message));
