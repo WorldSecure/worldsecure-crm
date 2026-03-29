@@ -745,6 +745,17 @@ app.delete('/api/products/:id', authenticateToken, async (req, res) => {
     await query(`
       INSERT INTO pending_deletions (entity_type, entity_id, deleted_at)
       VALUES ('product', $1, NOW()) ON CONFLICT DO NOTHING`, [req.params.id]).catch(() => {});
+    // נתק foreign keys לפני מחיקה כדי למנוע constraint violation
+    await query('UPDATE inbound_items SET product_id=NULL WHERE product_id=$1', [req.params.id]).catch(() => {});
+    await query('UPDATE outbound_items SET product_id=NULL WHERE product_id=$1', [req.params.id]).catch(() => {});
+    await query('UPDATE quote_items SET product_id=NULL WHERE product_id=$1', [req.params.id]).catch(() => {});
+    // מחק דגמים של האב קודם
+    const variants = await query('SELECT id FROM products WHERE parent_id=$1', [req.params.id]).catch(() => ({ rows: [] }));
+    for (const v of variants.rows) {
+      await query('UPDATE inbound_items SET product_id=NULL WHERE product_id=$1', [v.id]).catch(() => {});
+      await query('UPDATE outbound_items SET product_id=NULL WHERE product_id=$1', [v.id]).catch(() => {});
+      await query('UPDATE quote_items SET product_id=NULL WHERE product_id=$1', [v.id]).catch(() => {});
+    }
     await query('DELETE FROM products WHERE parent_id=$1', [req.params.id]);
     await query('DELETE FROM products WHERE id=$1', [req.params.id]);
     res.json({ message: 'Product deleted' });
@@ -2917,12 +2928,18 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
     }
 
     if (entity === 'products') {
+      // migrations — פעם אחת לפני הלולאה, לא בתוכה
       await client.query('ALTER TABLE products ADD COLUMN IF NOT EXISTS quantity_updated_at TIMESTAMPTZ').catch(() => {});
+      await client.query('ALTER TABLE products ADD COLUMN IF NOT EXISTS meta_updated_at TIMESTAMPTZ').catch(() => {});
+      await client.query('ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory_id INTEGER').catch(() => {});
+      await client.query('ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier_id INTEGER').catch(() => {});
+      await client.query('ALTER TABLE products ADD COLUMN IF NOT EXISTS manufacturer_id INTEGER').catch(() => {});
+      await client.query('ALTER TABLE products ADD COLUMN IF NOT EXISTS is_parent BOOLEAN DEFAULT FALSE').catch(() => {});
+      await client.query('ALTER TABLE products ADD COLUMN IF NOT EXISTS variant_attrs TEXT').catch(() => {});
+      await client.query('ALTER TABLE products ADD COLUMN IF NOT EXISTS parent_id INTEGER').catch(() => {});
       for (const r of rows) {
         const qty    = (r.quantity    != null) ? parseInt(r.quantity)    : 0;
         const minQty = (r.min_quantity != null) ? parseInt(r.min_quantity) : 0;
-        // ❌ הוסר DELETE כפילות SKU — שובר דו-כיווניות (מוחק מוצרי ענן עם SKU דומה)
-        // בדוק timestamps לכמות ול-meta (SKU/name/unit/category)
         const existing = await client.query('SELECT quantity_updated_at, meta_updated_at FROM products WHERE id=$1', [r.id]);
         const cloudQtyTs  = existing.rows[0]?.quantity_updated_at;
         const cloudMetaTs = existing.rows[0]?.meta_updated_at;
@@ -2930,13 +2947,6 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
         const localMetaTs = r.meta_updated_at;
         const useLocalQty  = !cloudQtyTs  || (localQtyTs  && localQtyTs  > cloudQtyTs.toISOString().slice(0,19));
         const useLocalMeta = !cloudMetaTs || (localMetaTs && localMetaTs > cloudMetaTs.toISOString().slice(0,19));
-        await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS meta_updated_at TIMESTAMPTZ`).catch(() => {});
-        await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory_id INTEGER`).catch(() => {});
-        await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier_id INTEGER`).catch(() => {});
-        await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS manufacturer_id INTEGER`).catch(() => {});
-        await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS is_parent BOOLEAN DEFAULT FALSE`).catch(() => {});
-        await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS variant_attrs TEXT`).catch(() => {});
-        await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS parent_id INTEGER`).catch(() => {});
         await client.query(`
           INSERT INTO products (id, sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at, supplier_id, manufacturer_id, is_parent, variant_attrs, parent_id, created_at)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
