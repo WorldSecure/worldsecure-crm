@@ -1201,7 +1201,7 @@ app.put('/api/products/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
   const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs } = req.body;
 
-  const doUpdate = (finalSku) => {
+  const doUpdate = (finalSku, oldSku) => {
     db.run(
       `UPDATE products 
        SET sku = ?, name = ?, description = ?, category_id = ?, subcategory_id = ?, price = ?, currency = ?, unit = ?, quantity = ?, min_quantity = ?, name_he = ?, name_pt = ?, supplier_id = ?, manufacturer_id = ?, is_parent = ?, variant_attrs = ?, quantity_updated_at = datetime('now'), meta_updated_at = datetime('now')
@@ -1211,6 +1211,21 @@ app.put('/api/products/:id', authenticateToken, (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         autoResolveStockAlerts(id);
         logActivity(req.user.id, 'UPDATE_PRODUCT', 'product', id, req.body);
+
+        // עדכן SKU הדגמים אם ה-SKU של האב השתנה
+        if (oldSku && oldSku !== finalSku) {
+          // חלץ את ה-prefix הישן של הדגמים (ללא -PAR-001)
+          const oldBase = oldSku.replace(/-PAR-\d+$/, '').replace(/-PAR$/, '');
+          const newBase = finalSku.replace(/-PAR-\d+$/, '').replace(/-PAR$/, '');
+          db.all('SELECT id, sku FROM products WHERE parent_id = ?', [id], (err, variants) => {
+            if (!variants) return;
+            variants.forEach(v => {
+              const newVariantSku = v.sku.startsWith(oldBase) ? v.sku.replace(oldBase, newBase) : v.sku;
+              db.run('UPDATE products SET sku=?, meta_updated_at=datetime("now") WHERE id=?', [newVariantSku, v.id]);
+            });
+          });
+        }
+
         res.json({ message: 'Product updated', sku: finalSku });
       }
     );
@@ -1229,7 +1244,7 @@ app.put('/api/products/:id', authenticateToken, (req, res) => {
 
       if (currentBase === baseSku) {
         // הבסיס לא השתנה — שמור את ה-SKU הקיים
-        return doUpdate(currentSku);
+        return doUpdate(currentSku, null);
       }
 
       // הבסיס השתנה (שינוי קטגוריה/סאב) — מצא מספר פנוי חדש
@@ -1238,13 +1253,13 @@ app.put('/api/products/:id', authenticateToken, (req, res) => {
         const candidate = `${baseSku}-${String(num).padStart(3, '0')}`;
         db.get('SELECT id FROM products WHERE sku = ? AND id != ?', [candidate, id], (err, existing) => {
           if (existing) { num++; findNext(); }
-          else doUpdate(candidate);
+          else doUpdate(candidate, currentSku);
         });
       };
       findNext();
     });
   } else {
-    doUpdate(sku);
+    doUpdate(sku, null);
   }
 });
 

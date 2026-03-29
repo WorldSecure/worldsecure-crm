@@ -538,6 +538,7 @@ app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS variant_attrs TEXT').catch(() => {});
 
     let finalSku = sku;
+    let oldSku = null;
 
     // אם מוצר אב — בדוק אם ה-SKU צריך להתעדכן
     if (is_parent && sku) {
@@ -549,6 +550,7 @@ app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
       const currentBase = currentSku.match(/^(.+)-\d{3}$/) ? currentSku.match(/^(.+)-\d{3}$/)[1] : currentSku;
 
       if (currentBase !== baseSku) {
+        oldSku = currentSku;
         let num = 1;
         while (true) {
           const candidate = `${baseSku}-${String(num).padStart(3, '0')}`;
@@ -572,6 +574,18 @@ app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
         [finalSku, name, description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null, quantity||0, min_quantity||0, name_he||null, name_pt||null, supplier_id||null, manufacturer_id||null, is_parent ? true : false, variant_attrs||null, req.params.id]
       );
     }
+
+    // עדכן SKU הדגמים אם ה-SKU של האב השתנה
+    if (oldSku && oldSku !== finalSku) {
+      const oldBase = oldSku.replace(/-PAR-\d+$/, '').replace(/-PAR$/, '');
+      const newBase = finalSku.replace(/-PAR-\d+$/, '').replace(/-PAR$/, '');
+      const variants = await query('SELECT id, sku FROM products WHERE parent_id=$1', [req.params.id]);
+      for (const v of variants.rows) {
+        const newVariantSku = v.sku.startsWith(oldBase) ? v.sku.replace(oldBase, newBase) : v.sku;
+        await query('UPDATE products SET sku=$1, meta_updated_at=NOW() WHERE id=$2', [newVariantSku, v.id]);
+      }
+    }
+
     res.json({ message: 'Product updated', sku: finalSku });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

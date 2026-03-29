@@ -397,7 +397,7 @@ function Products() {
       // בניית SKU למוצר אב אוטומטית
       let finalSku = formData.sku;
       let variantSkuPrefix = '';
-      if (formData.is_parent && !editingProduct) {
+      if (formData.is_parent) {
         const cat = categories.find(c => String(c.id) === String(formData.category_id));
         const sub = subcategories.find(s => String(s.id) === String(formData.subcategory_id));
         const extractCode = (name, fallback) => {
@@ -407,6 +407,7 @@ function Products() {
         const catCode = extractCode(cat?.name, 'CAT');
         const subCode = extractCode(sub?.name, 'SUB');
         variantSkuPrefix = `${catCode}-${subCode}`;
+        // תמיד שלח את ה-base החדש — השרת יחליט אם לבנות מחדש
         finalSku = `${variantSkuPrefix}-PAR`;
       }
 
