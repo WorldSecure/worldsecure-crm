@@ -471,7 +471,7 @@ function WarehouseReports() {
         <AccordionBody open={inventoryOpen} loading={inventoryLoading}>
           {inventoryData && (() => {
             const q = inventorySearch.toLowerCase();
-            const filtered = q ? inventoryData.filter(p => getProductName(p).toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q)) : inventoryData;
+            const filtered = q ? inventoryData.filter(p => !p.is_parent && (getProductName(p).toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q))) : inventoryData.filter(p => !p.is_parent);
             const sorted = doSort(filtered, inventorySort.field, inventorySort.dir, inventoryGetters);
             const handleSort = f => { setInventorySort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' })); setInventoryCurrentPage(1); };
             const totalPages = inventoryPageSize === 'all' ? 1 : Math.ceil(sorted.length / inventoryPageSize);
@@ -501,7 +501,9 @@ function WarehouseReports() {
                   </thead>
                   <tbody>
                     {paginated.map((p, i) => {
-                      const isLow = (p.quantity || 0) <= (p.min_quantity || 0);
+                      const isLow = p.parent_id
+                        ? (p.quantity < 0 || (p.min_quantity > 0 && p.quantity < p.min_quantity))
+                        : (p.quantity <= p.min_quantity);
                       return (
                         <tr key={p.id} style={{ borderBottom: '1px solid #f0f0f0', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
                           <td style={{ padding: '0.6rem 1rem', color: '#888', fontSize: '0.82rem' }}>{p.sku || '-'}</td>
@@ -525,7 +527,7 @@ function WarehouseReports() {
                       <td colSpan={3} style={{ padding: '0.65rem 1rem', color: '#1565c0' }}>{t('total') || 'סה"כ'}: {sorted.length} {t('products') || 'מוצרים'}</td>
                       <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#1565c0' }}>{fmt(sorted.reduce((s, p) => s + (p.quantity || 0), 0))}</td>
                       <td></td>
-                      <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#721c24' }}>⚠️ {sorted.filter(p => (p.quantity || 0) <= (p.min_quantity || 0)).length}</td>
+                      <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#721c24' }}>⚠️ {sorted.filter(p => p.parent_id ? (p.quantity < 0 || (p.min_quantity > 0 && p.quantity < p.min_quantity)) : (p.quantity <= p.min_quantity)).length}</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -533,7 +535,9 @@ function WarehouseReports() {
                 {/* Mobile Cards */}
                 <div style={{ display: isMobile ? 'flex' : 'none', flexDirection: 'column', gap: '0.75rem', padding: '0.75rem' }}>
                   {paginated.map(p => {
-                    const isLow = (p.quantity || 0) <= (p.min_quantity || 0);
+                    const isLow = p.parent_id
+                      ? (p.quantity < 0 || (p.min_quantity > 0 && p.quantity < p.min_quantity))
+                      : (p.quantity <= p.min_quantity);
                     return (
                       <div key={p.id} style={{ background: 'white', border: `1px solid ${isLow ? '#f5c6cb' : '#e2e8f0'}`, borderRadius: '10px', padding: '1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
