@@ -1200,19 +1200,52 @@ app.delete('/api/products/:id/price-history/:hid', authenticateToken, (req, res)
 app.put('/api/products/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
   const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs } = req.body;
-  
-  db.run(
-    `UPDATE products 
-     SET sku = ?, name = ?, description = ?, category_id = ?, subcategory_id = ?, price = ?, currency = ?, unit = ?, quantity = ?, min_quantity = ?, name_he = ?, name_pt = ?, supplier_id = ?, manufacturer_id = ?, is_parent = ?, variant_attrs = ?, quantity_updated_at = datetime('now'), meta_updated_at = datetime('now')
-     WHERE id = ?`,
-    [sku, name, description, category_id, subcategory_id||null, price, currency || 'ILS', unit, quantity, min_quantity, name_he || null, name_pt || null, supplier_id||null, manufacturer_id||null, is_parent ? 1 : 0, variant_attrs||null, id],
-    (err) => {
-      if (err) return res.status(500).json({ error: err.message });
-      autoResolveStockAlerts(id);
-      logActivity(req.user.id, 'UPDATE_PRODUCT', 'product', id, req.body);
-      res.json({ message: 'Product updated' });
-    }
-  );
+
+  const doUpdate = (finalSku) => {
+    db.run(
+      `UPDATE products 
+       SET sku = ?, name = ?, description = ?, category_id = ?, subcategory_id = ?, price = ?, currency = ?, unit = ?, quantity = ?, min_quantity = ?, name_he = ?, name_pt = ?, supplier_id = ?, manufacturer_id = ?, is_parent = ?, variant_attrs = ?, quantity_updated_at = datetime('now'), meta_updated_at = datetime('now')
+       WHERE id = ?`,
+      [finalSku, name, description, category_id, subcategory_id||null, price, currency || 'ILS', unit, quantity, min_quantity, name_he || null, name_pt || null, supplier_id||null, manufacturer_id||null, is_parent ? 1 : 0, variant_attrs||null, id],
+      (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        autoResolveStockAlerts(id);
+        logActivity(req.user.id, 'UPDATE_PRODUCT', 'product', id, req.body);
+        res.json({ message: 'Product updated', sku: finalSku });
+      }
+    );
+  };
+
+  // אם מוצר אב — בנה מחדש את ה-SKU לפי הקטגוריה/סאב-קטגוריה החדשה
+  if (is_parent && sku) {
+    // חלץ את ה-base SKU (ללא הסיומת -001/-002 וכו')
+    const baseSkuMatch = sku.match(/^(.+)-\d{3}$/);
+    const baseSku = baseSkuMatch ? baseSkuMatch[1] : sku;
+
+    // בדוק אם ה-SKU הנוכחי כבר שייך למוצר זה — אם כן אל תבנה מחדש
+    db.get('SELECT sku FROM products WHERE id = ?', [id], (err, row) => {
+      const currentSku = row?.sku || '';
+      const currentBase = currentSku.match(/^(.+)-\d{3}$/) ? currentSku.match(/^(.+)-\d{3}$/)[1] : currentSku;
+
+      if (currentBase === baseSku) {
+        // הבסיס לא השתנה — שמור את ה-SKU הקיים
+        return doUpdate(currentSku);
+      }
+
+      // הבסיס השתנה (שינוי קטגוריה/סאב) — מצא מספר פנוי חדש
+      let num = 1;
+      const findNext = () => {
+        const candidate = `${baseSku}-${String(num).padStart(3, '0')}`;
+        db.get('SELECT id FROM products WHERE sku = ? AND id != ?', [candidate, id], (err, existing) => {
+          if (existing) { num++; findNext(); }
+          else doUpdate(candidate);
+        });
+      };
+      findNext();
+    });
+  } else {
+    doUpdate(sku);
+  }
 });
 
 app.delete('/api/products/:id', authenticateToken, (req, res) => {

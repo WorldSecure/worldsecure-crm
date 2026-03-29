@@ -536,18 +536,43 @@ app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS manufacturer_id INTEGER').catch(() => {});
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS is_parent BOOLEAN DEFAULT FALSE').catch(() => {});
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS variant_attrs TEXT').catch(() => {});
+
+    let finalSku = sku;
+
+    // אם מוצר אב — בדוק אם ה-SKU צריך להתעדכן
+    if (is_parent && sku) {
+      const baseSkuMatch = sku.match(/^(.+)-\d{3}$/);
+      const baseSku = baseSkuMatch ? baseSkuMatch[1] : sku;
+
+      const currentRow = await query('SELECT sku FROM products WHERE id=$1', [req.params.id]);
+      const currentSku = currentRow.rows[0]?.sku || '';
+      const currentBase = currentSku.match(/^(.+)-\d{3}$/) ? currentSku.match(/^(.+)-\d{3}$/)[1] : currentSku;
+
+      if (currentBase !== baseSku) {
+        let num = 1;
+        while (true) {
+          const candidate = `${baseSku}-${String(num).padStart(3, '0')}`;
+          const existing = await query('SELECT id FROM products WHERE sku=$1 AND id!=$2', [candidate, req.params.id]);
+          if (existing.rows.length === 0) { finalSku = candidate; break; }
+          num++;
+        }
+      } else {
+        finalSku = currentSku;
+      }
+    }
+
     if (_skip_quantity) {
       await query(
         'UPDATE products SET sku=$1, name=$2, description=$3, category_id=$4, subcategory_id=$5, price=$6, currency=$7, unit=$8, min_quantity=$9, name_he=$10, name_pt=$11, supplier_id=$12, manufacturer_id=$13, is_parent=$14, variant_attrs=$15, meta_updated_at=$16 WHERE id=$17',
-        [sku, name, description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null, min_quantity||0, name_he||null, name_pt||null, supplier_id||null, manufacturer_id||null, is_parent ? true : false, variant_attrs||null, req.body.meta_updated_at||null, req.params.id]
+        [finalSku, name, description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null, min_quantity||0, name_he||null, name_pt||null, supplier_id||null, manufacturer_id||null, is_parent ? true : false, variant_attrs||null, req.body.meta_updated_at||null, req.params.id]
       );
     } else {
       await query(
         'UPDATE products SET sku=$1, name=$2, description=$3, category_id=$4, subcategory_id=$5, price=$6, currency=$7, unit=$8, quantity=$9, min_quantity=$10, name_he=$11, name_pt=$12, supplier_id=$13, manufacturer_id=$14, is_parent=$15, variant_attrs=$16, quantity_updated_at=NOW(), meta_updated_at=NOW() WHERE id=$17',
-        [sku, name, description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null, quantity||0, min_quantity||0, name_he||null, name_pt||null, supplier_id||null, manufacturer_id||null, is_parent ? true : false, variant_attrs||null, req.params.id]
+        [finalSku, name, description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null, quantity||0, min_quantity||0, name_he||null, name_pt||null, supplier_id||null, manufacturer_id||null, is_parent ? true : false, variant_attrs||null, req.params.id]
       );
     }
-    res.json({ message: 'Product updated' });
+    res.json({ message: 'Product updated', sku: finalSku });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
