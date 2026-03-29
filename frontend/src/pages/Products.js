@@ -298,7 +298,7 @@ function Products() {
           await axios.post('/api/product-type-codes', { code, name: name_en, name_he, name_pt });
           success++;
         } catch(e) {
-          if (e.response?.status === 500 && e.response?.data?.error?.includes('UNIQUE')) {
+          if (e.response?.status === 500 && (e.response?.data?.error?.includes('UNIQUE') || e.response?.data?.error?.includes('duplicate key') || e.response?.data?.error?.includes('unique constraint'))) {
             skipped++; // קוד כבר קיים
           } else {
             errors.push(code);

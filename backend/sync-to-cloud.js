@@ -435,6 +435,62 @@ async function syncManufacturersFromCloud() {
   if (count > 0) log(`  ↳ manufacturers from cloud: ${count} updated`);
 }
 
+async function syncVariantAttrTypesFromCloud() {
+  const result = await apiRequest('GET', '/api/variant-attribute-types');
+  if (result.status !== 200) { log(`  ⚠ pull variant-attribute-types: ${JSON.stringify(result.body)}`); return; }
+  const rows = result.body || [];
+  await sqliteRun(`CREATE TABLE IF NOT EXISTS variant_attribute_types (
+    id INTEGER PRIMARY KEY, name TEXT NOT NULL, name_he TEXT, name_pt TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`).catch(() => {});
+  let count = 0;
+  for (const r of rows) {
+    const existing = await sqliteGet('SELECT id FROM variant_attribute_types WHERE id=?', [r.id]).catch(() => null);
+    if (!existing) {
+      await sqliteRun(
+        'INSERT OR IGNORE INTO variant_attribute_types (id, name, name_he, name_pt) VALUES (?,?,?,?)',
+        [r.id, r.name, r.name_he||null, r.name_pt||null]
+      ).catch(() => {});
+      count++;
+    } else {
+      await sqliteRun(
+        'UPDATE variant_attribute_types SET name=?, name_he=?, name_pt=? WHERE id=?',
+        [r.name, r.name_he||null, r.name_pt||null, r.id]
+      ).catch(() => {});
+      count++;
+    }
+  }
+  if (count > 0) log(`  ↳ variant_attribute_types from cloud: ${count} synced`);
+}
+
+async function syncProductTypeCodesFromCloud() {
+  const result = await apiRequest('GET', '/api/product-type-codes');
+  if (result.status !== 200) { log(`  ⚠ pull product-type-codes: ${JSON.stringify(result.body)}`); return; }
+  const rows = result.body || [];
+  await sqliteRun(`CREATE TABLE IF NOT EXISTS product_type_codes (
+    id INTEGER PRIMARY KEY, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+    name_he TEXT, name_pt TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`).catch(() => {});
+  let count = 0;
+  for (const r of rows) {
+    const existing = await sqliteGet('SELECT id FROM product_type_codes WHERE id=?', [r.id]).catch(() => null);
+    if (!existing) {
+      await sqliteRun(
+        'INSERT OR IGNORE INTO product_type_codes (id, code, name, name_he, name_pt) VALUES (?,?,?,?,?)',
+        [r.id, r.code, r.name, r.name_he||null, r.name_pt||null]
+      ).catch(() => {});
+      count++;
+    } else {
+      await sqliteRun(
+        'UPDATE product_type_codes SET code=?, name=?, name_he=?, name_pt=? WHERE id=?',
+        [r.code, r.name, r.name_he||null, r.name_pt||null, r.id]
+      ).catch(() => {});
+      count++;
+    }
+  }
+  if (count > 0) log(`  ↳ product_type_codes from cloud: ${count} synced`);
+}
+
 async function syncCloudToLocal() {
   log('▶ CLOUD → LOCAL sync...');
   try {
@@ -443,6 +499,8 @@ async function syncCloudToLocal() {
     await syncQrFromCloud();
     await syncCategoriesFromCloud();
     await syncSubcategoriesFromCloud();
+    await syncVariantAttrTypesFromCloud();
+    await syncProductTypeCodesFromCloud();
     await syncProductsFromCloud();
     await syncCustomersFromCloud();
     await syncSuppliersFromCloud();
