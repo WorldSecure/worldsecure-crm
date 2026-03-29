@@ -218,10 +218,12 @@ async function syncDeletedVariantAttrTypesToCloud() {
   let successCount = 0;
   for (const d of deleted) {
     const result = await apiRequest('DELETE', `/api/variant-attribute-types/${d.id}`).catch(() => ({ status: 500 }));
-    if (result.status === 200 || result.status === 404) {
+    // רק 404 = כבר לא קיים בענן ונמחק מהpending — ניתן לנקות מקומית
+    // 200 = נמחק עכשיו ונרשם בpending_deletions — נשאיר בטבלה עד שpullDeletions יטפל בו
+    if (result.status === 404) {
       await sqliteRun('DELETE FROM deleted_variant_attribute_types WHERE id=?', [d.id]).catch(() => {});
-      successCount++;
     }
+    if (result.status === 200 || result.status === 404) successCount++;
   }
   if (successCount > 0) log(`  ↳ variant_attribute_type deletions pushed to cloud: ${successCount}`);
 }
@@ -233,10 +235,11 @@ async function syncDeletedProductTypeCodesToCloud() {
   let successCount = 0;
   for (const d of deleted) {
     const result = await apiRequest('DELETE', `/api/product-type-codes/${d.id}`).catch(() => ({ status: 500 }));
-    if (result.status === 200 || result.status === 404) {
+    // רק 404 = כבר לא קיים — ניתן לנקות. 200 = נרשם בpending — נשאיר עד שpullDeletions יטפל
+    if (result.status === 404) {
       await sqliteRun('DELETE FROM deleted_product_type_codes WHERE id=?', [d.id]).catch(() => {});
-      successCount++;
     }
+    if (result.status === 200 || result.status === 404) successCount++;
   }
   if (successCount > 0) log(`  ↳ product_type_code deletions pushed to cloud: ${successCount}`);
 }
@@ -983,18 +986,24 @@ async function pullDeletionsFromCloud() {
       } else if (d.entity_type === 'category') {
         await sqliteRun('DELETE FROM subcategories WHERE category_id = ?', [d.entity_id]).catch(() => {});
         await sqliteRun('DELETE FROM categories WHERE id = ?', [d.entity_id]).catch(() => {});
+        await sqliteRun('DELETE FROM deleted_categories WHERE id = ?', [d.entity_id]).catch(() => {});
         handled.push(d);
         log(`  ↳ pulled deletion: category #${d.entity_id}`);
       } else if (d.entity_type === 'subcategory') {
         await sqliteRun('DELETE FROM subcategories WHERE id = ?', [d.entity_id]).catch(() => {});
+        await sqliteRun('DELETE FROM deleted_subcategories WHERE id = ?', [d.entity_id]).catch(() => {});
         handled.push(d);
         log(`  ↳ pulled deletion: subcategory #${d.entity_id}`);
       } else if (d.entity_type === 'variant_attribute_type') {
         await sqliteRun('DELETE FROM variant_attribute_types WHERE id = ?', [d.entity_id]).catch(() => {});
+        // נקה מהטבלה המקומית — הענן כבר עיבד את המחיקה
+        await sqliteRun('DELETE FROM deleted_variant_attribute_types WHERE id = ?', [d.entity_id]).catch(() => {});
         handled.push(d);
         log(`  ↳ pulled deletion: variant_attribute_type #${d.entity_id}`);
       } else if (d.entity_type === 'product_type_code') {
         await sqliteRun('DELETE FROM product_type_codes WHERE id = ?', [d.entity_id]).catch(() => {});
+        // נקה מהטבלה המקומית — הענן כבר עיבד את המחיקה
+        await sqliteRun('DELETE FROM deleted_product_type_codes WHERE id = ?', [d.entity_id]).catch(() => {});
         handled.push(d);
         log(`  ↳ pulled deletion: product_type_code #${d.entity_id}`);
       }
