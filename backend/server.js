@@ -826,9 +826,12 @@ app.delete('/api/categories/:id', authenticateToken, (req, res) => {
   db.get('SELECT COUNT(*) as count FROM products WHERE category_id=?', [req.params.id], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     if (row.count > 0) return res.status(400).json({ error: 'Cannot delete category with products' });
-    db.run('DELETE FROM categories WHERE id=?', [req.params.id], function(err) {
+    const id = req.params.id;
+    db.run(`CREATE TABLE IF NOT EXISTS deleted_categories (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)`, () => {});
+    db.run(`INSERT OR IGNORE INTO deleted_categories (id) VALUES (?)`, [id], () => {});
+    db.run('DELETE FROM categories WHERE id=?', [id], function(err) {
       if (err) return res.status(500).json({ error: err.message });
-      logActivity(req.user.id, 'DELETE_CATEGORY', 'category', req.params.id, {});
+      logActivity(req.user.id, 'DELETE_CATEGORY', 'category', id, {});
       res.json({ message: 'deleted' });
     });
   });
@@ -896,7 +899,10 @@ app.delete('/api/subcategories/:id', authenticateToken, (req, res) => {
   db.get('SELECT COUNT(*) as count FROM products WHERE subcategory_id=?', [req.params.id], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     if (row?.count > 0) return res.status(400).json({ error: 'Cannot delete subcategory with products' });
-    db.run('DELETE FROM subcategories WHERE id=?', [req.params.id], function(err) {
+    const id = req.params.id;
+    db.run(`CREATE TABLE IF NOT EXISTS deleted_subcategories (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)`, () => {});
+    db.run(`INSERT OR IGNORE INTO deleted_subcategories (id) VALUES (?)`, [id], () => {});
+    db.run('DELETE FROM subcategories WHERE id=?', [id], function(err) {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ message: 'deleted' });
     });
@@ -1001,7 +1007,10 @@ app.put('/api/product-type-codes/:id', authenticateToken, (req, res) => {
 });
 
 app.delete('/api/product-type-codes/:id', authenticateToken, (req, res) => {
-  db.run('DELETE FROM product_type_codes WHERE id=?', [req.params.id], (err) => {
+  const id = req.params.id;
+  db.run(`CREATE TABLE IF NOT EXISTS deleted_product_type_codes (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)`, () => {});
+  db.run(`INSERT OR IGNORE INTO deleted_product_type_codes (id) VALUES (?)`, [id], () => {});
+  db.run('DELETE FROM product_type_codes WHERE id=?', [id], (err) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ message: 'deleted' });
   });
@@ -1037,7 +1046,10 @@ app.put('/api/variant-attribute-types/:id', authenticateToken, (req, res) => {
 });
 
 app.delete('/api/variant-attribute-types/:id', authenticateToken, (req, res) => {
-  db.run('DELETE FROM variant_attribute_types WHERE id=?', [req.params.id], (err) => {
+  const id = req.params.id;
+  db.run(`CREATE TABLE IF NOT EXISTS deleted_variant_attribute_types (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)`, () => {});
+  db.run(`INSERT OR IGNORE INTO deleted_variant_attribute_types (id) VALUES (?)`, [id], () => {});
+  db.run('DELETE FROM variant_attribute_types WHERE id=?', [id], (err) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ message: 'deleted' });
   });

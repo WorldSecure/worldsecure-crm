@@ -125,10 +125,14 @@ async function syncLocalToCloud() {
     await syncUsersToCloud();
     await syncQrToCloud();
     await syncEntityToCloud('categories',    'SELECT id, name, name_he, name_pt, description, code, updated_at FROM categories');
+    await syncDeletedCategoriesToCloud();
     await syncEntityToCloud('subcategories', 'SELECT id, category_id, name, name_he, name_pt, code, updated_at FROM subcategories');
+    await syncDeletedSubcategoriesToCloud();
     await syncEntityToCloud('customers',  'SELECT id, name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes, created_at, updated_at FROM customers');
     await syncEntityToCloud('variant_attribute_types', 'SELECT id, name, name_he, name_pt, created_at FROM variant_attribute_types');
+    await syncDeletedVariantAttrTypesToCloud();
     await syncEntityToCloud('product_type_codes', 'SELECT id, code, name, name_he, name_pt, created_at FROM product_type_codes');
+    await syncDeletedProductTypeCodesToCloud();
     await syncDeletedProductsToCloud();
     await syncEntityToCloud('products',   'SELECT id, sku, name, name_he, name_pt, description, category_id, subcategory_id, supplier_id, manufacturer_id, price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at, is_parent, variant_attrs, parent_id, is_active, product_type_code FROM products');
     await syncEntityToCloud('suppliers',  'SELECT id, name, address, phone, email, tax_id, country, contact_person, notes, created_at, updated_at FROM suppliers');
@@ -169,13 +173,72 @@ async function syncDeletedProductsToCloud() {
   let successCount = 0;
   for (const d of deleted) {
     const result = await apiRequest('DELETE', `/api/products/${d.id}`).catch(() => ({ status: 500 }));
-    // 200 = מחוק, 404 = לא קיים בענן — בשני המקרים ניתן לנקות מקומית
     if (result.status === 200 || result.status === 404) {
       await sqliteRun('DELETE FROM deleted_products WHERE id=?', [d.id]).catch(() => {});
       successCount++;
     }
   }
   if (successCount > 0) log(`  ↳ product deletions pushed to cloud: ${successCount}`);
+}
+
+async function syncDeletedCategoriesToCloud() {
+  await sqliteRun('CREATE TABLE IF NOT EXISTS deleted_categories (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
+  const deleted = await sqliteAll('SELECT id FROM deleted_categories').catch(() => []);
+  if (deleted.length === 0) return;
+  let successCount = 0;
+  for (const d of deleted) {
+    const result = await apiRequest('DELETE', `/api/categories/${d.id}`).catch(() => ({ status: 500 }));
+    if (result.status === 200 || result.status === 404) {
+      await sqliteRun('DELETE FROM deleted_categories WHERE id=?', [d.id]).catch(() => {});
+      successCount++;
+    }
+  }
+  if (successCount > 0) log(`  ↳ category deletions pushed to cloud: ${successCount}`);
+}
+
+async function syncDeletedSubcategoriesToCloud() {
+  await sqliteRun('CREATE TABLE IF NOT EXISTS deleted_subcategories (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
+  const deleted = await sqliteAll('SELECT id FROM deleted_subcategories').catch(() => []);
+  if (deleted.length === 0) return;
+  let successCount = 0;
+  for (const d of deleted) {
+    const result = await apiRequest('DELETE', `/api/subcategories/${d.id}`).catch(() => ({ status: 500 }));
+    if (result.status === 200 || result.status === 404) {
+      await sqliteRun('DELETE FROM deleted_subcategories WHERE id=?', [d.id]).catch(() => {});
+      successCount++;
+    }
+  }
+  if (successCount > 0) log(`  ↳ subcategory deletions pushed to cloud: ${successCount}`);
+}
+
+async function syncDeletedVariantAttrTypesToCloud() {
+  await sqliteRun('CREATE TABLE IF NOT EXISTS deleted_variant_attribute_types (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
+  const deleted = await sqliteAll('SELECT id FROM deleted_variant_attribute_types').catch(() => []);
+  if (deleted.length === 0) return;
+  let successCount = 0;
+  for (const d of deleted) {
+    const result = await apiRequest('DELETE', `/api/variant-attribute-types/${d.id}`).catch(() => ({ status: 500 }));
+    if (result.status === 200 || result.status === 404) {
+      await sqliteRun('DELETE FROM deleted_variant_attribute_types WHERE id=?', [d.id]).catch(() => {});
+      successCount++;
+    }
+  }
+  if (successCount > 0) log(`  ↳ variant_attribute_type deletions pushed to cloud: ${successCount}`);
+}
+
+async function syncDeletedProductTypeCodesToCloud() {
+  await sqliteRun('CREATE TABLE IF NOT EXISTS deleted_product_type_codes (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
+  const deleted = await sqliteAll('SELECT id FROM deleted_product_type_codes').catch(() => []);
+  if (deleted.length === 0) return;
+  let successCount = 0;
+  for (const d of deleted) {
+    const result = await apiRequest('DELETE', `/api/product-type-codes/${d.id}`).catch(() => ({ status: 500 }));
+    if (result.status === 200 || result.status === 404) {
+      await sqliteRun('DELETE FROM deleted_product_type_codes WHERE id=?', [d.id]).catch(() => {});
+      successCount++;
+    }
+  }
+  if (successCount > 0) log(`  ↳ product_type_code deletions pushed to cloud: ${successCount}`);
 }
 
 async function syncInboundToCloud() {
@@ -448,8 +511,13 @@ async function syncVariantAttrTypesFromCloud() {
     id INTEGER PRIMARY KEY, name TEXT NOT NULL, name_he TEXT, name_pt TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`).catch(() => {});
+  await sqliteRun('CREATE TABLE IF NOT EXISTS deleted_variant_attribute_types (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
+  // טען IDs שנמחקו מקומית ועדיין לא הגיעו לענן — לא להחזיר אותם
+  const locallyDeleted = await sqliteAll('SELECT id FROM deleted_variant_attribute_types').catch(() => []);
+  const deletedIds = new Set(locallyDeleted.map(r => r.id));
   let count = 0;
   for (const r of rows) {
+    if (deletedIds.has(r.id)) continue; // נמחק מקומית — דלג
     const existing = await sqliteGet('SELECT id FROM variant_attribute_types WHERE id=?', [r.id]).catch(() => null);
     if (!existing) {
       await sqliteRun(
@@ -465,11 +533,11 @@ async function syncVariantAttrTypesFromCloud() {
       count++;
     }
   }
-  // מחק מקומית רשומות שנמחקו בענן
+  // מחק מקומית רשומות שנמחקו בענן (ולא נמחקו מקומית כבר)
   const cloudIds = rows.map(r => r.id);
   const localRows = await sqliteAll('SELECT id FROM variant_attribute_types').catch(() => []);
   for (const local of localRows) {
-    if (!cloudIds.includes(local.id)) {
+    if (!cloudIds.includes(local.id) && !deletedIds.has(local.id)) {
       await sqliteRun('DELETE FROM variant_attribute_types WHERE id=?', [local.id]).catch(() => {});
       log(`  ↳ deleted local variant_attribute_type #${local.id} (removed from cloud)`);
     }
@@ -485,8 +553,13 @@ async function syncProductTypeCodesFromCloud() {
     id INTEGER PRIMARY KEY, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
     name_he TEXT, name_pt TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`).catch(() => {});
+  await sqliteRun('CREATE TABLE IF NOT EXISTS deleted_product_type_codes (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
+  // טען IDs שנמחקו מקומית ועדיין לא הגיעו לענן
+  const locallyDeleted = await sqliteAll('SELECT id FROM deleted_product_type_codes').catch(() => []);
+  const deletedIds = new Set(locallyDeleted.map(r => r.id));
   let count = 0;
   for (const r of rows) {
+    if (deletedIds.has(r.id)) continue; // נמחק מקומית — דלג
     const existing = await sqliteGet('SELECT id FROM product_type_codes WHERE id=?', [r.id]).catch(() => null);
     if (!existing) {
       await sqliteRun(
@@ -502,11 +575,11 @@ async function syncProductTypeCodesFromCloud() {
       count++;
     }
   }
-  // מחק מקומית רשומות שנמחקו בענן
+  // מחק מקומית רשומות שנמחקו בענן (ולא נמחקו מקומית כבר)
   const cloudIds = rows.map(r => r.id);
   const localRows = await sqliteAll('SELECT id FROM product_type_codes').catch(() => []);
   for (const local of localRows) {
-    if (!cloudIds.includes(local.id)) {
+    if (!cloudIds.includes(local.id) && !deletedIds.has(local.id)) {
       await sqliteRun('DELETE FROM product_type_codes WHERE id=?', [local.id]).catch(() => {});
       log(`  ↳ deleted local product_type_code #${local.id} (removed from cloud)`);
     }
