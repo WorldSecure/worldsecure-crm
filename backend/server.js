@@ -728,10 +728,21 @@ db.run(`ALTER TABLE products ADD COLUMN is_parent INTEGER DEFAULT 0`, () => {});
 db.run(`ALTER TABLE products ADD COLUMN variant_attrs TEXT`, () => {});
 db.run(`ALTER TABLE products ADD COLUMN parent_id INTEGER`, () => {});
 db.run(`ALTER TABLE products ADD COLUMN is_active INTEGER DEFAULT 1`, () => {});
+db.run(`ALTER TABLE products ADD COLUMN product_type_code TEXT`, () => {});
 
 // טבלת סוגי מאפייני דגמים
 db.run(`CREATE TABLE IF NOT EXISTS variant_attribute_types (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  name_he TEXT,
+  name_pt TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`, () => {});
+
+// טבלת קודי סוג מוצר
+db.run(`CREATE TABLE IF NOT EXISTS product_type_codes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   name_he TEXT,
   name_pt TEXT,
@@ -916,6 +927,42 @@ app.patch('/api/products/:id/quantity', authenticateToken, (req, res) => {
   );
 });
 
+// ── Product Type Codes CRUD ───────────────────────────────────────────────────
+app.get('/api/product-type-codes', authenticateToken, (req, res) => {
+  db.all('SELECT * FROM product_type_codes ORDER BY code', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.post('/api/product-type-codes', authenticateToken, (req, res) => {
+  const { code, name, name_he, name_pt } = req.body;
+  if (!code || !name) return res.status(400).json({ error: 'Code and name required' });
+  db.run('INSERT INTO product_type_codes (code, name, name_he, name_pt) VALUES (?,?,?,?)',
+    [code.toUpperCase().slice(0,3), name, name_he||null, name_pt||null],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      db.get('SELECT * FROM product_type_codes WHERE id=?', [this.lastID], (err, row) => res.json(row));
+    });
+});
+
+app.put('/api/product-type-codes/:id', authenticateToken, (req, res) => {
+  const { code, name, name_he, name_pt } = req.body;
+  db.run('UPDATE product_type_codes SET code=?, name=?, name_he=?, name_pt=? WHERE id=?',
+    [code.toUpperCase().slice(0,3), name, name_he||null, name_pt||null, req.params.id],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'updated' });
+    });
+});
+
+app.delete('/api/product-type-codes/:id', authenticateToken, (req, res) => {
+  db.run('DELETE FROM product_type_codes WHERE id=?', [req.params.id], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'deleted' });
+  });
+});
+
 // ── Variant Attribute Types CRUD ──────────────────────────────────────────────
 app.get('/api/variant-attribute-types', authenticateToken, (req, res) => {
   db.all('SELECT * FROM variant_attribute_types ORDER BY name', [], (err, rows) => {
@@ -1068,7 +1115,7 @@ app.post('/api/products/translate', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/products', authenticateToken, (req, res) => {
-  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs, variant_sku_prefix } = req.body;
+  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs, variant_sku_prefix, product_type_code } = req.body;
 
   if (!sku || !sku.trim()) return res.status(400).json({ error: 'SKU is required' });
 
@@ -1089,9 +1136,9 @@ app.post('/api/products', authenticateToken, (req, res) => {
   
   buildParentSku(sku, (finalSku) => {
   db.run(
-    `INSERT INTO products (sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs, meta_updated_at) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-    [finalSku, name, description, category_id, subcategory_id||null, price, currency || 'ILS', unit, quantity || 0, min_quantity || 0, name_he || null, name_pt || null, supplier_id||null, manufacturer_id||null, is_parent ? 1 : 0, variant_attrs||null],
+    `INSERT INTO products (sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs, product_type_code, meta_updated_at) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+    [finalSku, name, description, category_id, subcategory_id||null, price, currency || 'ILS', unit, quantity || 0, min_quantity || 0, name_he || null, name_pt || null, supplier_id||null, manufacturer_id||null, is_parent ? 1 : 0, variant_attrs||null, product_type_code||null],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
       const parentId = this.lastID;
@@ -1217,14 +1264,14 @@ app.delete('/api/products/:id/price-history/:hid', authenticateToken, (req, res)
 
 app.put('/api/products/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
-  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs } = req.body;
+  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs, product_type_code } = req.body;
 
   const doUpdate = (finalSku, oldSku) => {
     db.run(
       `UPDATE products 
-       SET sku = ?, name = ?, description = ?, category_id = ?, subcategory_id = ?, price = ?, currency = ?, unit = ?, quantity = ?, min_quantity = ?, name_he = ?, name_pt = ?, supplier_id = ?, manufacturer_id = ?, is_parent = ?, variant_attrs = ?, quantity_updated_at = datetime('now'), meta_updated_at = datetime('now')
+       SET sku = ?, name = ?, description = ?, category_id = ?, subcategory_id = ?, price = ?, currency = ?, unit = ?, quantity = ?, min_quantity = ?, name_he = ?, name_pt = ?, supplier_id = ?, manufacturer_id = ?, is_parent = ?, variant_attrs = ?, product_type_code = ?, quantity_updated_at = datetime('now'), meta_updated_at = datetime('now')
        WHERE id = ?`,
-      [finalSku, name, description, category_id, subcategory_id||null, price, currency || 'ILS', unit, quantity, min_quantity, name_he || null, name_pt || null, supplier_id||null, manufacturer_id||null, is_parent ? 1 : 0, variant_attrs||null, id],
+      [finalSku, name, description, category_id, subcategory_id||null, price, currency || 'ILS', unit, quantity, min_quantity, name_he || null, name_pt || null, supplier_id||null, manufacturer_id||null, is_parent ? 1 : 0, variant_attrs||null, product_type_code||null, id],
       (err) => {
         if (err) return res.status(500).json({ error: err.message });
         autoResolveStockAlerts(id);

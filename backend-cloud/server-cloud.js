@@ -204,6 +204,7 @@ app.get('/api/products', authenticateToken, async (req, res) => {
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier_id INTEGER').catch(() => {});
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS manufacturer_id INTEGER').catch(() => {});
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE').catch(() => {});
+    await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS product_type_code TEXT').catch(() => {});
     await query(`CREATE TABLE IF NOT EXISTS manufacturers (
       id SERIAL PRIMARY KEY, name TEXT NOT NULL, address TEXT, phone TEXT,
       email TEXT, tax_id TEXT, country TEXT, notes TEXT, contact_person TEXT,
@@ -212,6 +213,10 @@ app.get('/api/products', authenticateToken, async (req, res) => {
     await query(`CREATE TABLE IF NOT EXISTS variant_attribute_types (
       id SERIAL PRIMARY KEY, name TEXT NOT NULL, name_he TEXT, name_pt TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW()
+    )`).catch(() => {});
+    await query(`CREATE TABLE IF NOT EXISTS product_type_codes (
+      id SERIAL PRIMARY KEY, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+      name_he TEXT, name_pt TEXT, created_at TIMESTAMPTZ DEFAULT NOW()
     )`).catch(() => {});
     const showDiscontinued = req.query.discontinued === 'true';
     const r = await query(`
@@ -238,6 +243,44 @@ app.patch('/api/products/:id/discontinue', authenticateToken, async (req, res) =
       [is_active ? true : false, req.params.id]
     );
     res.json({ message: is_active ? 'Product restored' : 'Product discontinued' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Product Type Codes CRUD ───────────────────────────────────────────────────
+app.get('/api/product-type-codes', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM product_type_codes ORDER BY code');
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/product-type-codes', authenticateToken, async (req, res) => {
+  const { code, name, name_he, name_pt } = req.body;
+  if (!code || !name) return res.status(400).json({ error: 'Code and name required' });
+  try {
+    const result = await pool.query(
+      'INSERT INTO product_type_codes (code, name, name_he, name_pt) VALUES ($1,$2,$3,$4) RETURNING *',
+      [code.toUpperCase().slice(0,3), name, name_he||null, name_pt||null]
+    );
+    res.json(result.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/product-type-codes/:id', authenticateToken, async (req, res) => {
+  const { code, name, name_he, name_pt } = req.body;
+  try {
+    await pool.query(
+      'UPDATE product_type_codes SET code=$1, name=$2, name_he=$3, name_pt=$4 WHERE id=$5',
+      [code.toUpperCase().slice(0,3), name, name_he||null, name_pt||null, req.params.id]
+    );
+    res.json({ message: 'updated' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/product-type-codes/:id', authenticateToken, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM product_type_codes WHERE id=$1', [req.params.id]);
+    res.json({ message: 'deleted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -545,13 +588,14 @@ app.post('/api/products', authenticateToken, adminOnly, async (req, res) => {
 });
 
 app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
-  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs, _skip_quantity } = req.body;
+  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs, _skip_quantity, product_type_code } = req.body;
   try {
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS meta_updated_at TIMESTAMPTZ').catch(() => {});
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier_id INTEGER').catch(() => {});
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS manufacturer_id INTEGER').catch(() => {});
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS is_parent BOOLEAN DEFAULT FALSE').catch(() => {});
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS variant_attrs TEXT').catch(() => {});
+    await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS product_type_code TEXT').catch(() => {});
 
     let finalSku = sku;
     let oldSku = null;
@@ -581,13 +625,13 @@ app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
 
     if (_skip_quantity) {
       await query(
-        'UPDATE products SET sku=$1, name=$2, description=$3, category_id=$4, subcategory_id=$5, price=$6, currency=$7, unit=$8, min_quantity=$9, name_he=$10, name_pt=$11, supplier_id=$12, manufacturer_id=$13, is_parent=$14, variant_attrs=$15, meta_updated_at=$16 WHERE id=$17',
-        [finalSku, name, description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null, min_quantity||0, name_he||null, name_pt||null, supplier_id||null, manufacturer_id||null, is_parent ? true : false, variant_attrs||null, req.body.meta_updated_at||null, req.params.id]
+        'UPDATE products SET sku=$1, name=$2, description=$3, category_id=$4, subcategory_id=$5, price=$6, currency=$7, unit=$8, min_quantity=$9, name_he=$10, name_pt=$11, supplier_id=$12, manufacturer_id=$13, is_parent=$14, variant_attrs=$15, product_type_code=$16, meta_updated_at=$17 WHERE id=$18',
+        [finalSku, name, description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null, min_quantity||0, name_he||null, name_pt||null, supplier_id||null, manufacturer_id||null, is_parent ? true : false, variant_attrs||null, product_type_code||null, req.body.meta_updated_at||null, req.params.id]
       );
     } else {
       await query(
-        'UPDATE products SET sku=$1, name=$2, description=$3, category_id=$4, subcategory_id=$5, price=$6, currency=$7, unit=$8, quantity=$9, min_quantity=$10, name_he=$11, name_pt=$12, supplier_id=$13, manufacturer_id=$14, is_parent=$15, variant_attrs=$16, quantity_updated_at=NOW(), meta_updated_at=NOW() WHERE id=$17',
-        [finalSku, name, description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null, quantity||0, min_quantity||0, name_he||null, name_pt||null, supplier_id||null, manufacturer_id||null, is_parent ? true : false, variant_attrs||null, req.params.id]
+        'UPDATE products SET sku=$1, name=$2, description=$3, category_id=$4, subcategory_id=$5, price=$6, currency=$7, unit=$8, quantity=$9, min_quantity=$10, name_he=$11, name_pt=$12, supplier_id=$13, manufacturer_id=$14, is_parent=$15, variant_attrs=$16, product_type_code=$17, quantity_updated_at=NOW(), meta_updated_at=NOW() WHERE id=$18',
+        [finalSku, name, description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null, quantity||0, min_quantity||0, name_he||null, name_pt||null, supplier_id||null, manufacturer_id||null, is_parent ? true : false, variant_attrs||null, product_type_code||null, req.params.id]
       );
     }
 

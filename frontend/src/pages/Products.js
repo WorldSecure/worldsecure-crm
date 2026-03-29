@@ -63,6 +63,11 @@ function Products() {
   const [editingAttrType, setEditingAttrType] = useState(null);
   const [attrTypeForm, setAttrTypeForm] = useState({ name: '' });
   const [savingAttrType, setSavingAttrType] = useState(false);
+  const [showProductTypeModal, setShowProductTypeModal] = useState(false);
+  const [productTypeCodes, setProductTypeCodes] = useState([]);
+  const [editingProductType, setEditingProductType] = useState(null);
+  const [productTypeForm, setProductTypeForm] = useState({ code: '', name: '' });
+  const [savingProductType, setSavingProductType] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
   const [categoryForm, setCategoryForm] = useState({ value: '' });
   const [savingCategory, setSavingCategory] = useState(false);
@@ -102,7 +107,8 @@ function Products() {
     min_quantity: 0,
     supplier_id: '',
     manufacturer_id: '',
-    is_parent: false
+    is_parent: false,
+    product_type_code: ''
   });
 
   useEffect(() => {
@@ -135,13 +141,14 @@ function Products() {
 
   const fetchData = async () => {
     try {
-      const [productsRes, categoriesRes, subcategoriesRes, suppliersRes, manufacturersRes, attrTypesRes] = await Promise.all([
+      const [productsRes, categoriesRes, subcategoriesRes, suppliersRes, manufacturersRes, attrTypesRes, productTypeRes] = await Promise.all([
         axios.get('/api/products'),
         axios.get('/api/categories'),
         axios.get('/api/subcategories'),
         axios.get('/api/suppliers'),
         axios.get('/api/manufacturers'),
-        axios.get('/api/variant-attribute-types')
+        axios.get('/api/variant-attribute-types'),
+        axios.get('/api/product-type-codes')
       ]);
       
       setProducts(productsRes.data);
@@ -150,6 +157,7 @@ function Products() {
       setSuppliers(suppliersRes.data);
       setManufacturers(manufacturersRes.data);
       setAttrTypes(attrTypesRes.data || []);
+      setProductTypeCodes(productTypeRes.data || []);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -168,6 +176,13 @@ function Products() {
     try {
       const res = await axios.get('/api/variant-attribute-types');
       setAttrTypes(res.data || []);
+    } catch (e) { console.error(e); }
+  };
+
+  const fetchProductTypeCodes = async () => {
+    try {
+      const res = await axios.get('/api/product-type-codes');
+      setProductTypeCodes(res.data || []);
     } catch (e) { console.error(e); }
   };
 
@@ -208,6 +223,44 @@ function Products() {
     try {
       await axios.delete(`/api/variant-attribute-types/${id}`);
       await fetchAttrTypes();
+    } catch(e) { console.error(e); }
+  };
+
+  // ── Product Type Codes management ────────────────────────────────────────────
+  const openAddProductType = () => { setEditingProductType(null); setProductTypeForm({ code: '', name: '' }); setShowProductTypeModal(true); };
+  const openEditProductType = (pt) => { setEditingProductType(pt); setProductTypeForm({ code: pt.code, name: '' }); setShowProductTypeModal(true); };
+
+  const handleSaveProductType = async () => {
+    if (!productTypeForm.code.trim() || !productTypeForm.name.trim()) return;
+    setSavingProductType(true);
+    try {
+      const lang = localStorage.getItem('language') || 'he';
+      let name = productTypeForm.name.trim();
+      let name_he = name, name_en = name, name_pt = name;
+      try {
+        const transRes = await axios.post('/api/products/translate', { name, sourceLang: lang });
+        name_he = transRes.data.he || name;
+        name_en = transRes.data.en || name;
+        name_pt = transRes.data.pt || name;
+      } catch(e) {}
+      const payload = { code: productTypeForm.code.toUpperCase().slice(0,3), name: name_en, name_he, name_pt };
+      if (editingProductType) {
+        await axios.put(`/api/product-type-codes/${editingProductType.id}`, payload);
+      } else {
+        await axios.post('/api/product-type-codes', payload);
+      }
+      await fetchProductTypeCodes();
+      setProductTypeForm({ code: '', name: '' });
+      setEditingProductType(null);
+    } catch(e) { alert(t('error') + ': ' + (e.response?.data?.error || e.message)); }
+    setSavingProductType(false);
+  };
+
+  const handleDeleteProductType = async (id) => {
+    if (!window.confirm(t('confirm_delete') || 'למחוק?')) return;
+    try {
+      await axios.delete(`/api/product-type-codes/${id}`);
+      await fetchProductTypeCodes();
     } catch(e) { console.error(e); }
   };
 
@@ -425,9 +478,11 @@ function Products() {
           return match ? match[1].toUpperCase() : (name || fallback).slice(0,3).toUpperCase();
         };
         const catCode = extractCode(cat?.name, 'CAT');
-        const subCode = extractCode(sub?.name, 'SUB');
-        variantSkuPrefix = `${catCode}-${subCode}`;
-        // תמיד שלח את ה-base החדש — השרת יחליט אם לבנות מחדש
+        const subCode = sub ? extractCode(sub?.name, 'SUB') : null;
+        const typeCode = formData.product_type_code || null;
+        // בנה prefix: CAT-SUB-TYPE או CAT-TYPE או CAT-SUB
+        const parts = [catCode, subCode, typeCode].filter(Boolean);
+        variantSkuPrefix = parts.join('-');
         finalSku = `${variantSkuPrefix}-PAR`;
       }
 
@@ -464,7 +519,8 @@ function Products() {
       supplier_id: product.supplier_id || '',
       manufacturer_id: product.manufacturer_id || '',
       is_parent: product.is_parent ? true : false,
-      variant_attrs: product.variant_attrs || ''
+      variant_attrs: product.variant_attrs || '',
+      product_type_code: product.product_type_code || ''
     });
 
     // פרסור variant_attrs חזרה למבנה [{ name, values }]
@@ -662,6 +718,7 @@ function Products() {
                         { icon: '📂', label: t('edit_categories') || 'Categories', action: () => { setShowCategoryModal(true); setShowActionsMenu(false); } },
                         { icon: '📁', label: t('edit_subcategories') || 'Subcategories', action: () => { setSelectedCategoryFilter(categories[0]?.id?.toString() || ''); setShowSubcategoryModal(true); setShowActionsMenu(false); } },
                         { icon: '🏷️', label: t('edit_variant_attr_types') || 'Attributes', action: () => { openAddAttrType(); setShowActionsMenu(false); } },
+                        { icon: '📦', label: t('product_types') || 'Product Types', action: () => { openAddProductType(); setShowActionsMenu(false); } },
                       ].map((item, i) => (
                         <button key={i} onClick={item.action} style={{
                           display: 'flex', alignItems: 'center', gap: '0.6rem',
@@ -693,6 +750,11 @@ function Products() {
                 {isAdmin && (
                 <button className="btn btn-secondary" onClick={() => openAddAttrType()}>
                   🏷️ {t('edit_variant_attr_types') || 'Attributes'}
+                </button>
+                )}
+                {isAdmin && (
+                <button className="btn btn-secondary" onClick={() => openAddProductType()}>
+                  📦 {t('product_types') || 'Product Types'}
                 </button>
                 )}
                 {isAdmin && (
@@ -1257,7 +1319,21 @@ function Products() {
                   </span>
                 </label>
                 {formData.is_parent && (
-                  <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    {/* Product Type dropdown */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <label style={{ fontSize: '0.82rem', fontWeight: 500, whiteSpace: 'nowrap' }}>📦 {t('product_type') || 'סוג מוצר'}:</label>
+                      <select className="form-select" style={{ fontSize: '0.85rem', minWidth: '140px' }}
+                        value={formData.product_type_code || ''}
+                        onChange={(e) => setFormData({ ...formData, product_type_code: e.target.value })}>
+                        <option value="">— {t('none') || 'ללא'} —</option>
+                        {productTypeCodes.map(pt => {
+                          const lang = localStorage.getItem('language') || 'he';
+                          const label = lang === 'he' ? (pt.name_he || pt.name) : lang === 'pt' ? (pt.name_pt || pt.name) : pt.name;
+                          return <option key={pt.id} value={pt.code}>{pt.code} — {label}</option>;
+                        })}
+                      </select>
+                    </div>
                     {formData.variant_attrs && (
                       <span style={{ fontFamily: 'monospace', fontSize: '0.82rem', background: '#f0fff4', border: '1px solid #28a745', borderRadius: '4px', padding: '0.2rem 0.5rem' }}>
                         {formData.variant_attrs}
@@ -1811,6 +1887,88 @@ function Products() {
                 disabled={savingAttrType || !attrTypeForm.name.trim()}
                 onClick={handleSaveAttrType}>
                 {savingAttrType ? '...' : (editingAttrType ? t('save') : `➕ ${t('add_variant_attr_type') || 'הוסף'}`)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      )}
+
+      {/* ── מודל ניהול קודי סוג מוצר ──────────────────────────────────────── */}
+      {showProductTypeModal && (
+        <div className="modal-overlay">
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px', width: '95%' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">📦 {t('product_types_title') || 'ניהול קודי סוג מוצר'}</h3>
+              <button className="modal-close" onClick={() => { setShowProductTypeModal(false); setEditingProductType(null); setProductTypeForm({ code: '', name: '' }); }}>×</button>
+            </div>
+            <div className="modal-body">
+              {/* רשימה קיימת */}
+              {productTypeCodes.length > 0 && (
+                <div style={{ marginBottom: '1.25rem' }}>
+                  {productTypeCodes.map(pt => {
+                    const lang = localStorage.getItem('language') || 'he';
+                    const label = lang === 'he' ? (pt.name_he || pt.name) : lang === 'pt' ? (pt.name_pt || pt.name) : pt.name;
+                    return (
+                      <div key={pt.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', borderRadius: '6px', background: '#f8f9fa', marginBottom: '0.4rem', border: '1px solid #e2e8f0' }}>
+                        <span>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 700, background: '#e9ecef', borderRadius: '4px', padding: '0.1rem 0.4rem', marginRight: '0.5rem' }}>{pt.code}</span>
+                          {label}
+                        </span>
+                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                          <button className="btn btn-secondary" style={{ padding: '0.2rem 0.6rem', fontSize: '0.8rem' }}
+                            onClick={() => openEditProductType(pt)}>✏️</button>
+                          <button className="btn btn-danger" style={{ padding: '0.2rem 0.6rem', fontSize: '0.8rem' }}
+                            onClick={() => handleDeleteProductType(pt.id)}>🗑️</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* טופס הוספה/עריכה */}
+              <div style={{ borderTop: productTypeCodes.length > 0 ? '1px solid #e2e8f0' : 'none', paddingTop: productTypeCodes.length > 0 ? '1.2rem' : '0' }}>
+                <h4 style={{ marginBottom: '0.75rem', fontSize: '0.95rem', color: '#374151' }}>
+                  {editingProductType ? `✏️ ${t('edit_product_type') || 'ערוך סוג מוצר'}` : `➕ ${t('add_product_type') || 'הוסף סוג מוצר'}`}
+                </h4>
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end' }}>
+                  <div className="form-group" style={{ marginBottom: 0, flex: '0 0 90px' }}>
+                    <label className="form-label">📌 {t('sku_code') || 'קוד SKU'} *</label>
+                    <input className="form-input" type="text" maxLength={3}
+                      value={productTypeForm.code}
+                      onChange={e => setProductTypeForm(f => ({ ...f, code: e.target.value.toUpperCase().replace(/[^A-Z]/g,'') }))}
+                      placeholder="CYL"
+                      style={{ fontFamily: 'monospace', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }} />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
+                    <label className="form-label">
+                      {language === 'he' ? '🇮🇱 ' : language === 'pt' ? '🇵🇹 ' : '🇬🇧 '}
+                      {t('product_type_name') || 'שם סוג המוצר'} *
+                    </label>
+                    <input className="form-input" type="text"
+                      value={productTypeForm.name}
+                      onChange={e => setProductTypeForm(f => ({ ...f, name: e.target.value }))}
+                      placeholder={language === 'he' ? 'למשל: בלון' : language === 'pt' ? 'ex: Cilindro' : 'e.g. Cylinder'} />
+                  </div>
+                </div>
+                <small style={{ color: '#6c757d', fontSize: '0.78rem', marginTop: '0.3rem', display: 'block' }}>
+                  {language === 'he' ? 'השם יתורגם אוטומטית לכל השפות ✨' : language === 'pt' ? 'O nome será traduzido automaticamente ✨' : 'Name will be auto-translated to all languages ✨'}
+                </small>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              {editingProductType && (
+                <button type="button" className="btn btn-secondary"
+                  onClick={() => { setEditingProductType(null); setProductTypeForm({ code: '', name: '' }); }}>
+                  {t('cancel')}
+                </button>
+              )}
+              <button type="button" className="btn btn-primary"
+                disabled={savingProductType || !productTypeForm.code.trim() || !productTypeForm.name.trim()}
+                onClick={handleSaveProductType}>
+                {savingProductType ? '...' : (editingProductType ? t('save') : `➕ ${t('add_product_type') || 'הוסף'}`)}
               </button>
             </div>
           </div>
