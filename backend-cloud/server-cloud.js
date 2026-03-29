@@ -230,7 +230,7 @@ app.get('/api/products', authenticateToken, async (req, res) => {
 });
 
 // Discontinue / Restore product
-app.patch('/api/products/:id/discontinue', authenticateToken, adminOnly, async (req, res) => {
+app.patch('/api/products/:id/discontinue', authenticateToken, async (req, res) => {
   const { is_active } = req.body;
   try {
     await query(
