@@ -2981,6 +2981,8 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
       }
       // ❌ הוסר DELETE WHERE id NOT IN — מחיקות מוצרים מנוהלות דרך pending_deletions בלבד
       //    כדי לשמור על דו-כיווניות: מוצרים שנוצרו בענן לא יימחקו בסינק
+      // ✅ עדכן את ה-sequence כדי למנוע duplicate key בהוספת מוצרים חדשים
+      await client.query(`SELECT setval('products_id_seq', COALESCE((SELECT MAX(id) FROM products), 0) + 1, false)`).catch(() => {});
     }
 
     if (entity === 'suppliers') {
