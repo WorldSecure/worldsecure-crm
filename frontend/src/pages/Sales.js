@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useLanguage } from '../utils/LanguageContext';
 import { useAuth } from '../utils/AuthContext';
 import ProductPicker from './ProductPicker';
+import MobilePicker from './MobilePicker';
 import NewOutboundModal from '../components/NewOutboundModal';
 
 function Sales() {
@@ -1117,18 +1118,16 @@ function Sales() {
               {/* QR Code Selection */}
               <div className="form-group" style={{ marginTop: '1rem' }}>
                 <label className="form-label">📱 {t('add_qr_code') || 'הוסף קוד QR'}</label>
-                <select
-                  className="form-input"
-                  value={formData.qr_code_id || ''}
-                  onChange={(e) => setFormData({...formData, qr_code_id: e.target.value ? parseInt(e.target.value) : null})}
-                >
-                  <option value="">{qrCodes.length === 0 ? (t('no_qr_codes_created') || 'לא יוצרו קודי QR עדיין') : (t('select_qr_code') || 'בחר קוד QR')}</option>
-                  {qrCodes.map((qr, index) => (
-                    <option key={qr.id} value={qr.id}>
-                      QR #{index + 1} - {qr.type}
-                    </option>
-                  ))}
-                </select>
+                <MobilePicker
+                  options={[
+                    { value: '', label: qrCodes.length === 0 ? (t('no_qr_codes_created') || 'לא יוצרו קודי QR עדיין') : (t('select_qr_code') || 'בחר קוד QR') },
+                    ...qrCodes.map((qr, index) => ({ value: String(qr.id), label: qr.title || `QR #${index + 1} - ${qr.type}` }))
+                  ]}
+                  value={formData.qr_code_id ? String(formData.qr_code_id) : ''}
+                  onChange={(val) => setFormData({...formData, qr_code_id: val ? parseInt(val) : null})}
+                  placeholder={t('select_qr_code') || 'בחר קוד QR'}
+                  label={t('add_qr_code') || 'הוסף קוד QR'}
+                />
               </div>
 
               <div className="modal-footer">
