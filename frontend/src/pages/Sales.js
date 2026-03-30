@@ -964,7 +964,7 @@ function Sales() {
       {/* Quote Form Modal */}
       {showQuoteModal && (
         <div className="modal-overlay"> {/*onClick={() => { setShowQuoteModal(false); resetForm(); }}>*/}
-          <div className="modal" style={{ maxWidth: '900px', maxHeight: '90vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
+          <div className="modal" style={{ maxWidth: '1100px', maxHeight: '90vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="modal-title">
                 {editingQuoteId ? t('edit_quote') : t('new_quote')} - {selectedCurrency}
@@ -994,14 +994,14 @@ function Sales() {
                 <h4 style={{ marginBottom: '1rem' }}>{t('add_items')}</h4>
                 
                 <div className="form-row">
-                  <div className="form-group" style={{ flex: 2 }}>
+                  <div className="form-group" style={{ flex: 3 }}>
                     <label className="form-label">{t('select_product')}</label>
                     <ProductPicker
                       products={products}
                       value={currentItem.product_id}
                       onChange={(product) => setCurrentItem({ ...currentItem, product_id: product ? String(product.id) : '' })}
                       placeholder={t('select_product')}
-                      showStock={false}
+                      showStock={true}
                       language={language}
                     />
                   </div>
