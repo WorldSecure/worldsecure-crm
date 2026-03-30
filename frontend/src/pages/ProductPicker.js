@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
 
 function ProductPicker({ products = [], value, onChange, placeholder = 'Select product', showStock = true, language = 'en', disabled = false }) {
   const [open, setOpen] = useState(false);
@@ -7,6 +8,7 @@ function ProductPicker({ products = [], value, onChange, placeholder = 'Select p
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [sheetY, setSheetY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
   const containerRef = useRef(null);
   const searchRef = useRef(null);
   const dragStartY = useRef(0);
@@ -40,7 +42,20 @@ function ProductPicker({ products = [], value, onChange, placeholder = 'Select p
     if (open && searchRef.current) setTimeout(() => searchRef.current?.focus(), 100);
   }, [open]);
 
-  const handleOpen = () => { if (!disabled) { setSheetY(0); setOpen(true); } };
+  const handleOpen = () => {
+    if (!disabled) {
+      setSheetY(0);
+      if (!isMobile && containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        setDropdownPos({
+          top: rect.bottom + window.scrollY + 2,
+          left: rect.left + window.scrollX,
+          width: rect.width
+        });
+      }
+      setOpen(true);
+    }
+  };
   const handleClose = () => { setOpen(false); setSearch(''); setSheetY(0); };
 
   const handleTouchStart = (e) => {
@@ -164,16 +179,21 @@ function ProductPicker({ products = [], value, onChange, placeholder = 'Select p
         </span>
       </div>
 
-      {/* DESKTOP: Dropdown */}
-      {!isMobile && open && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 9999, background: 'white', border: '1px solid #d1d5db', borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', maxHeight: '320px', display: 'flex', flexDirection: 'column', marginTop: '2px' }}>
-          <div style={{ padding: '0.5rem', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
-            <input ref={searchRef} type="text" value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="🔍 Search name or SKU..."
-              style={{ width: '100%', padding: '0.4rem 0.6rem', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '0.85rem', outline: 'none', boxSizing: 'border-box' }} />
+      {/* DESKTOP: Dropdown via Portal — מחוץ ל-modal */}
+      {!isMobile && open && ReactDOM.createPortal(
+        <div>
+          {/* backdrop שקוף לסגירה */}
+          <div onClick={handleClose} style={{ position: 'fixed', inset: 0, zIndex: 9998 }} />
+          <div style={{ position: 'absolute', top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width, zIndex: 9999, background: 'white', border: '1px solid #d1d5db', borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', maxHeight: '320px', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '0.5rem', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
+              <input ref={searchRef} type="text" value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="🔍 Search name or SKU..."
+                style={{ width: '100%', padding: '0.4rem 0.6rem', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '0.85rem', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+            {productList}
           </div>
-          {productList}
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* MOBILE: Bottom Sheet */}
@@ -185,12 +205,14 @@ function ProductPicker({ products = [], value, onChange, placeholder = 'Select p
           {/* Sheet */}
           <div
             style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 9999, background: 'white', borderRadius: '20px 20px 0 0', boxShadow: '0 -8px 32px rgba(0,0,0,0.2)', height: '70vh', display: 'flex', flexDirection: 'column', transform: `translateY(${sheetY}px)`, transition: isDragging ? 'none' : 'transform 0.25s cubic-bezier(0.32,0.72,0,1)' }}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
           >
-            {/* Drag handle */}
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 4px', flexShrink: 0 }}>
+            {/* Drag handle — swipe כאן בלבד */}
+            <div
+              style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 4px', flexShrink: 0, cursor: 'grab' }}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
               <div style={{ width: '40px', height: '4px', borderRadius: '2px', background: '#d1d5db' }} />
             </div>
             {/* Header */}
