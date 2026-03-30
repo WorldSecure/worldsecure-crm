@@ -1899,15 +1899,19 @@ app.get('/api/support-tickets', authenticateToken, async (req, res) => {
   try {
     const isAdmin = req.user.role === 'admin';
     const r = isAdmin
-      ? await query(`SELECT t.*, u1.username as created_by_name, u2.username as owner_name
+      ? await query(`SELECT t.*, u1.username as created_by_name, u2.username as owner_name,
+          COALESCE(p.name, t.product_name) as product_name
           FROM support_tickets t
           LEFT JOIN users u1 ON t.created_by = u1.id
           LEFT JOIN users u2 ON t.owner_id = u2.id
+          LEFT JOIN products p ON t.product_id = p.id
           ORDER BY t.id DESC`)
-      : await query(`SELECT t.*, u1.username as created_by_name, u2.username as owner_name
+      : await query(`SELECT t.*, u1.username as created_by_name, u2.username as owner_name,
+          COALESCE(p.name, t.product_name) as product_name
           FROM support_tickets t
           LEFT JOIN users u1 ON t.created_by = u1.id
           LEFT JOIN users u2 ON t.owner_id = u2.id
+          LEFT JOIN products p ON t.product_id = p.id
           WHERE t.owner_id=$1 ORDER BY t.id DESC`, [req.user.id]);
     res.json(r.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }

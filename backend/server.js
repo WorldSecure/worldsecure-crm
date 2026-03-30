@@ -6025,17 +6025,21 @@ app.get('/api/support-tickets', authenticateToken, (req, res) => {
   const query = isAdmin
     ? `SELECT t.*, 
         u1.username as created_by_name,
-        u2.username as owner_name
+        u2.username as owner_name,
+        COALESCE(p.name, t.product_name) as product_name
        FROM support_tickets t
        LEFT JOIN users u1 ON t.created_by = u1.id
        LEFT JOIN users u2 ON t.owner_id = u2.id
+       LEFT JOIN products p ON t.product_id = p.id
        ORDER BY t.id DESC`
     : `SELECT t.*,
         u1.username as created_by_name,
-        u2.username as owner_name
+        u2.username as owner_name,
+        COALESCE(p.name, t.product_name) as product_name
        FROM support_tickets t
        LEFT JOIN users u1 ON t.created_by = u1.id
        LEFT JOIN users u2 ON t.owner_id = u2.id
+       LEFT JOIN products p ON t.product_id = p.id
        WHERE t.owner_id = ?
        ORDER BY t.id DESC`;
   const params = isAdmin ? [] : [req.user.id];
