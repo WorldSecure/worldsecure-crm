@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useLanguage } from '../utils/LanguageContext';
 import { useAuth } from '../utils/AuthContext';
+import MobilePicker from './MobilePicker';
 
 const getProductName = (product, lang) => {
   if (lang === 'en') return product.name;
@@ -1227,20 +1228,16 @@ function Products() {
                       )}
                     </div>
                     {attrTypes.length > 0 ? (
-                      <select className="form-input" style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}
-                        value={attr.name}
-                        onChange={(e) => {
-                          const updated = [...variantAttrs];
-                          updated[ai] = { ...updated[ai], name: e.target.value };
-                          setVariantAttrs(updated);
-                        }}>
-                        <option value="">{t('select_attr_type') || 'בחר מאפיין...'}</option>
-                        {attrTypes.map(at => {
+                      <MobilePicker
+                        options={[{ value: '', label: t('select_attr_type') || 'בחר מאפיין...' }, ...attrTypes.map(at => {
                           const lang = localStorage.getItem('language') || 'he';
                           const label = lang === 'he' ? (at.name_he || at.name) : lang === 'pt' ? (at.name_pt || at.name) : at.name;
-                          return <option key={at.id} value={at.name}>{label}</option>;
-                        })}
-                      </select>
+                          return { value: at.name, label };
+                        })]}
+                        value={attr.name}
+                        onChange={(val) => { const updated = [...variantAttrs]; updated[ai] = { ...updated[ai], name: val }; setVariantAttrs(updated); }}
+                        placeholder={t('select_attr_type') || 'בחר מאפיין...'} label={t('attr_name') || 'מאפיין'}
+                      />
                     ) : (
                       <input className="form-input" style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}
                         placeholder={ai === 0 ? (t('attr_name_placeholder_1') || 'למשל: צבע / Color') : (t('attr_name_placeholder_2') || 'למשל: מידה / Size')}
@@ -1360,18 +1357,20 @@ function Products() {
                 {formData.is_parent && (
                   <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                     {/* Product Type dropdown */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: '180px' }}>
                       <label style={{ fontSize: '0.82rem', fontWeight: 500, whiteSpace: 'nowrap' }}>📦 {t('product_type') || 'סוג מוצר'}:</label>
-                      <select className="form-select" style={{ fontSize: '0.85rem', minWidth: '140px' }}
-                        value={formData.product_type_code || ''}
-                        onChange={(e) => setFormData({ ...formData, product_type_code: e.target.value })}>
-                        <option value="">— {t('none') || 'ללא'} —</option>
-                        {productTypeCodes.map(pt => {
-                          const lang = localStorage.getItem('language') || 'he';
-                          const label = lang === 'he' ? (pt.name_he || pt.name) : lang === 'pt' ? (pt.name_pt || pt.name) : pt.name;
-                          return <option key={pt.id} value={pt.code}>{pt.code} — {label}</option>;
-                        })}
-                      </select>
+                      <div style={{ flex: 1 }}>
+                        <MobilePicker
+                          options={[{ value: '', label: `— ${t('none') || 'ללא'} —` }, ...productTypeCodes.map(pt => {
+                            const lang = localStorage.getItem('language') || 'he';
+                            const label = lang === 'he' ? (pt.name_he || pt.name) : lang === 'pt' ? (pt.name_pt || pt.name) : pt.name;
+                            return { value: pt.code, label: `${pt.code} — ${label}` };
+                          })]}
+                          value={formData.product_type_code || ''}
+                          onChange={(val) => setFormData({ ...formData, product_type_code: val })}
+                          placeholder={`— ${t('none') || 'ללא'} —`} label={t('product_type') || 'סוג מוצר'}
+                        />
+                      </div>
                     </div>
                     {formData.variant_attrs && (
                       <span style={{ fontFamily: 'monospace', fontSize: '0.82rem', background: '#f0fff4', border: '1px solid #28a745', borderRadius: '4px', padding: '0.2rem 0.5rem' }}>
@@ -1429,82 +1428,58 @@ function Products() {
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">{t('category')}</label>
-                  <select
-                    className="form-select"
-                    value={formData.category_id}
-                    onChange={(e) => setFormData({...formData, category_id: e.target.value, subcategory_id: ''})}
-                  >
-                    <option value="">{t('select_category')}</option>
-                    {categories.map(cat => {
+                  <MobilePicker
+                    options={[{ value: '', label: t('select_category') }, ...categories.map(cat => {
                       const label = language === 'he' ? (cat.name_he || cat.name) : language === 'pt' ? (cat.name_pt || cat.name) : cat.name;
-                      return <option key={cat.id} value={cat.id}>{cat.code ? `${cat.code} — ` : ''}{label}</option>;
-                    })}
-                  </select>
+                      return { value: String(cat.id), label: cat.code ? `${cat.code} — ${label}` : label };
+                    })]}
+                    value={String(formData.category_id)}
+                    onChange={(val) => setFormData({...formData, category_id: val, subcategory_id: ''})}
+                    placeholder={t('select_category')} label={t('category')}
+                  />
                 </div>
 
-                {/* סאב-קטגוריה — מוצג רק אם יש סאב-קטגוריות לקטגוריה שנבחרה */}
+                {/* סאב-קטגוריה */}
                 {formData.category_id && subcategories.filter(s => String(s.category_id) === String(formData.category_id)).length > 0 && (
                   <div className="form-group">
                     <label className="form-label">{t('subcategory') || 'סאב-קטגוריה'}</label>
-                    <select
-                      className="form-select"
-                      value={formData.subcategory_id}
-                      onChange={(e) => setFormData({...formData, subcategory_id: e.target.value})}
-                    >
-                      <option value="">{t('select_subcategory') || 'בחר סאב-קטגוריה'}</option>
-                      {subcategories
-                        .filter(s => String(s.category_id) === String(formData.category_id))
-                        .map(sub => (
-                          <option key={sub.id} value={sub.id}>{getSubcatDisplayName(sub)}</option>
-                        ))}
-                    </select>
+                    <MobilePicker
+                      options={[{ value: '', label: t('select_subcategory') || 'בחר סאב-קטגוריה' }, ...subcategories.filter(s => String(s.category_id) === String(formData.category_id)).map(sub => ({ value: String(sub.id), label: getSubcatDisplayName(sub) }))]}
+                      value={String(formData.subcategory_id)}
+                      onChange={(val) => setFormData({...formData, subcategory_id: val})}
+                      placeholder={t('select_subcategory') || 'בחר סאב-קטגוריה'} label={t('subcategory') || 'סאב-קטגוריה'}
+                    />
                   </div>
                 )}
 
                 <div className="form-group">
                   <label className="form-label">{t('unit')}</label>
-                  <select
-                    className="form-select"
+                  <MobilePicker
+                    options={[{ value: 'unit', label: t('unit_piece') }, { value: 'box', label: t('unit_box') }, { value: 'carton', label: t('unit_carton') }, { value: 'kg', label: t('unit_kg') }, { value: 'liter', label: t('unit_liter') }, { value: 'meter', label: t('unit_meter') }]}
                     value={formData.unit}
-                    onChange={(e) => setFormData({...formData, unit: e.target.value})}
-                    disabled={formData.is_parent}
-                    style={{ background: formData.is_parent ? '#f0f0f0' : '', color: formData.is_parent ? '#999' : '' }}
-                  >
-                    <option value="unit">{t('unit_piece')}</option>
-                    <option value="box">{t('unit_box')}</option>
-                    <option value="carton">{t('unit_carton')}</option>
-                    <option value="kg">{t('unit_kg')}</option>
-                    <option value="liter">{t('unit_liter')}</option>
-                    <option value="meter">{t('unit_meter')}</option>
-                  </select>
+                    onChange={(val) => setFormData({...formData, unit: val})}
+                    label={t('unit')} disabled={formData.is_parent}
+                  />
                 </div>
 
                 <div className="form-group">
                   <label className="form-label">{t('suppliers') || 'Supplier'}</label>
-                  <select
-                    className="form-select"
-                    value={formData.supplier_id}
-                    onChange={(e) => setFormData({...formData, supplier_id: e.target.value})}
-                  >
-                    <option value="">{t('select') || '— None —'}</option>
-                    {suppliers.map(s => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
+                  <MobilePicker
+                    options={[{ value: '', label: t('select') || '— None —' }, ...suppliers.map(s => ({ value: String(s.id), label: s.name }))]}
+                    value={String(formData.supplier_id)}
+                    onChange={(val) => setFormData({...formData, supplier_id: val})}
+                    placeholder={t('select') || '— None —'} label={t('suppliers') || 'Supplier'}
+                  />
                 </div>
 
                 <div className="form-group">
                   <label className="form-label">{t('manufacturers') || 'Manufacturer'}</label>
-                  <select
-                    className="form-select"
-                    value={formData.manufacturer_id}
-                    onChange={(e) => setFormData({...formData, manufacturer_id: e.target.value})}
-                  >
-                    <option value="">{t('select') || '— None —'}</option>
-                    {manufacturers.map(m => (
-                      <option key={m.id} value={m.id}>{m.name}</option>
-                    ))}
-                  </select>
+                  <MobilePicker
+                    options={[{ value: '', label: t('select') || '— None —' }, ...manufacturers.map(m => ({ value: String(m.id), label: m.name }))]}
+                    value={String(formData.manufacturer_id)}
+                    onChange={(val) => setFormData({...formData, manufacturer_id: val})}
+                    placeholder={t('select') || '— None —'} label={t('manufacturers') || 'Manufacturer'}
+                  />
                 </div>
               </div>
 
@@ -1514,31 +1489,21 @@ function Products() {
                     <label className="form-label">{t('price')}</label>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <input
-                        type="number"
-                        step="0.01"
-                        className="form-input"
+                        type="number" step="0.01" className="form-input"
                         value={formData.price}
                         onChange={(e) => setFormData({...formData, price: e.target.value})}
-                        onBlur={(e) => {
-                          if (e.target.value) {
-                            const formatted = parseFloat(e.target.value).toFixed(2);
-                            setFormData({...formData, price: formatted});
-                          }
-                        }}
-                        placeholder="0.00"
-                        disabled={formData.is_parent}
+                        onBlur={(e) => { if (e.target.value) { const formatted = parseFloat(e.target.value).toFixed(2); setFormData({...formData, price: formatted}); } }}
+                        placeholder="0.00" disabled={formData.is_parent}
                         style={{ textAlign: 'right', fontFamily: 'monospace', flex: 2, background: formData.is_parent ? '#f0f0f0' : '', color: formData.is_parent ? '#999' : '' }}
                       />
-                      <select
-                        className="form-select"
-                        value={formData.currency}
-                        onChange={(e) => setFormData({...formData, currency: e.target.value})}
-                        style={{ flex: 1 }}
-                      >
-                        <option value="ILS">₪ ILS</option>
-                        <option value="USD">$ USD</option>
-                        <option value="EUR">€ EUR</option>
-                      </select>
+                      <div style={{ flex: 1 }}>
+                        <MobilePicker
+                          options={[{ value: 'ILS', label: '₪ ILS' }, { value: 'USD', label: '$ USD' }, { value: 'EUR', label: '€ EUR' }]}
+                          value={formData.currency}
+                          onChange={(val) => setFormData({...formData, currency: val})}
+                          label="Currency" disabled={formData.is_parent}
+                        />
+                      </div>
                     </div>
                   </div>
                 )}

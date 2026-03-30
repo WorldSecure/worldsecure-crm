@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useLanguage } from '../utils/LanguageContext';
 import { useAuth } from '../utils/AuthContext';
 import { countries } from '../utils/countries';
+import MobilePicker from './MobilePicker';
 
 const COUNTRY_FLAGS = {
   'Afghanistan':'🇦🇫','Albania':'🇦🇱','Algeria':'🇩🇿','Angola':'🇦🇴','Argentina':'🇦🇷',
@@ -502,17 +503,12 @@ function Manufacturers() {
 
               <div className="form-group">
                 <label className="form-label">{t('country')} *</label>
-                <select
-                  className="form-select"
+                <MobilePicker
+                  options={[{ value: '', label: t('select_country') }, ...countries.map(c => ({ value: c, label: c }))]}
                   value={formData.country}
-                  onChange={(e) => setFormData({...formData, country: e.target.value})}
-                  required
-                >
-                  <option value="">{t('select_country')}</option>
-                  {countries.map(country => (
-                    <option key={country} value={country}>{country}</option>
-                  ))}
-                </select>
+                  onChange={(val) => setFormData({...formData, country: val})}
+                  placeholder={t('select_country')} label={t('country')}
+                />
               </div>
 
               <div className="form-group">

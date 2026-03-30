@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useLanguage } from '../utils/LanguageContext';
 import { useAuth } from '../utils/AuthContext';
 import ProductPicker from './ProductPicker';
+import MobilePicker from './MobilePicker';
 
 function Inbound() {
   const { t, language } = useLanguage();
@@ -426,30 +427,24 @@ function Inbound() {
               {/* Supplier Selection */}
               <div className="form-group">
                 <label className="form-label">{t('supplier_type')}</label>
-                <select
-                  className="form-select"
+                <MobilePicker
+                  options={[{ value: 'registered', label: t('registered') }, { value: 'casual', label: t('casual') }]}
                   value={formData.supplier_type}
-                  onChange={(e) => setFormData({...formData, supplier_type: e.target.value, supplier_id: '', casual_supplier_name: ''})}
-                >
-                  <option value="registered">{t('registered')}</option>
-                  <option value="casual">{t('casual')}</option>
-                </select>
+                  onChange={(val) => setFormData({...formData, supplier_type: val, supplier_id: '', casual_supplier_name: ''})}
+                  label={t('supplier_type')}
+                />
               </div>
 
               {formData.supplier_type === 'registered' ? (
                 <div className="form-group">
                   <label className="form-label">{t('select_supplier')} *</label>
-                  <select
-                    className="form-select"
-                    value={formData.supplier_id}
-                    onChange={(e) => setFormData({...formData, supplier_id: e.target.value})}
-                    required
-                  >
-                    <option value="">{t('select_supplier')}</option>
-                    {suppliers.map(supplier => (
-                      <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
-                    ))}
-                  </select>
+                  <MobilePicker
+                    options={suppliers.map(s => ({ value: String(s.id), label: s.name }))}
+                    value={String(formData.supplier_id)}
+                    onChange={(val) => setFormData({...formData, supplier_id: val})}
+                    placeholder={t('select_supplier')}
+                    label={t('select_supplier')}
+                  />
                 </div>
               ) : (
                 <div className="form-group">
@@ -589,18 +584,16 @@ function Inbound() {
                 {/* QR Code Selection */}
                 <div style={{ marginTop: '1rem' }}>
                   <label className="form-label">{t('add_qr_code')}</label>
-                  <select
-                    className="form-input"
-                    value={formData.qr_code_id || ''}
-                    onChange={(e) => setFormData({...formData, qr_code_id: e.target.value ? parseInt(e.target.value) : null})}
-                  >
-                    <option value="">{qrCodes.length === 0 ? t('no_qr_codes_created') : t('select_qr_code')}</option>
-                    {qrCodes.map((qr, index) => (
-                      <option key={qr.id} value={qr.id}>
-                        {qr.title || `QR #${index + 1} - ${qr.type}`}
-                      </option>
-                    ))}
-                  </select>
+                  <MobilePicker
+                    options={[
+                      { value: '', label: qrCodes.length === 0 ? t('no_qr_codes_created') : t('select_qr_code') },
+                      ...qrCodes.map((qr, index) => ({ value: String(qr.id), label: qr.title || `QR #${index + 1} - ${qr.type}` }))
+                    ]}
+                    value={formData.qr_code_id ? String(formData.qr_code_id) : ''}
+                    onChange={(val) => setFormData({...formData, qr_code_id: val ? parseInt(val) : null})}
+                    placeholder={t('select_qr_code')}
+                    label={t('add_qr_code')}
+                  />
                 </div>
               </div>
 

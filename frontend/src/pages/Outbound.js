@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useLanguage } from '../utils/LanguageContext';
 import { useAuth } from '../utils/AuthContext';
 import ProductPicker from './ProductPicker';
+import MobilePicker from './MobilePicker';
 
 function Outbound() {
   const { t, language } = useLanguage();
@@ -628,30 +629,24 @@ function Outbound() {
               {/* Customer Selection */}
               <div className="form-group">
                 <label className="form-label">{t('customer_type')}</label>
-                <select
-                  className="form-select"
+                <MobilePicker
+                  options={[{ value: 'registered', label: t('registered') }, { value: 'casual', label: t('casual') }]}
                   value={formData.customer_type}
-                  onChange={(e) => setFormData({...formData, customer_type: e.target.value, customer_id: '', casual_customer_name: ''})}
-                >
-                  <option value="registered">{t('registered')}</option>
-                  <option value="casual">{t('casual')}</option>
-                </select>
+                  onChange={(val) => setFormData({...formData, customer_type: val, customer_id: '', casual_customer_name: ''})}
+                  label={t('customer_type')}
+                />
               </div>
 
               {formData.customer_type === 'registered' ? (
                 <div className="form-group">
                   <label className="form-label">{t('select_customer')} *</label>
-                  <select
-                    className="form-select"
-                    value={formData.customer_id}
-                    onChange={(e) => setFormData({...formData, customer_id: e.target.value})}
-                    required
-                  >
-                    <option value="">{t('select_customer')}</option>
-                    {customers.map(customer => (
-                      <option key={customer.id} value={customer.id}>{customer.name}</option>
-                    ))}
-                  </select>
+                  <MobilePicker
+                    options={customers.map(c => ({ value: String(c.id), label: c.name }))}
+                    value={String(formData.customer_id)}
+                    onChange={(val) => setFormData({...formData, customer_id: val})}
+                    placeholder={t('select_customer')}
+                    label={t('select_customer')}
+                  />
                 </div>
               ) : (
                 <div className="form-group">
@@ -670,16 +665,17 @@ function Outbound() {
               {/* Status */}
               <div className="form-group">
                 <label className="form-label">{t('status')}</label>
-                <select
-                  className="form-select"
+                <MobilePicker
+                  options={[
+                    { value: 'pending', label: t('status_pending') },
+                    { value: 'ready', label: t('status_ready') },
+                    { value: 'shipped', label: t('status_shipped') },
+                    { value: 'delivered', label: t('status_delivered') },
+                  ]}
                   value={formData.status}
-                  onChange={(e) => setFormData({...formData, status: e.target.value})}
-                >
-                  <option value="pending">{t('status_pending')}</option>
-                  <option value="ready">{t('status_ready')}</option>
-                  <option value="shipped">{t('status_shipped')}</option>
-                  <option value="delivered">{t('status_delivered')}</option>
-                </select>
+                  onChange={(val) => setFormData({...formData, status: val})}
+                  label={t('status')}
+                />
               </div>
 
               {/* Add Items Section */}
@@ -999,18 +995,16 @@ function Outbound() {
                 {/* QR Code Selection */}
                 <div style={{ marginTop: '1rem' }}>
                   <label className="form-label">{t('add_qr_code')}</label>
-                  <select
-                    className="form-input"
-                    value={formData.qr_code_id || ''}
-                    onChange={(e) => setFormData({...formData, qr_code_id: e.target.value ? parseInt(e.target.value) : null})}
-                  >
-                    <option value="">{qrCodes.length === 0 ? t('no_qr_codes_created') : t('select_qr_code')}</option>
-                    {qrCodes.map((qr, index) => (
-                      <option key={qr.id} value={qr.id}>
-                        {qr.title || `QR #${index + 1} - ${qr.type}`}
-                      </option>
-                    ))}
-                  </select>
+                  <MobilePicker
+                    options={[
+                      { value: '', label: qrCodes.length === 0 ? t('no_qr_codes_created') : t('select_qr_code') },
+                      ...qrCodes.map((qr, index) => ({ value: String(qr.id), label: qr.title || `QR #${index + 1} - ${qr.type}` }))
+                    ]}
+                    value={formData.qr_code_id ? String(formData.qr_code_id) : ''}
+                    onChange={(val) => setFormData({...formData, qr_code_id: val ? parseInt(val) : null})}
+                    placeholder={t('select_qr_code')}
+                    label={t('add_qr_code')}
+                  />
                 </div>
               </div>
 
