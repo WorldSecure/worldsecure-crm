@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useLanguage } from '../utils/LanguageContext';
 import { useAuth } from '../utils/AuthContext';
+import ProductPicker from './ProductPicker';
 import NewOutboundModal from '../components/NewOutboundModal';
 
 function Sales() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { user } = useAuth();
   const [quotes, setQuotes] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -995,18 +996,14 @@ function Sales() {
                 <div className="form-row">
                   <div className="form-group" style={{ flex: 2 }}>
                     <label className="form-label">{t('select_product')}</label>
-                    <select
-                      className="form-select"
+                    <ProductPicker
+                      products={products}
                       value={currentItem.product_id}
-                      onChange={(e) => setCurrentItem({...currentItem, product_id: e.target.value})}
-                    >
-                      <option value="">{t('select_product')}</option>
-                      {products.filter(p => !p.is_parent && (p.is_active === 1 || p.is_active === true || p.is_active == null)).map(product => (
-                        <option key={product.id} value={product.id}>
-                          {product.name} {product.quantity > 0 ? `🟢 ${product.quantity}` : `🔴 ${product.quantity}`}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(product) => setCurrentItem({ ...currentItem, product_id: product ? String(product.id) : '' })}
+                      placeholder={t('select_product')}
+                      showStock={false}
+                      language={language}
+                    />
                   </div>
 
                   <div className="form-group" style={{ flex: 1 }}>

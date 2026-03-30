@@ -3,6 +3,7 @@ import SupportCaseManagementModal from './SupportCaseManagementModal';
 import axios from 'axios';
 import { useLanguage } from '../utils/LanguageContext';
 import { useAuth } from '../utils/AuthContext';
+import ProductPicker from './ProductPicker';
 
 const SortIcon = ({ column, sortBy, sortOrder }) => {
   if (sortBy !== column) return <span style={{ opacity: 0.3, marginInlineEnd: '4px' }}>↕</span>;
@@ -378,13 +379,14 @@ function SupportManagement() {
               </div>
               <div className="form-group">
                 <label className="form-label">📦 {t('product')||'מוצר'} *</label>
-                <select className="form-select" value={form.product_id} onChange={e => {
-                  const p = products.find(p => p.id === parseInt(e.target.value));
-                  setForm({...form, product_id: e.target.value, product_name: p?.name||''});
-                }}>
-                  <option value="">{t('select_product')}</option>
-                  {products.filter(p => !p.is_parent && (p.is_active === 1 || p.is_active === true || p.is_active == null)).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+                <ProductPicker
+                  products={products}
+                  value={form.product_id}
+                  onChange={(p) => setForm({...form, product_id: p ? String(p.id) : '', product_name: p?.name||''})}
+                  placeholder={t('select_product')}
+                  showStock={true}
+                  language={language}
+                />
               </div>
             </div>
 
@@ -609,14 +611,14 @@ function SupportManagement() {
 
             <div className="form-group">
               <label className="form-label">📦 {t('product')} *</label>
-              <select className="form-select" value={sendProductForm.product_id}
-                onChange={e => {
-                  const p = products.find(x => x.id === parseInt(e.target.value));
-                  setSendProductForm({...sendProductForm, product_id: e.target.value, product_name: p?.name||''});
-                }}>
-                <option value="">{t('select_product') || 'בחר מוצר'}</option>
-                {products.filter(p => !p.is_parent && (p.is_active === 1 || p.is_active === true || p.is_active == null)).map(p => <option key={p.id} value={p.id}>{p.name} {p.quantity > 0 ? `🟢 ${p.quantity}` : `🔴 ${p.quantity}`}</option>)}
-              </select>
+              <ProductPicker
+                products={products}
+                value={sendProductForm.product_id}
+                onChange={(p) => setSendProductForm({...sendProductForm, product_id: p ? String(p.id) : '', product_name: p?.name||''})}
+                placeholder={t('select_product') || 'בחר מוצר'}
+                showStock={true}
+                language={language}
+              />
             </div>
 
             <div className="form-group">
