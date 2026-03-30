@@ -2234,8 +2234,8 @@ app.put('/api/notifications/:id/acknowledge', authenticateToken, async (req, res
 app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
   try {
     const [prod, lowStock, cust, supp, inbound, outbound] = await Promise.all([
-      query('SELECT COUNT(*) as count FROM products'),
-      query('SELECT COUNT(*) as count FROM products WHERE quantity <= min_quantity'),
+      query('SELECT COUNT(*) as count FROM products WHERE (is_parent = false OR is_parent IS NULL)'),
+      query('SELECT COUNT(*) as count FROM products WHERE (is_parent = false OR is_parent IS NULL) AND quantity <= min_quantity'),
       query('SELECT COUNT(*) as count FROM customers'),
       query('SELECT COUNT(*) as count FROM suppliers'),
       query('SELECT COUNT(*) as count FROM inbound_transactions'),

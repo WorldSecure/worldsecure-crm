@@ -2950,8 +2950,8 @@ app.get('/api/reports/outbound', authenticateToken, (req, res) => {
 app.get('/api/dashboard/stats', authenticateToken, (req, res) => {
   const stats = {};
   
-  // Total products
-  db.get('SELECT COUNT(*) as count FROM products', [], (err, row) => {
+  // Total products — רק מוצרים שאינם אב (בדיוק כמו Inbound)
+  db.get(`SELECT COUNT(*) as count FROM products WHERE (is_parent = 0 OR is_parent IS NULL)`, [], (err, row) => {
     stats.totalProducts = row ? row.count : 0;
     
     // Low stock products
