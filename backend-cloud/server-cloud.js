@@ -532,7 +532,7 @@ app.delete('/api/customers/:id', authenticateToken, adminOnly, async (req, res) 
 
 // ── Products write ────────────────────────────────────────────────────────────
 app.post('/api/products', authenticateToken, adminOnly, async (req, res) => {
-  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs, variant_sku_prefix } = req.body;
+  const { sku, name, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, name_he, name_pt, supplier_id, manufacturer_id, is_parent, variant_attrs, variant_sku_prefix, product_type_code } = req.body;
   try {
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS meta_updated_at TIMESTAMPTZ').catch(() => {});
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier_id INTEGER').catch(() => {});
@@ -576,15 +576,14 @@ app.post('/api/products', authenticateToken, adminOnly, async (req, res) => {
           const skuBase = variant_sku_prefix || sku;
           for (const combo of combos) {
             const baseVariantSku = `${skuBase}-${combo.join('-')}`;
+            const variantLabel = [product_type_code, ...combo].filter(Boolean).join(' ');
             const existing = await query('SELECT id, parent_id FROM products WHERE sku=$1', [baseVariantSku]);
             let variantSku = baseVariantSku;
             if (existing.rows.length > 0) {
               if (!existing.rows[0].parent_id) {
-                // SKU קיים בלי אב — קשר לאב הנוכחי ודלג
                 await query('UPDATE products SET parent_id=$1 WHERE id=$2', [parentId, existing.rows[0].id]);
                 continue;
               }
-              // SKU תפוס על ידי אב אחר — הוסף suffix מספרי
               let suffix = 1;
               while (true) {
                 const candidate = `${baseVariantSku}${suffix}`;
@@ -596,7 +595,7 @@ app.post('/api/products', authenticateToken, adminOnly, async (req, res) => {
             await query(
               `INSERT INTO products (sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, supplier_id, manufacturer_id, parent_id, meta_updated_at)
                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,$11,$12,$13,$14,NOW())`,
-              [variantSku, `${name} (${combo.join(' ')})`, name_he ? `${name_he} (${combo.join(' ')})` : null, name_pt ? `${name_pt} (${combo.join(' ')})` : null,
+              [variantSku, `${name} (${variantLabel})`, name_he ? `${name_he} (${variantLabel})` : null, name_pt ? `${name_pt} (${variantLabel})` : null,
                description||null, category_id||null, subcategory_id||null, price||null, currency||'ILS', unit||null,
                min_quantity||0, supplier_id||null, manufacturer_id||null, parentId]
             );
@@ -708,6 +707,7 @@ app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
           // צור דגמים חדשים שלא קיימים עדיין
           for (const combo of combos) {
             const baseVariantSku = `${skuBase}-${combo.join('-')}`;
+            const variantLabel = [product_type_code, ...combo].filter(Boolean).join(' ');
             if (!existingSkus.includes(baseVariantSku)) {
               const existing = await query('SELECT id FROM products WHERE sku=$1', [baseVariantSku]);
               if (existing.rows.length === 0) {
@@ -715,9 +715,9 @@ app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
                   `INSERT INTO products (sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, supplier_id, manufacturer_id, parent_id, meta_updated_at)
                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,$11,$12,$13,$14,NOW())`,
                   [baseVariantSku,
-                   `${name} (${combo.join(' ')})`,
-                   name_he ? `${name_he} (${combo.join(' ')})` : null,
-                   name_pt ? `${name_pt} (${combo.join(' ')})` : null,
+                   `${name} (${variantLabel})`,
+                   name_he ? `${name_he} (${variantLabel})` : null,
+                   name_pt ? `${name_pt} (${variantLabel})` : null,
                    description||null, category_id||null, subcategory_id||null,
                    price||null, currency||'ILS', unit||null,
                    min_quantity||0, supplier_id||null, manufacturer_id||null, req.params.id]

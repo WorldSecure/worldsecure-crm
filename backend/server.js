@@ -1227,6 +1227,8 @@ app.post('/api/products', authenticateToken, (req, res) => {
             const insertVariant = (combo, index) => {
               if (index >= combos.length) return;
               const baseVariantSku = `${skuBase}-${combo.join('-')}`;
+              // שם הדגם: NAME (TYPE ATTR1 ATTR2...)
+              const variantLabel = [product_type_code, ...combo].filter(Boolean).join(' ');
               // בדוק אם SKU כבר קיים — אם כן, צור SKU ייחודי עם suffix מספרי (1,2,3...)
               db.get('SELECT id, parent_id FROM products WHERE sku = ?', [baseVariantSku], (err, existing) => {
                 if (existing && existing.parent_id && existing.parent_id !== parentId) {
@@ -1239,7 +1241,7 @@ app.post('/api/products', authenticateToken, (req, res) => {
                       db.run(
                         `INSERT INTO products (sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, supplier_id, manufacturer_id, parent_id, meta_updated_at)
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, datetime('now'))`,
-                        [candidate, `${name} (${combo.join(' ')})`, name_he ? `${name_he} (${combo.join(' ')})` : null, name_pt ? `${name_pt} (${combo.join(' ')})` : null,
+                        [candidate, `${name} (${variantLabel})`, name_he ? `${name_he} (${variantLabel})` : null, name_pt ? `${name_pt} (${variantLabel})` : null,
                          description, category_id, subcategory_id||null, price, currency||'ILS', unit,
                          min_quantity||0, supplier_id||null, manufacturer_id||null, parentId],
                         () => insertVariant(combos[index + 1], index + 1)
@@ -1256,7 +1258,7 @@ app.post('/api/products', authenticateToken, (req, res) => {
                   db.run(
                     `INSERT INTO products (sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, supplier_id, manufacturer_id, parent_id, meta_updated_at)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, datetime('now'))`,
-                    [baseVariantSku, `${name} (${combo.join(' ')})`, name_he ? `${name_he} (${combo.join(' ')})` : null, name_pt ? `${name_pt} (${combo.join(' ')})` : null,
+                    [baseVariantSku, `${name} (${variantLabel})`, name_he ? `${name_he} (${variantLabel})` : null, name_pt ? `${name_pt} (${variantLabel})` : null,
                      description, category_id, subcategory_id||null, price, currency||'ILS', unit,
                      min_quantity||0, supplier_id||null, manufacturer_id||null, parentId],
                     () => insertVariant(combos[index + 1], index + 1)
@@ -1392,15 +1394,16 @@ app.put('/api/products/:id', authenticateToken, (req, res) => {
                   if (index >= toCreate.length) return;
                   const combo = toCreate[index];
                   const baseVariantSku = `${skuBase}-${combo.join('-')}`;
+                  const variantLabel = [product_type_code, ...combo].filter(Boolean).join(' ');
                   db.get('SELECT id FROM products WHERE sku = ?', [baseVariantSku], (err, existing) => {
                     if (!existing) {
                       db.run(
                         `INSERT INTO products (sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, supplier_id, manufacturer_id, parent_id, meta_updated_at)
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, datetime('now'))`,
                         [baseVariantSku,
-                         `${name} (${combo.join(' ')})`,
-                         name_he ? `${name_he} (${combo.join(' ')})` : null,
-                         name_pt ? `${name_pt} (${combo.join(' ')})` : null,
+                         `${name} (${variantLabel})`,
+                         name_he ? `${name_he} (${variantLabel})` : null,
+                         name_pt ? `${name_pt} (${variantLabel})` : null,
                          description, category_id, subcategory_id||null, price, currency||'ILS', unit,
                          min_quantity||0, supplier_id||null, manufacturer_id||null, id],
                         () => insertNext(index + 1)
