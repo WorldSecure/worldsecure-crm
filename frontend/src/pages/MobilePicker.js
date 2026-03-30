@@ -27,15 +27,6 @@ function MobilePicker({ options = [], value, onChange, placeholder = 'Select...'
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // סגור בלחיצה מחוץ (desktop)
-  useEffect(() => {
-    if (isMobile) return;
-    const handleClick = (e) => {
-      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [isMobile]);
 
   useEffect(() => {
     if (isMobile && open) document.body.style.overflow = 'hidden';
@@ -111,15 +102,11 @@ function MobilePicker({ options = [], value, onChange, placeholder = 'Select...'
         <span style={{ color: '#9ca3af', fontSize: '0.7rem', marginLeft: '0.5rem' }}>{open ? '▲' : '▼'}</span>
       </div>
 
-      {/* DESKTOP: Dropdown via Portal */}
-      {!isMobile && open && ReactDOM.createPortal(
-        <div>
-          <div onClick={handleClose} style={{ position: 'fixed', inset: 0, zIndex: 9998 }} />
-          <div style={{ position: 'absolute', top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width, zIndex: 9999, background: 'white', border: '1px solid #d1d5db', borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', maxHeight: '280px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            {optionList}
-          </div>
-        </div>,
-        document.body
+      {/* DESKTOP: Dropdown — position absolute בתוך הקונטיינר */}
+      {!isMobile && open && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 9999, background: 'white', border: '1px solid #d1d5db', borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', maxHeight: '280px', display: 'flex', flexDirection: 'column', overflow: 'hidden', marginTop: '2px' }}>
+          {optionList}
+        </div>
       )}
 
       {/* MOBILE: Bottom Sheet */}

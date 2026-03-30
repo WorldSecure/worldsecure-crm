@@ -21,15 +21,6 @@ function ProductPicker({ products = [], value, onChange, placeholder = 'Select p
   }, []);
 
   useEffect(() => {
-    if (isMobile) return;
-    const handleClick = (e) => {
-      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [isMobile]);
-
-  useEffect(() => {
     if (isMobile && open) {
       document.body.style.overflow = 'hidden';
     } else {
