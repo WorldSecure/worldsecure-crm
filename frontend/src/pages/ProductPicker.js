@@ -30,7 +30,7 @@ function ProductPicker({ products = [], value, onChange, placeholder = 'Select p
   }, [isMobile, open]);
 
   useEffect(() => {
-    if (open && searchRef.current) setTimeout(() => searchRef.current?.focus(), 100);
+    if (open && !isMobile && searchRef.current) setTimeout(() => searchRef.current?.focus(), 100);
   }, [open]);
 
   const handleOpen = () => {
