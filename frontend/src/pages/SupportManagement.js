@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useLanguage } from '../utils/LanguageContext';
 import { useAuth } from '../utils/AuthContext';
 import ProductPicker from './ProductPicker';
+import MobilePicker from './MobilePicker';
 
 const SortIcon = ({ column, sortBy, sortOrder }) => {
   if (sortBy !== column) return <span style={{ opacity: 0.3, marginInlineEnd: '4px' }}>↕</span>;
@@ -369,13 +370,16 @@ function SupportManagement() {
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">👥 {t('customer')} *</label>
-                <select className="form-select" value={form.customer_id} onChange={e => {
-                  const c = customers.find(c => c.id === parseInt(e.target.value));
-                  setForm({...form, customer_id: e.target.value, customer_name: c?.name||''});
-                }}>
-                  <option value="">{t('select_customer')}</option>
-                  {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <MobilePicker
+                  options={customers.map(c => ({ value: String(c.id), label: c.name }))}
+                  value={String(form.customer_id)}
+                  onChange={val => {
+                    const c = customers.find(c => c.id === parseInt(val));
+                    setForm({...form, customer_id: val, customer_name: c?.name||''});
+                  }}
+                  placeholder={t('select_customer')}
+                  label={t('customer')}
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">📦 {t('product')||'מוצר'} *</label>
