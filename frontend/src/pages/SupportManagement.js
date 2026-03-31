@@ -339,7 +339,7 @@ function SupportManagement() {
       {/* Modal */}
       {showModal && (
         <div className="modal-overlay">
-          <div className="modal" style={{ maxWidth:'600px', width:'95%' }}>
+          <div className="modal" style={{ maxWidth:'1100px', maxHeight:'90vh', overflow:'auto', width:'95%' }}>
             <div className="modal-header">
               <h3 className="modal-title">{editingId ? (t('edit_ticket')) : (t('open_new_ticket'))}</h3>
               <button className="modal-close" onClick={closeModal}>✕</button>
