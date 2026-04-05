@@ -1123,12 +1123,18 @@ const callAnthropicAPI = (prompt) => {
 app.post('/api/products/translate-existing', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
 
-  db.all('SELECT id, name FROM products WHERE name_he IS NULL OR name_pt IS NULL', [], async (err, rows) => {
+  db.all('SELECT id, name, parent_id FROM products WHERE name_he IS NULL OR name_pt IS NULL', [], async (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     if (rows.length === 0) return res.json({ message: 'All products already translated', count: 0 });
 
+    // קודם תרגם הורים, אחר כך variants יירשו את התרגום
+    const parents = rows.filter(r => !r.parent_id);
+    const variants = rows.filter(r => r.parent_id);
+
     let count = 0;
-    for (const product of rows) {
+
+    // 1. תרגם הורים וstandalone
+    for (const product of parents) {
       try {
         const translations = await callAnthropicAPI(
           `Translate this product name. Return ONLY a JSON object with no extra text:\n{"he": "<Hebrew translation>", "pt": "<Portuguese translation>"}\n\nProduct name: ${product.name}`
@@ -1140,13 +1146,53 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
           );
         });
         count++;
-        // השהייה קטנה למניעת rate limit
         await new Promise(r => setTimeout(r, 600));
       } catch (e) {
-        console.error(`Failed to translate product ${product.id}:`, e.message);
+        console.error('Failed to translate product ' + product.id + ':', e.message);
       }
     }
-    res.json({ message: `Translated ${count} products`, count });
+
+    // 2. variants — בנה שם מתרגום ההורה
+    for (const variant of variants) {
+      try {
+        // מצא את תרגום ההורה
+        const parentRow = await new Promise((resolve, reject) => {
+          db.get('SELECT name_he, name_pt FROM products WHERE id = ?', [variant.parent_id], (err, row) => err ? reject(err) : resolve(row));
+        });
+
+        if (parentRow?.name_he && parentRow?.name_pt) {
+          // חלץ את ה-label מהשם: "Parent Name (label)" → "(label)"
+          const baseName = rows.find(r => r.id === variant.parent_id)?.name || '';
+          const label = variant.name.replace(baseName, '').trim();
+          const name_he = parentRow.name_he + (label ? ' ' + label : '');
+          const name_pt = parentRow.name_pt + (label ? ' ' + label : '');
+          await new Promise((resolve, reject) => {
+            db.run('UPDATE products SET name_he = ?, name_pt = ? WHERE id = ?',
+              [name_he, name_pt, variant.id],
+              (err) => err ? reject(err) : resolve()
+            );
+          });
+          count++;
+        } else {
+          // הורה לא תורגם — תרגם ישירות
+          const translations = await callAnthropicAPI(
+            'Translate this product name. Return ONLY a JSON object with no extra text:\n{"he": "<Hebrew translation>", "pt": "<Portuguese translation>"}\n\nProduct name: ' + variant.name
+          );
+          await new Promise((resolve, reject) => {
+            db.run('UPDATE products SET name_he = ?, name_pt = ? WHERE id = ?',
+              [translations.he, translations.pt, variant.id],
+              (err) => err ? reject(err) : resolve()
+            );
+          });
+          count++;
+          await new Promise(r => setTimeout(r, 600));
+        }
+      } catch (e) {
+        console.error('Failed to translate variant ' + variant.id + ':', e.message);
+      }
+    }
+
+    res.json({ message: 'Translated ' + count + ' products', count });
   });
 });
 
