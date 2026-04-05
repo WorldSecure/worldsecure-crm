@@ -1462,9 +1462,9 @@ async function syncNotificationAcksToCloud() {
 
 
 async function syncAll() {
-  await pullDeletionsFromCloud();
-  await syncLocalToCloud();
-  await syncCloudToLocal();
+  await syncLocalToCloud();         // שלב 1: שלח מחיקות לענן (כולל categories)
+  await pullDeletionsFromCloud();   // שלב 2: משוך pending_deletions — עכשיו כולל את מה שנמחק בשלב 1
+  await syncCloudToLocal();         // שלב 3: משוך נתונים — הקטגוריות שנמחקו כבר הוסרו מהענן
 }
 
 async function main() {
