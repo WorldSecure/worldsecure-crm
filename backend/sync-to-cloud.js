@@ -353,7 +353,7 @@ async function syncProductsFromCloud() {
     // דלג על מוצרים שנמחקו מקומית
     if (deletedIds.has(p.id)) continue;
     const existing = await sqliteGet(
-      'SELECT quantity, quantity_updated_at, meta_updated_at, subcategory_id, supplier_id, manufacturer_id FROM products WHERE id=?', [p.id]
+      'SELECT quantity, quantity_updated_at, meta_updated_at, subcategory_id, supplier_id, manufacturer_id, name_he, name_pt FROM products WHERE id=?', [p.id]
     ).catch(() => null);
 
     // לוגיקת כמות — מי עדכן אחרון
@@ -392,7 +392,10 @@ async function syncProductsFromCloud() {
           variant_attrs=?, parent_id=?, is_active=?, product_type_code=?,
           quantity=?, quantity_updated_at=?
         WHERE id=?`,
-        [p.sku, p.name, p.name_he||null, p.name_pt||null, p.description||null,
+        [p.sku, p.name,
+         p.name_he || existing?.name_he || null,
+         p.name_pt || existing?.name_pt || null,
+         p.description||null,
          p.category_id||null,
          (p.subcategory_id != null ? p.subcategory_id : (existing?.subcategory_id ?? null)),
          p.price||null, p.currency||'ILS', p.unit||'unit',
