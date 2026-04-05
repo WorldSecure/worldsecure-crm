@@ -956,13 +956,14 @@ app.get('/api/products/:id/variants', authenticateToken, (req, res) => {
 });
 
 app.patch('/api/products/:id/quantity', authenticateToken, (req, res) => {
-  const { quantity, price, unit, currency } = req.body;
+  const { quantity, price, unit, currency, min_quantity } = req.body;
   const updates = [];
   const params = [];
   if (quantity !== undefined) { updates.push('quantity = ?'); params.push(parseInt(quantity)); updates.push("quantity_updated_at = datetime('now')"); }
   if (price !== undefined) { updates.push('price = ?'); params.push(parseFloat(price)); }
   if (unit !== undefined) { updates.push('unit = ?'); params.push(unit); }
   if (currency !== undefined) { updates.push('currency = ?'); params.push(currency); }
+  if (min_quantity !== undefined) { updates.push('min_quantity = ?'); params.push(parseInt(min_quantity)); }
   if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update' });
   updates.push("meta_updated_at = datetime('now')");
   params.push(req.params.id);
@@ -971,7 +972,7 @@ app.patch('/api/products/:id/quantity', authenticateToken, (req, res) => {
     params,
     (err) => {
       if (err) return res.status(500).json({ error: err.message });
-      logActivity(req.user.id, 'UPDATE_PRODUCT_QTY', 'product', req.params.id, { quantity, price, unit, currency });
+      logActivity(req.user.id, 'UPDATE_PRODUCT_QTY', 'product', req.params.id, { quantity, price, unit, currency, min_quantity });
       res.json({ message: 'Updated' });
     }
   );
@@ -1081,7 +1082,7 @@ const callAnthropicAPI = (prompt) => {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 200,
+      max_tokens: 500,
       messages: [{ role: 'user', content: prompt }]
     });
 
@@ -1130,7 +1131,7 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
     for (const product of rows) {
       try {
         const translations = await callAnthropicAPI(
-          `Translate this product name to Hebrew and Portuguese. Return ONLY valid JSON:\n{"he": "Hebrew translation", "pt": "Portuguese translation"}\n\nProduct: ${product.name}`
+          `Translate this product name. Return ONLY a JSON object with no extra text:\n{"he": "<Hebrew translation>", "pt": "<Portuguese translation>"}\n\nProduct name: ${product.name}`
         );
         await new Promise((resolve, reject) => {
           db.run('UPDATE products SET name_he = ?, name_pt = ? WHERE id = ?',
@@ -1140,7 +1141,7 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
         });
         count++;
         // השהייה קטנה למניעת rate limit
-        await new Promise(r => setTimeout(r, 300));
+        await new Promise(r => setTimeout(r, 600));
       } catch (e) {
         console.error(`Failed to translate product ${product.id}:`, e.message);
       }
