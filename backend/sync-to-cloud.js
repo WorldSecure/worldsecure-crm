@@ -628,7 +628,14 @@ async function syncCategoriesFromCloud() {
   await sqliteRun('ALTER TABLE categories ADD COLUMN code TEXT').catch(() => {});
   const normalizeTs = (v) => v ? String(v).replace(' ', 'T').slice(0, 19) : '';
   let count = 0;
+  // טען את רשימת הקטגוריות שנמחקו מקומית — אסור לשחזר אותן מהענן
+  const localDeleted = await sqliteAll('SELECT id FROM deleted_categories').catch(() => []);
+  const localDeletedIds = new Set(localDeleted.map(d => String(d.id)));
+
   for (const r of rows) {
+    // אם הקטגוריה נמחקה מקומית — דלג עליה, אל תשחזר
+    if (localDeletedIds.has(String(r.id))) continue;
+
     const existing = await sqliteGet('SELECT id, updated_at FROM categories WHERE id=?', [r.id]).catch(() => null);
     const cloudTs = normalizeTs(r.updated_at);
     const localTs = normalizeTs(existing?.updated_at);
