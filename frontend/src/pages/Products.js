@@ -686,7 +686,9 @@ function Products() {
       'carton': 'unit_carton',
       'kg': 'unit_kg',
       'liter': 'unit_liter',
-      'meter': 'unit_meter'
+      'meter': 'unit_meter',
+      'kit': 'unit_kit',
+      'pair': 'unit_pair'
     };
     return t(unitMap[unit] || 'unit_piece');
   };
@@ -968,6 +970,8 @@ function Products() {
                           <option value="kg">{t('unit_kg')}</option>
                           <option value="liter">{t('unit_liter')}</option>
                           <option value="meter">{t('unit_meter')}</option>
+                          <option value="kit">{t('unit_kit')}</option>
+                          <option value="pair">{t('unit_pair')}</option>
                         </select>
                         <span style={{ fontSize: '0.72rem', color: '#888' }}>{t('unit') || 'יחידה'}</span>
                       </div>
@@ -1456,7 +1460,7 @@ function Products() {
                 <div className="form-group">
                   <label className="form-label">{t('unit')}</label>
                   <MobilePicker
-                    options={[{ value: 'unit', label: t('unit_piece') }, { value: 'box', label: t('unit_box') }, { value: 'carton', label: t('unit_carton') }, { value: 'kg', label: t('unit_kg') }, { value: 'liter', label: t('unit_liter') }, { value: 'meter', label: t('unit_meter') }]}
+                    options={[{ value: 'unit', label: t('unit_piece') }, { value: 'box', label: t('unit_box') }, { value: 'carton', label: t('unit_carton') }, { value: 'kg', label: t('unit_kg') }, { value: 'liter', label: t('unit_liter') }, { value: 'meter', label: t('unit_meter') }, { value: 'kit', label: t('unit_kit') }, { value: 'pair', label: t('unit_pair') }]}
                     value={formData.unit}
                     onChange={(val) => setFormData({...formData, unit: val})}
                     label={t('unit')}
@@ -1906,7 +1910,6 @@ function Products() {
             </div>
           </div>
         </div>
-      )}
       )}
 
       {/* ── מודל ניהול קודי סוג מוצר ──────────────────────────────────────── */}

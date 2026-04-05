@@ -121,6 +121,8 @@ export const en = {
   unit_kg: 'Kg',
   unit_liter: 'Liter',
   unit_meter: 'Meter',
+  unit_kit: 'Kit',
+  unit_pair: 'Pair',
   
   // Suppliers
   supplier: 'Supplier',
