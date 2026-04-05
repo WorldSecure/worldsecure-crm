@@ -37,6 +37,7 @@ function WarehouseReports() {
   const [inventorySearch, setInventorySearch] = useState('');
   const [inventoryPageSize, setInventoryPageSize] = useState(10);
   const [inventoryCurrentPage, setInventoryCurrentPage] = useState(1);
+  const [inventoryExpanded, setInventoryExpanded] = useState({});
 
   // ── State: דוח 2 - תנועות ──
   const [movementsOpen, setMovementsOpen] = useState(false);
@@ -471,11 +472,27 @@ function WarehouseReports() {
         <AccordionBody open={inventoryOpen} loading={inventoryLoading}>
           {inventoryData && (() => {
             const q = inventorySearch.toLowerCase();
-            const filtered = q ? inventoryData.filter(p => !p.is_parent && (getProductName(p).toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q))) : inventoryData.filter(p => !p.is_parent);
-            const sorted = doSort(filtered, inventorySort.field, inventorySort.dir, inventoryGetters);
+            // בניית עץ: אבות + variants + standalone
+            const parents = inventoryData.filter(p => p.is_parent && !p.parent_id);
+            const standalone = inventoryData.filter(p => !p.is_parent && !p.parent_id);
+            const variantsByParent = {};
+            inventoryData.forEach(p => { if (p.parent_id) { if (!variantsByParent[p.parent_id]) variantsByParent[p.parent_id] = []; variantsByParent[p.parent_id].push(p); } });
+            const matchesSearch = p => !q || getProductName(p).toLowerCase().includes(q) || (p.sku||'').toLowerCase().includes(q);
+            const parentHasMatch = pid => (variantsByParent[pid]||[]).some(v => matchesSearch(v));
+            const filteredParents = parents.filter(p => matchesSearch(p) || parentHasMatch(p.id));
+            const filteredStandalone = standalone.filter(p => matchesSearch(p));
+            const allVariants = filteredParents.flatMap(p => (variantsByParent[p.id]||[]).filter(v => !q || matchesSearch(v)));
+            const totalProducts = allVariants.length + filteredStandalone.length;
+            const totalQty = [...allVariants, ...filteredStandalone].reduce((s, p) => s + (p.quantity||0), 0);
+            const totalLow = [...allVariants, ...filteredStandalone].filter(p => p.quantity < 0 || (p.min_quantity > 0 && p.quantity < p.min_quantity)).length;
             const handleSort = f => { setInventorySort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' })); setInventoryCurrentPage(1); };
-            const totalPages = inventoryPageSize === 'all' ? 1 : Math.ceil(sorted.length / inventoryPageSize);
-            const paginated = inventoryPageSize === 'all' ? sorted : sorted.slice((inventoryCurrentPage - 1) * inventoryPageSize, inventoryCurrentPage * inventoryPageSize);
+            // Pagination — ברמת אבות + standalone (כל אב נחשב פריט אחד)
+            const treeItems = [...filteredParents, ...filteredStandalone];
+            const pageSize = inventoryPageSize === 'all' ? treeItems.length : parseInt(inventoryPageSize);
+            const totalPages = Math.ceil(treeItems.length / pageSize);
+            const paginatedItems = treeItems.slice((inventoryCurrentPage - 1) * pageSize, inventoryCurrentPage * pageSize);
+            const paginatedParents = paginatedItems.filter(p => p.is_parent);
+            const paginatedStandalone = paginatedItems.filter(p => !p.is_parent);
             return (
               <>
                 <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -483,7 +500,7 @@ function WarehouseReports() {
                     <span style={{ color: '#666', fontSize: '0.85rem' }}>🔍</span>
                     <input type="text" placeholder={t('search') || 'חיפוש...'} value={inventorySearch} onChange={e => { setInventorySearch(e.target.value); setInventoryCurrentPage(1); }}
                       style={{ border: '1px solid #ddd', borderRadius: '6px', padding: '0.3rem 0.6rem', fontSize: '0.85rem', outline: 'none', width: '200px' }} />
-                    <span style={{ color: '#666', fontSize: '0.85rem' }}>{t('products') || 'מוצרים'}: <strong>{filtered.length}</strong></span>
+                    <span style={{ color: '#666', fontSize: '0.85rem' }}>{t('products') || 'מוצרים'}: <strong>{totalProducts}</strong></span>
                   </div>
                   <RefreshBtn onClick={async () => { setInventoryLoading(true); try { const r = await axios.get('/api/products'); setInventoryData(r.data); } catch (e) {} setInventoryLoading(false); }} />
                 </div>
@@ -491,7 +508,7 @@ function WarehouseReports() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
                   <thead>
                     <tr style={{ background: '#f8f9fa' }}>
-                      <SortTh field="sku" sortState={inventorySort} onSort={handleSort} style={{ width: '110px' }}>SKU</SortTh>
+                      <SortTh field="sku" sortState={inventorySort} onSort={handleSort} style={{ width: '140px' }}>SKU</SortTh>
                       <SortTh field="name" sortState={inventorySort} onSort={handleSort}>{t('product') || 'מוצר'}</SortTh>
                       <SortTh field="category" sortState={inventorySort} onSort={handleSort} style={{ width: '130px' }}>{t('category') || 'קטגוריה'}</SortTh>
                       <SortTh field="quantity" sortState={inventorySort} onSort={handleSort} style={{ width: '100px', textAlign: 'center' }}>{t('quantity') || 'כמות'}</SortTh>
@@ -500,10 +517,53 @@ function WarehouseReports() {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginated.map((p, i) => {
-                      const isLow = p.parent_id
-                        ? (p.quantity < 0 || (p.min_quantity > 0 && p.quantity < p.min_quantity))
-                        : (p.quantity <= p.min_quantity);
+                    {paginatedParents.map(parent => {
+                      const variants = (variantsByParent[parent.id]||[]).filter(v => !q || matchesSearch(v));
+                      const expanded = q ? true : !!inventoryExpanded[parent.id];
+                      const totalVariants = (variantsByParent[parent.id]||[]).length;
+                      return (
+                        <React.Fragment key={parent.id}>
+                          {/* שורת אב */}
+                          <tr onClick={() => setInventoryExpanded(prev => ({...prev, [parent.id]: !prev[parent.id]}))}
+                            style={{ background: '#fffbf0', borderBottom: '1px solid #f5f0e0', cursor: 'pointer' }}>
+                            <td colSpan={6} style={{ padding: '0.6rem 1rem' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <span style={{ fontSize: '0.75rem', color: '#f59e0b', minWidth: '14px' }}>{expanded ? '▼' : '▶'}</span>
+                                <span style={{ fontSize: '0.85rem' }}>⭐</span>
+                                <span style={{ fontWeight: 600, color: '#444', flex: 1 }}>{getProductName(parent)}</span>
+                                <span style={{ fontSize: '0.78rem', color: '#9ca3af' }}>{totalVariants} {t('variants') || 'variants'}</span>
+                                <span style={{ fontSize: '0.78rem', color: '#666' }}>{parent.category_name || '-'}</span>
+                              </div>
+                            </td>
+                          </tr>
+                          {/* שורות variants */}
+                          {expanded && variants.map(v => {
+                            const isLow = v.quantity < 0 || (v.min_quantity > 0 && v.quantity < v.min_quantity);
+                            return (
+                              <tr key={v.id} style={{ borderBottom: '1px solid #fafafa', background: 'white' }}>
+                                <td style={{ padding: '0.5rem 1rem 0.5rem 2.2rem', color: '#888', fontSize: '0.82rem' }}>
+                                  <span style={{ color: '#9ca3af', marginRight: '4px' }}>└</span>{v.sku || '-'}
+                                </td>
+                                <td style={{ padding: '0.5rem 1rem', fontWeight: 500, fontSize: '0.88rem', color: '#374151' }}>{getProductName(v)}</td>
+                                <td style={{ padding: '0.5rem 1rem', color: '#666', fontSize: '0.85rem' }}>{v.category_name || '-'}</td>
+                                <td style={{ padding: '0.5rem 1rem', textAlign: 'center' }}>
+                                  <span style={{ background: isLow ? '#f8d7da' : '#d4edda', color: isLow ? '#721c24' : '#155724', padding: '2px 10px', borderRadius: '12px', fontWeight: 700, fontSize: '0.85rem' }}>{fmt(v.quantity)}</span>
+                                </td>
+                                <td style={{ padding: '0.5rem 1rem', textAlign: 'center', color: '#666' }}>{fmt(v.min_quantity || 0)}</td>
+                                <td style={{ padding: '0.5rem 1rem', textAlign: 'center' }}>
+                                  {isLow
+                                    ? <span style={{ background: '#f8d7da', color: '#721c24', padding: '2px 8px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: 600 }}>⚠️ {t('low_stock') || 'נמוך'}</span>
+                                    : <span style={{ background: '#d4edda', color: '#155724', padding: '2px 8px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: 600 }}>✅ {t('ok') || 'תקין'}</span>}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </React.Fragment>
+                      );
+                    })}
+                    {/* standalone products */}
+                    {paginatedStandalone.map((p, i) => {
+                      const isLow = p.quantity < 0 || (p.min_quantity > 0 && p.quantity < p.min_quantity);
                       return (
                         <tr key={p.id} style={{ borderBottom: '1px solid #f0f0f0', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
                           <td style={{ padding: '0.6rem 1rem', color: '#888', fontSize: '0.82rem' }}>{p.sku || '-'}</td>
@@ -524,20 +584,18 @@ function WarehouseReports() {
                   </tbody>
                   <tfoot>
                     <tr style={{ background: '#e3f2fd', fontWeight: 700, borderTop: '2px solid #007bff' }}>
-                      <td colSpan={3} style={{ padding: '0.65rem 1rem', color: '#1565c0' }}>{t('total') || 'סה"כ'}: {sorted.length} {t('products') || 'מוצרים'}</td>
-                      <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#1565c0' }}>{fmt(sorted.reduce((s, p) => s + (p.quantity || 0), 0))}</td>
+                      <td colSpan={3} style={{ padding: '0.65rem 1rem', color: '#1565c0' }}>{t('total') || 'סה"כ'}: {totalProducts} {t('products') || 'מוצרים'}</td>
+                      <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#1565c0' }}>{fmt(totalQty)}</td>
                       <td></td>
-                      <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#721c24' }}>⚠️ {sorted.filter(p => p.parent_id ? (p.quantity < 0 || (p.min_quantity > 0 && p.quantity < p.min_quantity)) : (p.quantity <= p.min_quantity)).length}</td>
+                      <td style={{ padding: '0.65rem 1rem', textAlign: 'center', color: '#721c24' }}>⚠️ {totalLow}</td>
                     </tr>
                   </tfoot>
                 </table>
                 </div>
                 {/* Mobile Cards */}
                 <div style={{ display: isMobile ? 'flex' : 'none', flexDirection: 'column', gap: '0.75rem', padding: '0.75rem' }}>
-                  {paginated.map(p => {
-                    const isLow = p.parent_id
-                      ? (p.quantity < 0 || (p.min_quantity > 0 && p.quantity < p.min_quantity))
-                      : (p.quantity <= p.min_quantity);
+                  {[...paginatedParents.flatMap(p => (variantsByParent[p.id]||[])), ...paginatedStandalone].map(p => {
+                    const isLow = p.quantity < 0 || (p.min_quantity > 0 && p.quantity < p.min_quantity);
                     return (
                       <div key={p.id} style={{ background: 'white', border: `1px solid ${isLow ? '#f5c6cb' : '#e2e8f0'}`, borderRadius: '10px', padding: '1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
@@ -565,7 +623,7 @@ function WarehouseReports() {
                 {/* Pagination Bar */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', padding: '0.75rem 1rem', borderTop: '1px solid #e2e8f0' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: '#555' }}>
-                    <span>{sorted.length} {t('products') || 'מוצרים'}</span>
+                    <span>{totalProducts} {t('products') || 'מוצרים'}</span>
                     <span>|</span>
                     <label>{t('per_page') || 'פר עמוד'}:</label>
                     <select value={inventoryPageSize} onChange={e => { setInventoryPageSize(e.target.value === 'all' ? 'all' : parseInt(e.target.value)); setInventoryCurrentPage(1); }}
@@ -574,7 +632,7 @@ function WarehouseReports() {
                       <option value="all">{t('all') || 'הכל'}</option>
                     </select>
                   </div>
-                  {inventoryPageSize !== 'all' && totalPages > 1 && (
+                  {totalPages > 1 && inventoryPageSize !== 'all' && (
                     <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
                       <button onClick={() => setInventoryCurrentPage(1)} disabled={inventoryCurrentPage === 1}
                         style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: inventoryCurrentPage === 1 ? '#f3f4f6' : '#fff', cursor: inventoryCurrentPage === 1 ? 'default' : 'pointer' }}>«</button>
@@ -590,8 +648,8 @@ function WarehouseReports() {
                 </div>
                 <div style={{ padding: '0.75rem 1rem', borderTop: '1px solid #dee2e6', display: 'flex', justifyContent: 'flex-end' }}>
                   <PrintBtn onClick={() => {
-                    const rows = sorted.map(p => {
-                      const isLow = (p.quantity || 0) <= (p.min_quantity || 0);
+                    const rows = [...filteredParents.flatMap(p => (variantsByParent[p.id]||[])), ...filteredStandalone].map(p => {
+                      const isLow = (p.quantity || 0) < 0 || ((p.min_quantity || 0) > 0 && (p.quantity || 0) < (p.min_quantity || 0));
                       return `<tr><td>${p.sku || '-'}</td><td>${getProductName(p)}</td><td>${p.category_name || '-'}</td><td style="text-align:center;">${fmt(p.quantity)}</td><td style="text-align:center;">${fmt(p.min_quantity || 0)}</td><td style="text-align:center;">${isLow ? '⚠️ Low' : '✅ OK'}</td></tr>`;
                     }).join('');
                     openPrint(printHeader(`📦 ${t('current_inventory') || 'מלאי נוכחי'}`, '#007bff')

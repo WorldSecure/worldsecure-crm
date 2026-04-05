@@ -92,6 +92,7 @@ function Products() {
   const [editingQty, setEditingQty] = useState({}); // { variantId: newQty }
   const [editingPrice, setEditingPrice] = useState({}); // { variantId: newPrice }
   const [editingUnit, setEditingUnit] = useState({}); // { variantId: unit }
+  const [editingMinQty, setEditingMinQty] = useState({}); // { variantId: min_quantity }
   const [editingCurrency, setEditingCurrency] = useState({}); // { variantId: currency }
   const [variantPage, setVariantPage] = useState({}); // { parentId: currentPage }
   const VARIANT_PAGE_SIZE = 5;
@@ -629,13 +630,15 @@ function Products() {
     const price = editingPrice[variantId];
     const unit = editingUnit[variantId];
     const currency = editingCurrency[variantId];
-    if (qty === undefined && price === undefined && unit === undefined && currency === undefined) return;
+    const minQty = editingMinQty[variantId];
+    if (qty === undefined && price === undefined && unit === undefined && currency === undefined && minQty === undefined) return;
     try {
       await axios.patch(`/api/products/${variantId}/quantity`, {
         ...(qty !== undefined ? { quantity: parseInt(qty) } : {}),
         ...(price !== undefined ? { price: parseFloat(price) } : {}),
         ...(unit !== undefined ? { unit } : {}),
-        ...(currency !== undefined ? { currency } : {})
+        ...(currency !== undefined ? { currency } : {}),
+        ...(minQty !== undefined ? { min_quantity: parseInt(minQty) } : {})
       });
       setVariantsCache(c => ({
         ...c,
@@ -644,13 +647,15 @@ function Products() {
           ...(qty !== undefined ? { quantity: parseInt(qty) } : {}),
           ...(price !== undefined ? { price: parseFloat(price) } : {}),
           ...(unit !== undefined ? { unit } : {}),
-          ...(currency !== undefined ? { currency } : {})
+          ...(currency !== undefined ? { currency } : {}),
+          ...(minQty !== undefined ? { min_quantity: parseInt(minQty) } : {})
         } : v)
       }));
       setEditingQty(q => { const n = { ...q }; delete n[variantId]; return n; });
       setEditingPrice(p => { const n = { ...p }; delete n[variantId]; return n; });
       setEditingUnit(u => { const n = { ...u }; delete n[variantId]; return n; });
       setEditingCurrency(c => { const n = { ...c }; delete n[variantId]; return n; });
+      setEditingMinQty(q => { const n = { ...q }; delete n[variantId]; return n; });
     } catch (e) {
       alert(t('error') + ': ' + e.message);
     }
@@ -892,7 +897,7 @@ function Products() {
                     </span>
                     {!!product.is_parent ? (
                       <span style={{ color: '#999', fontSize: '0.8rem' }}>—</span>
-                    ) : product.quantity <= product.min_quantity ? (
+                    ) : (product.quantity < 0 || (product.min_quantity > 0 && product.quantity < product.min_quantity)) ? (
                       <span className="badge badge-danger">{product.quantity}</span>
                     ) : (
                       <span className="badge badge-success">{product.quantity}</span>
@@ -983,7 +988,7 @@ function Products() {
                         </div>
                         <span style={{ fontSize: '0.72rem', color: '#888' }}>{t('price') || 'מחיר'}</span>
                       </div>
-                      {(editingQty[variant.id] !== undefined || editingPrice[variant.id] !== undefined || editingUnit[variant.id] !== undefined || editingCurrency[variant.id] !== undefined) && (
+                      {(editingQty[variant.id] !== undefined || editingPrice[variant.id] !== undefined || editingUnit[variant.id] !== undefined || editingCurrency[variant.id] !== undefined || editingMinQty[variant.id] !== undefined) && (
                         <button onClick={() => saveVariantQty(variant.id, product.id)}
                           style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', alignSelf: 'flex-end' }}>✓</button>
                       )}
@@ -1051,7 +1056,7 @@ function Products() {
                     <td>
                       {!!!!product.is_parent ? (
                         <span style={{ color: '#999', fontSize: '0.8rem' }}>—</span>
-                      ) : product.quantity <= product.min_quantity ? (
+                      ) : (product.quantity < 0 || (product.min_quantity > 0 && product.quantity < product.min_quantity)) ? (
                         <span className="badge badge-danger">{product.quantity}</span>
                       ) : (
                         <span className="badge badge-success">{product.quantity}</span>
@@ -1098,7 +1103,7 @@ function Products() {
                                   <th style={{ padding: '0.4rem 0.6rem', textAlign: 'left', fontWeight: 600, color: '#666', fontSize: '0.78rem' }}>SKU</th>
                                   <th style={{ padding: '0.4rem 0.6rem', fontWeight: 600, color: '#666', fontSize: '0.78rem' }}>{t('name')}</th>
                                   <th style={{ padding: '0.4rem 0.6rem', fontWeight: 600, color: '#666', fontSize: '0.78rem' }}>{t('quantity')}</th>
-                                  <th style={{ padding: '0.4rem 0.6rem', fontWeight: 600, color: '#666', fontSize: '0.78rem' }}>{t('unit')}</th>
+                                  <th style={{ padding: '0.4rem 0.6rem', fontWeight: 600, color: '#666', fontSize: '0.78rem' }}>{t('min_quantity')}</th>
                                   <th style={{ padding: '0.4rem 0.6rem', fontWeight: 600, color: '#666', fontSize: '0.78rem' }}>{t('price')}</th>
                                   <th style={{ padding: '0.4rem 0.6rem' }}></th>
                                 </tr>
@@ -1117,16 +1122,12 @@ function Products() {
                                       </div>
                                     </td>
                                     <td style={{ padding: '0.4rem 0.6rem' }}>
-                                      <select style={{ padding: '0.2rem 0.3rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.82rem' }}
-                                        value={editingUnit[variant.id] !== undefined ? editingUnit[variant.id] : (variant.unit ?? 'unit')}
-                                        onChange={(e) => setEditingUnit(u => ({ ...u, [variant.id]: e.target.value }))}>
-                                        <option value="unit">{t('unit_piece')}</option>
-                                        <option value="box">{t('unit_box')}</option>
-                                        <option value="carton">{t('unit_carton')}</option>
-                                        <option value="kg">{t('unit_kg')}</option>
-                                        <option value="liter">{t('unit_liter')}</option>
-                                        <option value="meter">{t('unit_meter')}</option>
-                                      </select>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                                        <input type="number" min="0" style={{ width: '65px', padding: '0.2rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.85rem' }}
+                                          value={editingMinQty[variant.id] !== undefined ? editingMinQty[variant.id] : (variant.min_quantity ?? 0)}
+                                          onChange={(e) => setEditingMinQty(q => ({ ...q, [variant.id]: e.target.value }))} />
+                                        <span style={{ fontSize: '0.7rem', color: '#aaa' }}>{t('min_quantity')}</span>
+                                      </div>
                                     </td>
                                     <td style={{ padding: '0.4rem 0.6rem' }}>
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
@@ -1146,7 +1147,7 @@ function Products() {
                                       </div>
                                     </td>
                                     <td style={{ padding: '0.4rem 0.6rem' }}>
-                                      {(editingQty[variant.id] !== undefined || editingPrice[variant.id] !== undefined || editingUnit[variant.id] !== undefined || editingCurrency[variant.id] !== undefined) && (
+                                      {(editingQty[variant.id] !== undefined || editingPrice[variant.id] !== undefined || editingUnit[variant.id] !== undefined || editingCurrency[variant.id] !== undefined || editingMinQty[variant.id] !== undefined) && (
                                         <button onClick={() => saveVariantQty(variant.id, product.id)}
                                           style={{ padding: '0.2rem 0.6rem', fontSize: '0.8rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
                                           ✓ {t('save') || 'שמור'}
@@ -1458,7 +1459,7 @@ function Products() {
                     options={[{ value: 'unit', label: t('unit_piece') }, { value: 'box', label: t('unit_box') }, { value: 'carton', label: t('unit_carton') }, { value: 'kg', label: t('unit_kg') }, { value: 'liter', label: t('unit_liter') }, { value: 'meter', label: t('unit_meter') }]}
                     value={formData.unit}
                     onChange={(val) => setFormData({...formData, unit: val})}
-                    label={t('unit')} disabled={formData.is_parent}
+                    label={t('unit')}
                   />
                 </div>
 
@@ -1634,6 +1635,8 @@ function Products() {
                     className="form-input"
                     value={formData.min_quantity}
                     onChange={(e) => setFormData({...formData, min_quantity: e.target.value})}
+                    disabled={formData.is_parent}
+                    style={{ background: formData.is_parent ? '#f0f0f0' : '', color: formData.is_parent ? '#999' : '' }}
                   />
                 </div>
               </div>
