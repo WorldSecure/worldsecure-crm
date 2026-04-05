@@ -3575,10 +3575,7 @@ Product name: ${product.name}`
           count++;
         } else {
           const translations = await callAnthropicAPI(
-            'Translate this product name. Return ONLY a JSON object with no extra text:
-{"he": "<Hebrew translation>", "pt": "<Portuguese translation>"}
-
-Product name: ' + variant.name
+            'Translate this product name. Return ONLY a JSON object with no extra text:\n{"he": "<Hebrew translation>", "pt": "<Portuguese translation>"}\n\nProduct name: ' + variant.name
           );
           await query('UPDATE products SET name_he=$1, name_pt=$2 WHERE id=$3', [translations.he, translations.pt, variant.id]);
           count++;
