@@ -39,6 +39,21 @@ function Products() {
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [translating, setTranslating] = useState(false);
+  const [translateResult, setTranslateResult] = useState(null);
+
+  const handleTranslateMissing = async () => {
+    setTranslating(true);
+    setTranslateResult(null);
+    try {
+      const res = await axios.post('/api/products/translate-existing');
+      setTranslateResult(res.data);
+      if (res.data.count > 0) fetchProducts();
+    } catch (e) {
+      setTranslateResult({ error: e.message });
+    }
+    setTranslating(false);
+  };
   const [showDiscontinued, setShowDiscontinued] = useState(false);
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -767,6 +782,7 @@ function Products() {
                         { icon: '📁', label: t('edit_subcategories') || 'Subcategories', action: () => { setSelectedCategoryFilter(categories[0]?.id?.toString() || ''); setEditingSubcategory(null); setSubcategoryForm({ code: '', name: '' }); setShowSubcategoryModal(true); setShowActionsMenu(false); } },
                         { icon: '🏷️', label: t('edit_variant_attr_types') || 'Attributes', action: () => { openAddAttrType(); setShowActionsMenu(false); } },
                         { icon: '📦', label: t('product_types') || 'Product Types', action: () => { openAddProductType(); setShowActionsMenu(false); } },
+                        { icon: translating ? '⏳' : '🌐', label: translating ? '...' : `🌐 Translate Missing`, action: () => { handleTranslateMissing(); setShowActionsMenu(false); } },
                       ].map((item, i) => (
                         <button key={i} onClick={item.action} style={{
                           display: 'flex', alignItems: 'center', gap: '0.6rem',
@@ -808,6 +824,22 @@ function Products() {
                 {isAdmin && (
                 <button className="btn btn-secondary" onClick={() => { setSelectedCategoryFilter(categories[0]?.id?.toString() || ''); setEditingSubcategory(null); setSubcategoryForm({ code: '', name: '' }); setShowSubcategoryModal(true); }}>
                   📁 {t('edit_subcategories') || 'Subcategories'}
+                </button>
+                )}
+                {isAdmin && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={handleTranslateMissing}
+                  disabled={translating}
+                  title="Translate missing product names"
+                  style={{ background: translating ? '#6c757d' : '#17a2b8', color: 'white', border: 'none' }}
+                >
+                  {translating ? '⏳ ...' : '🌐'}
+                  {translateResult && !translating && (
+                    <span style={{ marginLeft: '0.3rem', fontSize: '0.8rem' }}>
+                      {translateResult.error ? '❌' : `✅ ${translateResult.count}`}
+                    </span>
+                  )}
                 </button>
                 )}
                 {isAdmin && (
@@ -1910,6 +1942,7 @@ function Products() {
             </div>
           </div>
         </div>
+      )}
       )}
 
       {/* ── מודל ניהול קודי סוג מוצר ──────────────────────────────────────── */}
