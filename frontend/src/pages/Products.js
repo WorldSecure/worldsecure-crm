@@ -1748,14 +1748,19 @@ function Products() {
               {/* בחירת קטגוריה אב */}
               <div className="form-group" style={{ marginBottom: '1rem' }}>
                 <label className="form-label">📂 {t('category') || 'קטגוריה'}</label>
-                <select className="form-select" value={selectedCategoryFilter}
-                  onChange={e => { setSelectedCategoryFilter(e.target.value); setEditingSubcategory(null); setSubcategoryForm({ code: '', name: '' }); }}>
-                  <option value="">{t('select_category') || 'בחר קטגוריה'}</option>
-                  {categories.map(cat => {
-                    const label = language === 'he' ? (cat.name_he || cat.name) : language === 'pt' ? (cat.name_pt || cat.name) : cat.name;
-                    return <option key={cat.id} value={cat.id}>{cat.code ? `${cat.code} — ` : ''}{label}</option>;
-                  })}
-                </select>
+                <MobilePicker
+                  options={[
+                    { value: '', label: t('select_category') || 'בחר קטגוריה' },
+                    ...categories.map(cat => {
+                      const label = language === 'he' ? (cat.name_he || cat.name) : language === 'pt' ? (cat.name_pt || cat.name) : cat.name;
+                      return { value: String(cat.id), label: cat.code ? `${cat.code} — ${label}` : label };
+                    })
+                  ]}
+                  value={String(selectedCategoryFilter)}
+                  onChange={val => { setSelectedCategoryFilter(val); setEditingSubcategory(null); setSubcategoryForm({ code: '', name: '' }); }}
+                  placeholder={t('select_category') || 'בחר קטגוריה'}
+                  label={t('category') || 'קטגוריה'}
+                />
               </div>
 
               {selectedCategoryFilter && (
