@@ -352,13 +352,14 @@ app.get('/api/products/:id/variants', authenticateToken, async (req, res) => {
 });
 
 app.patch('/api/products/:id/quantity', authenticateToken, async (req, res) => {
-  const { quantity, price, unit, currency } = req.body;
+  const { quantity, price, unit, currency, min_quantity } = req.body;
   const updates = [];
   const params = [];
   if (quantity !== undefined) { updates.push(`quantity=$${params.push(parseInt(quantity))}`); updates.push('quantity_updated_at=NOW()'); }
   if (price !== undefined) { updates.push(`price=$${params.push(parseFloat(price))}`); }
   if (unit !== undefined) { updates.push(`unit=$${params.push(unit)}`); }
   if (currency !== undefined) { updates.push(`currency=$${params.push(currency)}`); }
+  if (min_quantity !== undefined) { updates.push(`min_quantity=$${params.push(parseInt(min_quantity))}`); }
   if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update' });
   updates.push('meta_updated_at=NOW()');
   params.push(req.params.id);
@@ -3481,6 +3482,115 @@ app.post('/api/run-migrations', authenticateToken, async (req, res) => {
 });
 
 // ── Health Check ──────────────────────────────────────────────────────────────
+// ── Translate Helper ─────────────────────────────────────────────────────────
+const callAnthropicAPI = (prompt) => {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 500,
+      messages: [{ role: 'user', content: prompt }]
+    });
+    const options = {
+      hostname: 'api.anthropic.com',
+      path: '/v1/messages',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY || '',
+        'anthropic-version': '2023-06-01',
+        'Content-Length': Buffer.byteLength(body)
+      }
+    };
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          const text = parsed.content?.[0]?.text || '{}';
+          const clean = text.replace(/```json|```/g, '').trim();
+          resolve(JSON.parse(clean));
+        } catch (e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+};
+
+// ── Translate Product Name ────────────────────────────────────────────────────
+app.post('/api/products/translate', authenticateToken, async (req, res) => {
+  const { name, sourceLang = 'en' } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name required' });
+  const langNames = { he: 'Hebrew', en: 'English', pt: 'Portuguese' };
+  const targets = ['he', 'en', 'pt'].filter(l => l !== sourceLang);
+  const prompt = `Translate this product name from ${langNames[sourceLang]} to ${targets.map(l => langNames[l]).join(' and ')}. Return ONLY valid JSON with these exact keys: ${JSON.stringify(Object.fromEntries(targets.map(l => [l, '...'])))}
+
+Product: ${name}`;
+  try {
+    const translations = await callAnthropicAPI(prompt);
+    const result = { he: name, en: name, pt: name };
+    targets.forEach(l => { if (translations[l]) result[l] = translations[l]; });
+    res.json(result);
+  } catch (err) {
+    res.json({ he: name, en: name, pt: name });
+  }
+});
+
+// ── Translate Existing Products ───────────────────────────────────────────────
+app.post('/api/products/translate-existing', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  try {
+    const { rows } = await query('SELECT id, name, parent_id FROM products WHERE name_he IS NULL OR name_pt IS NULL');
+    if (rows.length === 0) return res.json({ message: 'All products already translated', count: 0 });
+
+    const parents = rows.filter(r => !r.parent_id);
+    const variants = rows.filter(r => r.parent_id);
+    let count = 0;
+
+    for (const product of parents) {
+      try {
+        const translations = await callAnthropicAPI(
+          `Translate this product name. Return ONLY a JSON object with no extra text:
+{"he": "<Hebrew translation>", "pt": "<Portuguese translation>"}
+
+Product name: ${product.name}`
+        );
+        await query('UPDATE products SET name_he=$1, name_pt=$2 WHERE id=$3', [translations.he, translations.pt, product.id]);
+        count++;
+        await new Promise(r => setTimeout(r, 600));
+      } catch (e) { console.error('Failed to translate product ' + product.id + ':', e.message); }
+    }
+
+    for (const variant of variants) {
+      try {
+        const parentRes = await query('SELECT name_he, name_pt FROM products WHERE id=$1', [variant.parent_id]);
+        const parentRow = parentRes.rows[0];
+        if (parentRow?.name_he && parentRow?.name_pt) {
+          const baseName = rows.find(r => r.id === variant.parent_id)?.name || '';
+          const label = variant.name.replace(baseName, '').trim();
+          await query('UPDATE products SET name_he=$1, name_pt=$2 WHERE id=$3',
+            [parentRow.name_he + (label ? ' ' + label : ''), parentRow.name_pt + (label ? ' ' + label : ''), variant.id]);
+          count++;
+        } else {
+          const translations = await callAnthropicAPI(
+            'Translate this product name. Return ONLY a JSON object with no extra text:
+{"he": "<Hebrew translation>", "pt": "<Portuguese translation>"}
+
+Product name: ' + variant.name
+          );
+          await query('UPDATE products SET name_he=$1, name_pt=$2 WHERE id=$3', [translations.he, translations.pt, variant.id]);
+          count++;
+          await new Promise(r => setTimeout(r, 600));
+        }
+      } catch (e) { console.error('Failed to translate variant ' + variant.id + ':', e.message); }
+    }
+
+    res.json({ message: 'Translated ' + count + ' products', count });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
 // ════════════════════════════════════════════════════════════════════════════
