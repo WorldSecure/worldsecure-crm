@@ -2958,8 +2958,8 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
           ON CONFLICT (id) DO UPDATE SET
             sku            = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $2  ELSE products.sku END,
             name           = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $3  ELSE products.name END,
-            name_he        = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $4  ELSE products.name_he END,
-            name_pt        = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $5  ELSE products.name_pt END,
+            name_he        = CASE WHEN $4 IS NOT NULL AND (products.name_he IS NULL OR ($15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')))) THEN $4 ELSE products.name_he END,
+            name_pt        = CASE WHEN $5 IS NOT NULL AND (products.name_pt IS NULL OR ($15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')))) THEN $5 ELSE products.name_pt END,
             description    = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $6  ELSE products.description END,
             category_id    = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $7  ELSE products.category_id END,
             subcategory_id = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $8  ELSE products.subcategory_id END,
