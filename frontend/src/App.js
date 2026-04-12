@@ -1,4 +1,5 @@
 import React from 'react';
+import ReactDOM from 'react-dom';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './utils/AuthContext';
 import { LanguageProvider, useLanguage } from './utils/LanguageContext';
@@ -27,6 +28,88 @@ import SupportManagement from './pages/SupportManagement';
 import AdminLayout from './components/AdminLayout';
 import MobilePicker from './pages/MobilePicker';
 import './App.css';
+
+// כפתור בחירת שפה — שומר על עיצוב ה-Header במובייל ובדסקטופ
+const LangPicker = ({ language, setLanguage, isMobile }) => {
+  const [open, setOpen] = React.useState(false);
+  const labels = { he: 'עברית', en: 'English', pt: 'Português' };
+
+  if (!isMobile) {
+    return (
+      <select
+        value={language}
+        onChange={(e) => setLanguage(e.target.value)}
+        style={{
+          padding: '0.8rem 1.5rem',
+          background: 'rgba(255,255,255,0.2)',
+          borderRadius: '50px',
+          border: 'none',
+          color: 'white',
+          cursor: 'pointer',
+          fontWeight: '600',
+          fontSize: '1rem'
+        }}
+      >
+        <option value="he" style={{background: '#0a3d6b', color: 'white'}}>עברית</option>
+        <option value="en" style={{background: '#0a3d6b', color: 'white'}}>English</option>
+        <option value="pt" style={{background: '#0a3d6b', color: 'white'}}>Português</option>
+      </select>
+    );
+  }
+
+  // מובייל — כפתור בסגנון Header + MobilePicker
+  return (
+    <>
+      <span
+        onClick={() => setOpen(true)}
+        style={{
+          padding: '0.3rem 0.5rem',
+          background: 'rgba(255,255,255,0.2)',
+          borderRadius: '50px',
+          border: 'none',
+          color: 'white',
+          cursor: 'pointer',
+          fontWeight: '600',
+          fontSize: '0.8rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.3rem',
+          userSelect: 'none'
+        }}
+      >
+        {labels[language]} <span style={{ fontSize: '0.6rem' }}>▼</span>
+      </span>
+      {open && ReactDOM.createPortal(
+        <div>
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9998 }} />
+          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 9999, background: 'white', borderRadius: '20px 20px 0 0', boxShadow: '0 -8px 32px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 4px' }}>
+              <div style={{ width: '40px', height: '4px', borderRadius: '2px', background: '#d1d5db' }} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 1rem 0.75rem', borderBottom: '1px solid #f0f0f0' }}>
+              <span style={{ fontWeight: 700, fontSize: '1.05rem', color: '#111' }}>
+                {language === 'he' ? 'שפה' : language === 'pt' ? 'Idioma' : 'Language'}
+              </span>
+              <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', color: '#9ca3af', cursor: 'pointer' }}>×</button>
+            </div>
+            {[{ value: 'he', label: 'עברית' }, { value: 'en', label: 'English' }, { value: 'pt', label: 'Português' }].map(opt => (
+              <div key={opt.value} onClick={() => { setLanguage(opt.value); setOpen(false); }}
+                style={{ padding: '0.9rem 1.2rem', cursor: 'pointer', borderBottom: '1px solid #f3f4f6', fontSize: '1rem',
+                  background: language === opt.value ? '#e8f5e9' : 'white',
+                  color: language === opt.value ? '#1a7a3c' : '#374151',
+                  fontWeight: language === opt.value ? 600 : 400,
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: '52px' }}>
+                <span>{opt.label}</span>
+                {language === opt.value && <span style={{ color: '#27ae60' }}>✓</span>}
+              </div>
+            ))}
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+};
 
 // Header חדש עם הרשאות
 const NewHeader = ({ activeTab }) => {
@@ -113,39 +196,7 @@ const NewHeader = ({ activeTab }) => {
           </span>
           
           {/* בחירת שפה */}
-          {isMobile ? (
-            <div style={{ minWidth: '90px' }}>
-              <MobilePicker
-                options={[
-                  { value: 'he', label: 'עברית' },
-                  { value: 'en', label: 'English' },
-                  { value: 'pt', label: 'Português' },
-                ]}
-                value={language}
-                onChange={(val) => setLanguage(val)}
-                label={language === 'he' ? 'שפה' : language === 'pt' ? 'Idioma' : 'Language'}
-              />
-            </div>
-          ) : (
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              style={{
-                padding: '0.8rem 1.5rem',
-                background: 'rgba(255,255,255,0.2)',
-                borderRadius: '50px',
-                border: 'none',
-                color: 'white',
-                cursor: 'pointer',
-                fontWeight: '600',
-                fontSize: '1rem'
-              }}
-            >
-              <option value="he" style={{background: '#0a3d6b', color: 'white'}}>עברית</option>
-              <option value="en" style={{background: '#0a3d6b', color: 'white'}}>English</option>
-              <option value="pt" style={{background: '#0a3d6b', color: 'white'}}>Português</option>
-            </select>
-          )}
+          <LangPicker language={language} setLanguage={setLanguage} isMobile={isMobile} />
           
           {/* כפתור יציאה */}
           <button 
