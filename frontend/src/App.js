@@ -25,7 +25,7 @@ import Users from './pages/Users';
 import SupportDashboard from './pages/SupportDashboard';
 import SupportManagement from './pages/SupportManagement';
 import AdminLayout from './components/AdminLayout';
-import MobilePicker from './components/MobilePicker';
+import MobilePicker from './pages/MobilePicker';
 import './App.css';
 
 // Header חדש עם הרשאות
@@ -113,18 +113,39 @@ const NewHeader = ({ activeTab }) => {
           </span>
           
           {/* בחירת שפה */}
-          <div style={{ minWidth: isMobile ? '90px' : '130px' }} className="lang-picker-dark">
-            <MobilePicker
-              options={[
-                { value: 'he', label: 'עברית' },
-                { value: 'en', label: 'English' },
-                { value: 'pt', label: 'Português' },
-              ]}
+          {isMobile ? (
+            <div style={{ minWidth: '90px' }}>
+              <MobilePicker
+                options={[
+                  { value: 'he', label: 'עברית' },
+                  { value: 'en', label: 'English' },
+                  { value: 'pt', label: 'Português' },
+                ]}
+                value={language}
+                onChange={(val) => setLanguage(val)}
+                label={language === 'he' ? 'שפה' : language === 'pt' ? 'Idioma' : 'Language'}
+              />
+            </div>
+          ) : (
+            <select
               value={language}
-              onChange={(val) => setLanguage(val)}
-              label={language === 'he' ? 'שפה' : language === 'pt' ? 'Idioma' : 'Language'}
-            />
-          </div>
+              onChange={(e) => setLanguage(e.target.value)}
+              style={{
+                padding: '0.8rem 1.5rem',
+                background: 'rgba(255,255,255,0.2)',
+                borderRadius: '50px',
+                border: 'none',
+                color: 'white',
+                cursor: 'pointer',
+                fontWeight: '600',
+                fontSize: '1rem'
+              }}
+            >
+              <option value="he" style={{background: '#0a3d6b', color: 'white'}}>עברית</option>
+              <option value="en" style={{background: '#0a3d6b', color: 'white'}}>English</option>
+              <option value="pt" style={{background: '#0a3d6b', color: 'white'}}>Português</option>
+            </select>
+          )}
           
           {/* כפתור יציאה */}
           <button 
