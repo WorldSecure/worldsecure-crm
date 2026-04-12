@@ -1185,7 +1185,7 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
     // ── 2. CATEGORIES ────────────────────────────────────────────────────────
     await dbRun('ALTER TABLE categories ADD COLUMN name_he TEXT').catch(() => {});
     await dbRun('ALTER TABLE categories ADD COLUMN name_pt TEXT').catch(() => {});
-    const catRows = await dbAll("SELECT id, name FROM categories WHERE (name_he IS NULL OR name_he = '') OR (name_pt IS NULL OR name_pt = '')");
+    const catRows = await dbAll("SELECT id, name FROM categories WHERE (name_he IS NULL OR name_he = '' OR name_he = name) OR (name_pt IS NULL OR name_pt = '' OR name_pt = name)");
     for (const row of catRows) {
       try {
         const t = await callAnthropicAPI(
@@ -1200,7 +1200,7 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
     // ── 3. SUBCATEGORIES ─────────────────────────────────────────────────────
     await dbRun('ALTER TABLE subcategories ADD COLUMN name_he TEXT').catch(() => {});
     await dbRun('ALTER TABLE subcategories ADD COLUMN name_pt TEXT').catch(() => {});
-    const subRows = await dbAll("SELECT id, name FROM subcategories WHERE (name_he IS NULL OR name_he = '') OR (name_pt IS NULL OR name_pt = '')");
+    const subRows = await dbAll("SELECT id, name FROM subcategories WHERE (name_he IS NULL OR name_he = '' OR name_he = name) OR (name_pt IS NULL OR name_pt = '' OR name_pt = name)");
     for (const row of subRows) {
       try {
         const t = await callAnthropicAPI(
@@ -1216,7 +1216,7 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
     await dbRun('CREATE TABLE IF NOT EXISTS variant_attribute_types (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, name_he TEXT, name_pt TEXT)').catch(() => {});
     await dbRun('ALTER TABLE variant_attribute_types ADD COLUMN name_he TEXT').catch(() => {});
     await dbRun('ALTER TABLE variant_attribute_types ADD COLUMN name_pt TEXT').catch(() => {});
-    const attrRows = await dbAll("SELECT id, name FROM variant_attribute_types WHERE (name_he IS NULL OR name_he = '') OR (name_pt IS NULL OR name_pt = '')");
+    const attrRows = await dbAll("SELECT id, name FROM variant_attribute_types WHERE (name_he IS NULL OR name_he = '' OR name_he = name) OR (name_pt IS NULL OR name_pt = '' OR name_pt = name)");
     for (const row of attrRows) {
       try {
         const t = await callAnthropicAPI(
@@ -1232,7 +1232,7 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
     await dbRun('CREATE TABLE IF NOT EXISTS product_type_codes (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, name_he TEXT, name_pt TEXT)').catch(() => {});
     await dbRun('ALTER TABLE product_type_codes ADD COLUMN name_he TEXT').catch(() => {});
     await dbRun('ALTER TABLE product_type_codes ADD COLUMN name_pt TEXT').catch(() => {});
-    const ptRows = await dbAll("SELECT id, name FROM product_type_codes WHERE (name_he IS NULL OR name_he = '') OR (name_pt IS NULL OR name_pt = '')");
+    const ptRows = await dbAll("SELECT id, name FROM product_type_codes WHERE (name_he IS NULL OR name_he = '' OR name_he = name) OR (name_pt IS NULL OR name_pt = '' OR name_pt = name)");
     for (const row of ptRows) {
       try {
         const t = await callAnthropicAPI(
