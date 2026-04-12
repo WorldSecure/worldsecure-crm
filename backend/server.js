@@ -1133,77 +1133,122 @@ const callAnthropicAPI = (prompt) => {
 app.post('/api/products/translate-existing', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
 
-  db.all('SELECT id, name, parent_id FROM products WHERE name_he IS NULL OR name_pt IS NULL', [], async (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (rows.length === 0) return res.json({ message: 'All products already translated', count: 0 });
+  const dbAll = (sql, params = []) => new Promise((resolve, reject) =>
+    db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows))
+  );
+  const dbRun = (sql, params = []) => new Promise((resolve, reject) =>
+    db.run(sql, params, (err) => err ? reject(err) : resolve())
+  );
+  const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
-    // קודם תרגם הורים, אחר כך variants יירשו את התרגום
-    const parents = rows.filter(r => !r.parent_id);
-    const variants = rows.filter(r => r.parent_id);
+  let count = 0;
+  const details = { products: 0, categories: 0, subcategories: 0, attributes: 0, productTypes: 0 };
 
-    let count = 0;
+  try {
+    // ── 1. PRODUCTS ──────────────────────────────────────────────────────────
+    const productRows = await dbAll("SELECT id, name, parent_id FROM products WHERE (name_he IS NULL OR name_he = '') OR (name_pt IS NULL OR name_pt = '')");
+    const parents  = productRows.filter(r => !r.parent_id);
+    const variants = productRows.filter(r =>  r.parent_id);
 
-    // 1. תרגם הורים וstandalone
     for (const product of parents) {
       try {
-        const translations = await callAnthropicAPI(
-          `Translate this product name. Return ONLY a JSON object with no extra text:\n{"he": "<Hebrew translation>", "pt": "<Portuguese translation>"}\n\nProduct name: ${product.name}`
+        const t = await callAnthropicAPI(
+          'Translate this product name. Return ONLY a JSON object: {"he":"...","pt":"..."}\n\nProduct name: ' + product.name
         );
-        await new Promise((resolve, reject) => {
-          db.run('UPDATE products SET name_he = ?, name_pt = ? WHERE id = ?',
-            [translations.he, translations.pt, product.id],
-            (err) => err ? reject(err) : resolve()
-          );
-        });
-        count++;
-        await new Promise(r => setTimeout(r, 600));
-      } catch (e) {
-        console.error('Failed to translate product ' + product.id + ':', e.message);
-      }
+        await dbRun('UPDATE products SET name_he=?, name_pt=? WHERE id=?', [t.he, t.pt, product.id]);
+        details.products++; count++;
+        await delay(600);
+      } catch (e) { console.error('product translate failed:', product.id, e.message); }
     }
 
-    // 2. variants — בנה שם מתרגום ההורה
     for (const variant of variants) {
       try {
-        // מצא את תרגום ההורה
-        const parentRow = await new Promise((resolve, reject) => {
-          db.get('SELECT name_he, name_pt FROM products WHERE id = ?', [variant.parent_id], (err, row) => err ? reject(err) : resolve(row));
-        });
-
-        if (parentRow?.name_he && parentRow?.name_pt) {
-          // חלץ את ה-label מהשם: "Parent Name (label)" → "(label)"
-          const baseName = rows.find(r => r.id === variant.parent_id)?.name || '';
-          const label = variant.name.replace(baseName, '').trim();
-          const name_he = parentRow.name_he + (label ? ' ' + label : '');
-          const name_pt = parentRow.name_pt + (label ? ' ' + label : '');
-          await new Promise((resolve, reject) => {
-            db.run('UPDATE products SET name_he = ?, name_pt = ? WHERE id = ?',
-              [name_he, name_pt, variant.id],
-              (err) => err ? reject(err) : resolve()
-            );
-          });
-          count++;
+        const parentRow = await new Promise((resolve, reject) =>
+          db.get('SELECT name_he, name_pt FROM products WHERE id=?', [variant.parent_id], (err, row) => err ? reject(err) : resolve(row))
+        );
+        if (parentRow && parentRow.name_he && parentRow.name_pt) {
+          const baseName = productRows.find(r => r.id === variant.parent_id) ? productRows.find(r => r.id === variant.parent_id).name : '';
+          const label    = variant.name.replace(baseName, '').trim();
+          await dbRun('UPDATE products SET name_he=?, name_pt=? WHERE id=?',
+            [parentRow.name_he + (label ? ' ' + label : ''), parentRow.name_pt + (label ? ' ' + label : ''), variant.id]);
         } else {
-          // הורה לא תורגם — תרגם ישירות
-          const translations = await callAnthropicAPI(
-            'Translate this product name. Return ONLY a JSON object with no extra text:\n{"he": "<Hebrew translation>", "pt": "<Portuguese translation>"}\n\nProduct name: ' + variant.name
+          const t = await callAnthropicAPI(
+            'Translate this product name. Return ONLY a JSON object: {"he":"...","pt":"..."}\n\nProduct name: ' + variant.name
           );
-          await new Promise((resolve, reject) => {
-            db.run('UPDATE products SET name_he = ?, name_pt = ? WHERE id = ?',
-              [translations.he, translations.pt, variant.id],
-              (err) => err ? reject(err) : resolve()
-            );
-          });
-          count++;
-          await new Promise(r => setTimeout(r, 600));
+          await dbRun('UPDATE products SET name_he=?, name_pt=? WHERE id=?', [t.he, t.pt, variant.id]);
+          await delay(600);
         }
-      } catch (e) {
-        console.error('Failed to translate variant ' + variant.id + ':', e.message);
-      }
+        details.products++; count++;
+      } catch (e) { console.error('variant translate failed:', variant.id, e.message); }
     }
 
-    res.json({ message: 'Translated ' + count + ' products', count });
-  });
+    // ── 2. CATEGORIES ────────────────────────────────────────────────────────
+    await dbRun('ALTER TABLE categories ADD COLUMN name_he TEXT').catch(() => {});
+    await dbRun('ALTER TABLE categories ADD COLUMN name_pt TEXT').catch(() => {});
+    const catRows = await dbAll("SELECT id, name FROM categories WHERE (name_he IS NULL OR name_he = '') OR (name_pt IS NULL OR name_pt = '')");
+    for (const row of catRows) {
+      try {
+        const t = await callAnthropicAPI(
+          'Translate this product category name. Return ONLY a JSON object: {"he":"...","pt":"..."}\n\nCategory: ' + row.name
+        );
+        await dbRun('UPDATE categories SET name_he=?, name_pt=? WHERE id=?', [t.he, t.pt, row.id]);
+        details.categories++; count++;
+        await delay(600);
+      } catch (e) { console.error('category translate failed:', row.id, e.message); }
+    }
+
+    // ── 3. SUBCATEGORIES ─────────────────────────────────────────────────────
+    await dbRun('ALTER TABLE subcategories ADD COLUMN name_he TEXT').catch(() => {});
+    await dbRun('ALTER TABLE subcategories ADD COLUMN name_pt TEXT').catch(() => {});
+    const subRows = await dbAll("SELECT id, name FROM subcategories WHERE (name_he IS NULL OR name_he = '') OR (name_pt IS NULL OR name_pt = '')");
+    for (const row of subRows) {
+      try {
+        const t = await callAnthropicAPI(
+          'Translate this product subcategory name. Return ONLY a JSON object: {"he":"...","pt":"..."}\n\nSubcategory: ' + row.name
+        );
+        await dbRun('UPDATE subcategories SET name_he=?, name_pt=? WHERE id=?', [t.he, t.pt, row.id]);
+        details.subcategories++; count++;
+        await delay(600);
+      } catch (e) { console.error('subcategory translate failed:', row.id, e.message); }
+    }
+
+    // ── 4. VARIANT ATTRIBUTE TYPES ───────────────────────────────────────────
+    await dbRun('CREATE TABLE IF NOT EXISTS variant_attribute_types (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, name_he TEXT, name_pt TEXT)').catch(() => {});
+    await dbRun('ALTER TABLE variant_attribute_types ADD COLUMN name_he TEXT').catch(() => {});
+    await dbRun('ALTER TABLE variant_attribute_types ADD COLUMN name_pt TEXT').catch(() => {});
+    const attrRows = await dbAll("SELECT id, name FROM variant_attribute_types WHERE (name_he IS NULL OR name_he = '') OR (name_pt IS NULL OR name_pt = '')");
+    for (const row of attrRows) {
+      try {
+        const t = await callAnthropicAPI(
+          'Translate this product attribute type name. Return ONLY a JSON object: {"he":"...","pt":"..."}\n\nAttribute: ' + row.name
+        );
+        await dbRun('UPDATE variant_attribute_types SET name_he=?, name_pt=? WHERE id=?', [t.he, t.pt, row.id]);
+        details.attributes++; count++;
+        await delay(600);
+      } catch (e) { console.error('attr type translate failed:', row.id, e.message); }
+    }
+
+    // ── 5. PRODUCT TYPE CODES ────────────────────────────────────────────────
+    await dbRun('CREATE TABLE IF NOT EXISTS product_type_codes (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, name_he TEXT, name_pt TEXT)').catch(() => {});
+    await dbRun('ALTER TABLE product_type_codes ADD COLUMN name_he TEXT').catch(() => {});
+    await dbRun('ALTER TABLE product_type_codes ADD COLUMN name_pt TEXT').catch(() => {});
+    const ptRows = await dbAll("SELECT id, name FROM product_type_codes WHERE (name_he IS NULL OR name_he = '') OR (name_pt IS NULL OR name_pt = '')");
+    for (const row of ptRows) {
+      try {
+        const t = await callAnthropicAPI(
+          'Translate this product type name. Return ONLY a JSON object: {"he":"...","pt":"..."}\n\nProduct type: ' + row.name
+        );
+        await dbRun('UPDATE product_type_codes SET name_he=?, name_pt=? WHERE id=?', [t.he, t.pt, row.id]);
+        details.productTypes++; count++;
+        await delay(600);
+      } catch (e) { console.error('product type translate failed:', row.id, e.message); }
+    }
+
+    res.json({ message: 'Translated ' + count + ' items', count, details });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ============ PRODUCT TRANSLATION ============

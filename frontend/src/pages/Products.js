@@ -48,7 +48,20 @@ function Products() {
     try {
       const res = await axios.post('/api/products/translate-existing');
       setTranslateResult(res.data);
-      if (res.data.count > 0) fetchProducts();
+      if (res.data.count > 0) {
+        fetchProducts();
+        // רענן גם categories, subcategories, attrTypes, productTypes
+        const [catsRes, subsRes, attrsRes, ptRes] = await Promise.all([
+          axios.get('/api/categories'),
+          axios.get('/api/subcategories'),
+          axios.get('/api/variant-attribute-types'),
+          axios.get('/api/product-type-codes'),
+        ]);
+        setCategories(catsRes.data || []);
+        setSubcategories(subsRes.data || []);
+        setAttrTypes(attrsRes.data || []);
+        setProductTypeCodes(ptRes.data || []);
+      }
     } catch (e) {
       setTranslateResult({ error: e.message });
     }
@@ -831,7 +844,9 @@ function Products() {
                   className="btn btn-secondary"
                   onClick={handleTranslateMissing}
                   disabled={translating}
-                  title="Translate missing product names"
+                  title={translateResult && !translating && translateResult.details
+                    ? `Products: ${translateResult.details.products} | Categories: ${translateResult.details.categories} | Subcategories: ${translateResult.details.subcategories} | Attributes: ${translateResult.details.attributes} | Product Types: ${translateResult.details.productTypes}`
+                    : 'Translate missing names (products, categories, subcategories, attributes, product types)'}
                   style={{ background: translating ? '#6c757d' : '#17a2b8', color: 'white', border: 'none' }}
                 >
                   {translating ? '⏳ ...' : '🌐'}
