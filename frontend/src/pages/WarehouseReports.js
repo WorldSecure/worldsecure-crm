@@ -482,7 +482,7 @@ function WarehouseReports() {
             const filteredParents = parents.filter(p => matchesSearch(p) || parentHasMatch(p.id));
             const filteredStandalone = standalone.filter(p => matchesSearch(p));
             const allVariants = filteredParents.flatMap(p => (variantsByParent[p.id]||[]).filter(v => !q || matchesSearch(v)));
-            const totalProducts = allVariants.length + filteredStandalone.length;
+            const totalProducts = filteredParents.length + allVariants.length + filteredStandalone.length;
             const totalQty = [...allVariants, ...filteredStandalone].reduce((s, p) => s + (p.quantity||0), 0);
             const totalLow = [...allVariants, ...filteredStandalone].filter(p => p.quantity < 0 || (p.min_quantity > 0 && p.quantity < p.min_quantity)).length;
             const handleSort = f => { setInventorySort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' })); setInventoryCurrentPage(1); };
@@ -594,30 +594,77 @@ function WarehouseReports() {
                 </div>
                 {/* Mobile Cards */}
                 <div style={{ display: isMobile ? 'flex' : 'none', flexDirection: 'column', gap: '0.75rem', padding: '0.75rem' }}>
-                  {[...paginatedParents.flatMap(p => (variantsByParent[p.id]||[])), ...paginatedStandalone].map(p => {
-                    const isLow = p.quantity < 0 || (p.min_quantity > 0 && p.quantity < p.min_quantity);
-                    return (
-                      <div key={p.id} style={{ background: 'white', border: `1px solid ${isLow ? '#f5c6cb' : '#e2e8f0'}`, borderRadius: '10px', padding: '1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                          <span style={{ fontSize: '0.8rem', color: '#888' }}>{p.sku || '-'}</span>
-                          {isLow
-                            ? <span style={{ background: '#f8d7da', color: '#721c24', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>⚠️ {t('low_stock') || 'נמוך'}</span>
-                            : <span style={{ background: '#d4edda', color: '#155724', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>✅ {t('ok') || 'תקין'}</span>}
-                        </div>
-                        <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#1e293b', marginBottom: '0.25rem' }}>📦 {getProductName(p)}</div>
-                        {p.category_name && <div style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '0.4rem' }}>🏷️ {p.category_name}</div>}
-                        <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                          <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: '0.75rem', color: '#888' }}>{t('quantity') || 'כמות'}</div>
-                            <span style={{ background: isLow ? '#f8d7da' : '#d4edda', color: isLow ? '#721c24' : '#155724', padding: '2px 12px', borderRadius: '12px', fontWeight: 700, fontSize: '0.9rem' }}>{fmt(p.quantity)}</span>
+                  {paginatedItems.flatMap(p => {
+                    if (p.is_parent) {
+                      // הצג את האב + כל הvariants שלו
+                      const variants = (variantsByParent[p.id]||[]).filter(v => !q || matchesSearch(v));
+                      const parentLow = variants.some(v => v.quantity < 0 || (v.min_quantity > 0 && v.quantity < v.min_quantity));
+                      const cards = [];
+                      // כרטיס אב
+                      cards.push(
+                        <div key={`parent-${p.id}`} style={{ background: '#f0f4ff', border: '2px solid #c7d2fe', borderRadius: '10px', padding: '0.75rem 1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
+                            <span style={{ fontSize: '0.8rem', color: '#888' }}>{p.sku || '-'}</span>
+                            <span style={{ fontSize: '0.75rem', background: '#e0e7ff', color: '#3730a3', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>
+                              {(variantsByParent[p.id]||[]).length} {t('variants') || 'variants'}
+                            </span>
                           </div>
-                          <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: '0.75rem', color: '#888' }}>{t('min_quantity') || 'מינימום'}</div>
-                            <span style={{ color: '#666', fontWeight: 600, fontSize: '0.9rem' }}>{fmt(p.min_quantity || 0)}</span>
+                          <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#1e1b4b', marginBottom: '0.2rem' }}>📦 {getProductName(p)}</div>
+                          {p.category_name && <div style={{ fontSize: '0.82rem', color: '#64748b' }}>🏷️ {p.category_name}</div>}
+                        </div>
+                      );
+                      // כרטיסי variants
+                      variants.forEach(v => {
+                        const isLow = v.quantity < 0 || (v.min_quantity > 0 && v.quantity < v.min_quantity);
+                        cards.push(
+                          <div key={v.id} style={{ background: 'white', border: `1px solid ${isLow ? '#f5c6cb' : '#e2e8f0'}`, borderRadius: '10px', padding: '0.75rem 1rem', marginLeft: '1rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
+                              <span style={{ fontSize: '0.78rem', color: '#aaa' }}>{v.sku || '-'}</span>
+                              {isLow
+                                ? <span style={{ background: '#f8d7da', color: '#721c24', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>⚠️ {t('low_stock') || 'נמוך'}</span>
+                                : <span style={{ background: '#d4edda', color: '#155724', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>✅ {t('ok') || 'תקין'}</span>}
+                            </div>
+                            <div style={{ fontWeight: 600, fontSize: '0.88rem', color: '#374151', marginBottom: '0.3rem' }}>↳ {getProductName(v)}</div>
+                            <div style={{ display: 'flex', gap: '1rem', marginTop: '0.4rem' }}>
+                              <div style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: '0.72rem', color: '#888' }}>{t('quantity') || 'כמות'}</div>
+                                <span style={{ background: isLow ? '#f8d7da' : '#d4edda', color: isLow ? '#721c24' : '#155724', padding: '2px 10px', borderRadius: '12px', fontWeight: 700, fontSize: '0.88rem' }}>{fmt(v.quantity)}</span>
+                              </div>
+                              <div style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: '0.72rem', color: '#888' }}>{t('min_quantity') || 'מינימום'}</div>
+                                <span style={{ color: '#666', fontWeight: 600, fontSize: '0.88rem' }}>{fmt(v.min_quantity || 0)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      });
+                      return cards;
+                    } else {
+                      // standalone
+                      const isLow = p.quantity < 0 || (p.min_quantity > 0 && p.quantity < p.min_quantity);
+                      return [(
+                        <div key={p.id} style={{ background: 'white', border: `1px solid ${isLow ? '#f5c6cb' : '#e2e8f0'}`, borderRadius: '10px', padding: '1rem', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                            <span style={{ fontSize: '0.8rem', color: '#888' }}>{p.sku || '-'}</span>
+                            {isLow
+                              ? <span style={{ background: '#f8d7da', color: '#721c24', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>⚠️ {t('low_stock') || 'נמוך'}</span>
+                              : <span style={{ background: '#d4edda', color: '#155724', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>✅ {t('ok') || 'תקין'}</span>}
+                          </div>
+                          <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#1e293b', marginBottom: '0.25rem' }}>📦 {getProductName(p)}</div>
+                          {p.category_name && <div style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '0.4rem' }}>🏷️ {p.category_name}</div>}
+                          <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                            <div style={{ textAlign: 'center' }}>
+                              <div style={{ fontSize: '0.75rem', color: '#888' }}>{t('quantity') || 'כמות'}</div>
+                              <span style={{ background: isLow ? '#f8d7da' : '#d4edda', color: isLow ? '#721c24' : '#155724', padding: '2px 12px', borderRadius: '12px', fontWeight: 700, fontSize: '0.9rem' }}>{fmt(p.quantity)}</span>
+                            </div>
+                            <div style={{ textAlign: 'center' }}>
+                              <div style={{ fontSize: '0.75rem', color: '#888' }}>{t('min_quantity') || 'מינימום'}</div>
+                              <span style={{ color: '#666', fontWeight: 600, fontSize: '0.9rem' }}>{fmt(p.min_quantity || 0)}</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
+                      )];
+                    }
                   })}
                 </div>
                 {/* Pagination Bar */}
