@@ -99,6 +99,12 @@ function Products() {
   const [savingProductType, setSavingProductType] = useState(false);
   const [importingCsv, setImportingCsv] = useState(false);
   const [importCsvResult, setImportCsvResult] = useState(null);
+  const [importingCsvCat, setImportingCsvCat] = useState(false);
+  const [importCsvResultCat, setImportCsvResultCat] = useState(null);
+  const [importingCsvSub, setImportingCsvSub] = useState(false);
+  const [importCsvResultSub, setImportCsvResultSub] = useState(null);
+  const [importingCsvAttr, setImportingCsvAttr] = useState(false);
+  const [importCsvResultAttr, setImportCsvResultAttr] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
   const [categoryForm, setCategoryForm] = useState({ code: '', name: '' });
   const [savingCategory, setSavingCategory] = useState(false);
@@ -341,6 +347,164 @@ function Products() {
       setImportCsvResult({ error: e.message });
     }
     setImportingCsv(false);
+  };
+
+  // ── Export CSV helpers ────────────────────────────────────────────────────
+  const downloadCsv = (filename, rows) => {
+    const csv = rows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportProductTypes = () => {
+    const rows = ['code,name_en,name_he,name_pt',
+      ...productTypeCodes.map(pt => `${pt.code},"${pt.name}","${pt.name_he||pt.name}","${pt.name_pt||pt.name}"`)];
+    downloadCsv('product_types.csv', rows);
+  };
+
+  const handleExportCategories = () => {
+    const rows = ['code,name_en,name_he,name_pt',
+      ...categories.map(c => `${c.code||''},"${c.name}","${c.name_he||c.name}","${c.name_pt||c.name}"`)];
+    downloadCsv('categories.csv', rows);
+  };
+
+  const handleExportSubcategories = () => {
+    const rows = ['code,name_en,name_he,name_pt,category_code',
+      ...subcategories.map(s => {
+        const cat = categories.find(c => c.id === s.category_id);
+        return `${s.code||''},"${s.name}","${s.name_he||s.name}","${s.name_pt||s.name}","${cat?.code||''}"`;
+      })];
+    downloadCsv('subcategories.csv', rows);
+  };
+
+  const handleExportAttrTypes = () => {
+    const rows = ['name_en,name_he,name_pt',
+      ...attrTypes.map(a => `"${a.name}","${a.name_he||a.name}","${a.name_pt||a.name}"`)];
+    downloadCsv('attributes.csv', rows);
+  };
+
+  // ── Import CSV — Categories ───────────────────────────────────────────────
+  const handleImportCsvCategories = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setImportingCsvCat(true);
+    setImportCsvResultCat(null);
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      const dataLines = lines[0]?.toLowerCase().startsWith('code') ? lines.slice(1) : lines;
+      const lang = localStorage.getItem('language') || 'he';
+      let success = 0, skipped = 0, errors = [];
+      for (const line of dataLines) {
+        const [rawCode, ...nameParts] = line.split(',');
+        const code = (rawCode || '').trim().toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
+        const name = nameParts.join(',').trim().replace(/^"|"$/g, '');
+        if (!code || !name) { skipped++; continue; }
+        try {
+          let name_en = name, name_he = name, name_pt = name;
+          try {
+            const transRes = await axios.post('/api/products/translate', { name, sourceLang: lang });
+            name_he = transRes.data.he || name;
+            name_en = transRes.data.en || name;
+            name_pt = transRes.data.pt || name;
+          } catch(e) {}
+          await axios.post('/api/categories', { code, name: name_en, name_he, name_pt });
+          success++;
+        } catch(e) {
+          if (e.response?.status === 400 || e.response?.data?.error?.includes('UNIQUE') || e.response?.data?.error?.includes('duplicate')) skipped++;
+          else errors.push(code);
+        }
+      }
+      const res = await axios.get('/api/categories');
+      setCategories(res.data);
+      setImportCsvResultCat({ success, skipped, errors });
+    } catch(e) { setImportCsvResultCat({ error: e.message }); }
+    setImportingCsvCat(false);
+  };
+
+  // ── Import CSV — Subcategories ────────────────────────────────────────────
+  const handleImportCsvSubcategories = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setImportingCsvSub(true);
+    setImportCsvResultSub(null);
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      const dataLines = lines[0]?.toLowerCase().startsWith('code') ? lines.slice(1) : lines;
+      const lang = localStorage.getItem('language') || 'he';
+      let success = 0, skipped = 0, errors = [];
+      // category_id נלקח מה-selectedCategoryFilter
+      const catId = selectedCategoryFilter;
+      if (!catId) { setImportCsvResultSub({ error: 'בחר קטגוריה תחילה' }); setImportingCsvSub(false); return; }
+      for (const line of dataLines) {
+        const [rawCode, ...nameParts] = line.split(',');
+        const code = (rawCode || '').trim().toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
+        const name = nameParts.join(',').trim().replace(/^"|"$/g, '');
+        if (!code || !name) { skipped++; continue; }
+        try {
+          let name_en = name, name_he = name, name_pt = name;
+          try {
+            const transRes = await axios.post('/api/products/translate', { name, sourceLang: lang });
+            name_he = transRes.data.he || name;
+            name_en = transRes.data.en || name;
+            name_pt = transRes.data.pt || name;
+          } catch(e) {}
+          await axios.post('/api/subcategories', { category_id: catId, code, name: name_en, name_he, name_pt });
+          success++;
+        } catch(e) {
+          if (e.response?.data?.error?.includes('UNIQUE') || e.response?.data?.error?.includes('duplicate')) skipped++;
+          else errors.push(code);
+        }
+      }
+      const res = await axios.get('/api/subcategories');
+      setSubcategories(res.data);
+      setImportCsvResultSub({ success, skipped, errors });
+    } catch(e) { setImportCsvResultSub({ error: e.message }); }
+    setImportingCsvSub(false);
+  };
+
+  // ── Import CSV — Attributes ───────────────────────────────────────────────
+  const handleImportCsvAttrTypes = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setImportingCsvAttr(true);
+    setImportCsvResultAttr(null);
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      const dataLines = lines[0]?.toLowerCase().startsWith('name') ? lines.slice(1) : lines;
+      const lang = localStorage.getItem('language') || 'he';
+      let success = 0, skipped = 0, errors = [];
+      for (const line of dataLines) {
+        const name = line.split(',')[0].trim().replace(/^"|"$/g, '');
+        if (!name) { skipped++; continue; }
+        try {
+          let name_en = name, name_he = name, name_pt = name;
+          try {
+            const transRes = await axios.post('/api/products/translate', { name, sourceLang: lang });
+            name_he = transRes.data.he || name;
+            name_en = transRes.data.en || name;
+            name_pt = transRes.data.pt || name;
+          } catch(e) {}
+          await axios.post('/api/variant-attribute-types', { name: name_en, name_he, name_pt });
+          success++;
+        } catch(e) {
+          if (e.response?.data?.error?.includes('UNIQUE') || e.response?.data?.error?.includes('duplicate')) skipped++;
+          else errors.push(name);
+        }
+      }
+      const res = await axios.get('/api/variant-attribute-types');
+      setAttrTypes(res.data);
+      setImportCsvResultAttr({ success, skipped, errors });
+    } catch(e) { setImportCsvResultAttr({ error: e.message }); }
+    setImportingCsvAttr(false);
   };
 
   // ── Category management ───────────────────────────────────────────────────
@@ -1718,6 +1882,29 @@ function Products() {
               <button className="modal-close" onClick={() => { setShowCategoryModal(false); setEditingCategory(null); setCategoryForm({ code: '', name: '' }); }}>×</button>
             </div>
             <div className="modal-body">
+              {/* כפתורי Import / Export CSV */}
+              <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <label style={{ cursor: importingCsvCat ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: '#17a2b8', color: 'white', border: 'none', borderRadius: '6px', padding: '0.4rem 0.9rem', fontSize: '0.85rem', fontWeight: 500, opacity: importingCsvCat ? 0.6 : 1 }}>
+                  {importingCsvCat ? '⏳ ...' : '📥 Import CSV'}
+                  <input type="file" accept=".csv,.txt" style={{ display: 'none' }} onChange={handleImportCsvCategories} disabled={importingCsvCat} />
+                </label>
+                <button onClick={handleExportCategories} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '6px', padding: '0.4rem 0.9rem', fontSize: '0.85rem', fontWeight: 500, cursor: 'pointer' }}>
+                  📤 Export CSV
+                </button>
+                <small style={{ color: '#6c757d', fontSize: '0.78rem' }}>
+                  {language === 'he' ? 'פורמט: code,שם (לדוגמה: MAR,ציוד ימי)' : 'Format: code,name (e.g. MAR,Maritime)'}
+                </small>
+              </div>
+              {importCsvResultCat && (
+                <div style={{ marginBottom: '1rem', padding: '0.6rem 0.9rem', borderRadius: '6px', fontSize: '0.83rem',
+                  background: importCsvResultCat.error ? '#fff3f3' : '#f0fff4',
+                  border: `1px solid ${importCsvResultCat.error ? '#dc3545' : '#28a745'}`,
+                  color: importCsvResultCat.error ? '#dc3545' : '#155724' }}>
+                  {importCsvResultCat.error ? `❌ ${importCsvResultCat.error}` :
+                    `✅ ${importCsvResultCat.success} ${language === 'he' ? 'נוספו' : 'imported'} · ${importCsvResultCat.skipped} ${language === 'he' ? 'דולגו' : 'skipped'}${importCsvResultCat.errors?.length ? ` · ❌ שגיאה: ${importCsvResultCat.errors.join(', ')}` : ''}`
+                  }
+                </div>
+              )}
               {/* רשימה קיימת */}
               {categories.length > 0 && (
                 <div style={{ marginBottom: '1.25rem' }}>
@@ -1799,6 +1986,29 @@ function Products() {
             </div>
 
             <div className="modal-body">
+              {/* כפתורי Import / Export CSV */}
+              <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <label style={{ cursor: importingCsvSub ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: '#17a2b8', color: 'white', border: 'none', borderRadius: '6px', padding: '0.4rem 0.9rem', fontSize: '0.85rem', fontWeight: 500, opacity: importingCsvSub ? 0.6 : 1 }}>
+                  {importingCsvSub ? '⏳ ...' : '📥 Import CSV'}
+                  <input type="file" accept=".csv,.txt" style={{ display: 'none' }} onChange={handleImportCsvSubcategories} disabled={importingCsvSub} />
+                </label>
+                <button onClick={handleExportSubcategories} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '6px', padding: '0.4rem 0.9rem', fontSize: '0.85rem', fontWeight: 500, cursor: 'pointer' }}>
+                  📤 Export CSV
+                </button>
+                <small style={{ color: '#6c757d', fontSize: '0.78rem' }}>
+                  {language === 'he' ? 'פורמט: code,שם — מייבא לקטגוריה הנבחרת' : 'Format: code,name — imports into selected category'}
+                </small>
+              </div>
+              {importCsvResultSub && (
+                <div style={{ marginBottom: '1rem', padding: '0.6rem 0.9rem', borderRadius: '6px', fontSize: '0.83rem',
+                  background: importCsvResultSub.error ? '#fff3f3' : '#f0fff4',
+                  border: `1px solid ${importCsvResultSub.error ? '#dc3545' : '#28a745'}`,
+                  color: importCsvResultSub.error ? '#dc3545' : '#155724' }}>
+                  {importCsvResultSub.error ? `❌ ${importCsvResultSub.error}` :
+                    `✅ ${importCsvResultSub.success} ${language === 'he' ? 'נוספו' : 'imported'} · ${importCsvResultSub.skipped} ${language === 'he' ? 'דולגו' : 'skipped'}${importCsvResultSub.errors?.length ? ` · ❌ שגיאה: ${importCsvResultSub.errors.join(', ')}` : ''}`
+                  }
+                </div>
+              )}
               {/* בחירת קטגוריה אב */}
               <div className="form-group" style={{ marginBottom: '1rem' }}>
                 <label className="form-label">📂 {t('category') || 'קטגוריה'}</label>
@@ -1901,6 +2111,29 @@ function Products() {
               <button className="modal-close" onClick={() => { setShowAttrTypesModal(false); setEditingAttrType(null); setAttrTypeForm({ name: '' }); }}>×</button>
             </div>
             <div className="modal-body">
+              {/* כפתורי Import / Export CSV */}
+              <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <label style={{ cursor: importingCsvAttr ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: '#17a2b8', color: 'white', border: 'none', borderRadius: '6px', padding: '0.4rem 0.9rem', fontSize: '0.85rem', fontWeight: 500, opacity: importingCsvAttr ? 0.6 : 1 }}>
+                  {importingCsvAttr ? '⏳ ...' : '📥 Import CSV'}
+                  <input type="file" accept=".csv,.txt" style={{ display: 'none' }} onChange={handleImportCsvAttrTypes} disabled={importingCsvAttr} />
+                </label>
+                <button onClick={handleExportAttrTypes} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '6px', padding: '0.4rem 0.9rem', fontSize: '0.85rem', fontWeight: 500, cursor: 'pointer' }}>
+                  📤 Export CSV
+                </button>
+                <small style={{ color: '#6c757d', fontSize: '0.78rem' }}>
+                  {language === 'he' ? 'פורמט: שם (לדוגמה: Color)' : 'Format: name (e.g. Color)'}
+                </small>
+              </div>
+              {importCsvResultAttr && (
+                <div style={{ marginBottom: '1rem', padding: '0.6rem 0.9rem', borderRadius: '6px', fontSize: '0.83rem',
+                  background: importCsvResultAttr.error ? '#fff3f3' : '#f0fff4',
+                  border: `1px solid ${importCsvResultAttr.error ? '#dc3545' : '#28a745'}`,
+                  color: importCsvResultAttr.error ? '#dc3545' : '#155724' }}>
+                  {importCsvResultAttr.error ? `❌ ${importCsvResultAttr.error}` :
+                    `✅ ${importCsvResultAttr.success} ${language === 'he' ? 'נוספו' : 'imported'} · ${importCsvResultAttr.skipped} ${language === 'he' ? 'דולגו' : 'skipped'}${importCsvResultAttr.errors?.length ? ` · ❌ שגיאה: ${importCsvResultAttr.errors.join(', ')}` : ''}`
+                  }
+                </div>
+              )}
               {/* רשימת מאפיינים קיימים */}
               {attrTypes.length > 0 && (
                 <div style={{ marginBottom: '1.25rem' }}>
@@ -1975,6 +2208,9 @@ function Products() {
                   {importingCsv ? '⏳ ...' : '📥 Import CSV'}
                   <input type="file" accept=".csv,.txt" style={{ display: 'none' }} onChange={handleImportCsv} disabled={importingCsv} />
                 </label>
+                <button onClick={handleExportProductTypes} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '6px', padding: '0.4rem 0.9rem', fontSize: '0.85rem', fontWeight: 500, cursor: 'pointer' }}>
+                  📤 Export CSV
+                </button>
                 <small style={{ color: '#6c757d', fontSize: '0.78rem' }}>
                   {language === 'he' ? 'פורמט: code,שם (לדוגמה: CYL,בלון)' : 'Format: code,name (e.g. CYL,Cylinder)'}
                 </small>
