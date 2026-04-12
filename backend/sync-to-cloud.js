@@ -631,14 +631,11 @@ async function syncCategoriesFromCloud() {
   await sqliteRun('ALTER TABLE categories ADD COLUMN code TEXT').catch(() => {});
   const normalizeTs = (v) => v ? String(v).replace(' ', 'T').slice(0, 19) : '';
   let count = 0;
-  // טען את רשימת הקטגוריות שנמחקו מקומית — אסור לשחזר אותן מהענן
-  const localDeleted = await sqliteAll('SELECT id FROM deleted_categories').catch(() => []);
-  const localDeletedIds = new Set(localDeleted.map(d => String(d.id)));
+
+  // בנה Set של IDs בענן
+  const cloudIds = new Set(rows.map(r => r.id));
 
   for (const r of rows) {
-    // אם הקטגוריה נמחקה מקומית — דלג עליה, אל תשחזר
-    if (localDeletedIds.has(String(r.id))) continue;
-
     const existing = await sqliteGet('SELECT id, updated_at FROM categories WHERE id=?', [r.id]).catch(() => null);
     const cloudTs = normalizeTs(r.updated_at);
     const localTs = normalizeTs(existing?.updated_at);
@@ -656,6 +653,21 @@ async function syncCategoriesFromCloud() {
       count++;
     }
   }
+
+  // מחק מקומית קטגוריות שכבר לא קיימות בענן
+  // (ייתכן שpullDeletions כבר טיפל בהן, זה cleanup נוסף)
+  await sqliteRun('CREATE TABLE IF NOT EXISTS deleted_categories (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
+  const localRows = await sqliteAll('SELECT id FROM categories').catch(() => []);
+  for (const local of localRows) {
+    if (!cloudIds.has(local.id)) {
+      // קטגוריה קיימת מקומית אבל לא בענן — נמחקה בענן, מחק גם מקומית
+      await sqliteRun('DELETE FROM subcategories WHERE category_id=?', [local.id]).catch(() => {});
+      await sqliteRun('DELETE FROM categories WHERE id=?', [local.id]).catch(() => {});
+      await sqliteRun('DELETE FROM deleted_categories WHERE id=?', [local.id]).catch(() => {});
+      log(`  ↳ category #${local.id} deleted locally (removed from cloud)`);
+    }
+  }
+
   if (count > 0) log(`  ↳ categories from cloud: ${count} updated`);
 }
 
@@ -677,6 +689,10 @@ async function syncSubcategoriesFromCloud() {
   await sqliteRun('ALTER TABLE subcategories ADD COLUMN code TEXT').catch(() => {});
   const normalizeTs = (v) => v ? String(v).replace(' ', 'T').slice(0, 19) : '';
   let count = 0;
+
+  // בנה Set של IDs בענן
+  const cloudIds = new Set(rows.map(r => r.id));
+
   for (const r of rows) {
     const existing = await sqliteGet('SELECT id, updated_at FROM subcategories WHERE id=?', [r.id]).catch(() => null);
     const cloudTs = normalizeTs(r.updated_at);
@@ -695,6 +711,18 @@ async function syncSubcategoriesFromCloud() {
       count++;
     }
   }
+
+  // מחק מקומית סאב-קטגוריות שכבר לא קיימות בענן
+  await sqliteRun('CREATE TABLE IF NOT EXISTS deleted_subcategories (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
+  const localRows = await sqliteAll('SELECT id FROM subcategories').catch(() => []);
+  for (const local of localRows) {
+    if (!cloudIds.has(local.id)) {
+      await sqliteRun('DELETE FROM subcategories WHERE id=?', [local.id]).catch(() => {});
+      await sqliteRun('DELETE FROM deleted_subcategories WHERE id=?', [local.id]).catch(() => {});
+      log(`  ↳ subcategory #${local.id} deleted locally (removed from cloud)`);
+    }
+  }
+
   if (count > 0) log(`  ↳ subcategories from cloud: ${count} updated`);
 }
 
@@ -1465,9 +1493,14 @@ async function syncNotificationAcksToCloud() {
 
 
 async function syncAll() {
-  await syncLocalToCloud();         // שלב 1: שלח מחיקות לענן (כולל categories)
-  await pullDeletionsFromCloud();   // שלב 2: משוך pending_deletions — עכשיו כולל את מה שנמחק בשלב 1
-  await syncCloudToLocal();         // שלב 3: משוך נתונים — הקטגוריות שנמחקו כבר הוסרו מהענן
+  // שלב 1: משוך מחיקות מהענן תחילה — כך קטגוריות שנמחקו בענן יוסרו מקומית
+  //         לפני ששולחים את הנתונים המקומיים חזרה לענן (מניעת "החייאה")
+  await pullDeletionsFromCloud();
+  // שלב 2: שלח נתונים מקומיים לענן — כולל מחיקות מקומיות.
+  //         הענן מוגן: קטגוריות ב-pending_deletions לא יקבלו UPSERT (תוקן ב-server-cloud.js)
+  await syncLocalToCloud();
+  // שלב 3: משוך נתונים מהענן — קטגוריות שנמחקו כבר הוסרו בשני הכיוונים
+  await syncCloudToLocal();
 }
 
 async function main() {

@@ -828,11 +828,21 @@ app.delete('/api/categories/:id', authenticateToken, (req, res) => {
     if (row.count > 0) return res.status(400).json({ error: 'Cannot delete category with products' });
     const id = req.params.id;
     db.run(`CREATE TABLE IF NOT EXISTS deleted_categories (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)`, () => {});
-    db.run(`INSERT OR IGNORE INTO deleted_categories (id) VALUES (?)`, [id], () => {});
-    db.run('DELETE FROM categories WHERE id=?', [id], function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      logActivity(req.user.id, 'DELETE_CATEGORY', 'category', id, {});
-      res.json({ message: 'deleted' });
+    db.run(`CREATE TABLE IF NOT EXISTS deleted_subcategories (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)`, () => {});
+    // רשום את כל הסאב-קטגוריות של הקטגוריה הזו ב-deleted_subcategories לפני המחיקה
+    db.all('SELECT id FROM subcategories WHERE category_id=?', [id], (err2, subRows) => {
+      if (!err2 && subRows) {
+        subRows.forEach(sub => {
+          db.run(`INSERT OR IGNORE INTO deleted_subcategories (id) VALUES (?)`, [sub.id], () => {});
+        });
+      }
+      db.run(`INSERT OR IGNORE INTO deleted_categories (id) VALUES (?)`, [id], () => {});
+      db.run('DELETE FROM subcategories WHERE category_id=?', [id], () => {});
+      db.run('DELETE FROM categories WHERE id=?', [id], function(err3) {
+        if (err3) return res.status(500).json({ error: err3.message });
+        logActivity(req.user.id, 'DELETE_CATEGORY', 'category', id, {});
+        res.json({ message: 'deleted' });
+      });
     });
   });
 });

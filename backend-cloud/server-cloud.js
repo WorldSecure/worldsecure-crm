@@ -2817,6 +2817,13 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
         END
         WHERE code IS NULL OR code = ''`).catch(() => {});
       for (const r of rows) {
+        // ⛔ אם הקטגוריה נמחקה בענן (pending_deletions) — אל תחייה אותה דרך UPSERT
+        const pendingDel = await client.query(
+          `SELECT 1 FROM pending_deletions WHERE entity_type='category' AND entity_id=$1 LIMIT 1`,
+          [r.id]
+        ).catch(() => ({ rows: [] }));
+        if (pendingDel.rows.length > 0) continue;
+
         const catCode = r.code ? r.code.toUpperCase().replace(/[^A-Z]/g,'').slice(0,3)
           : (r.name || '').slice(0,3).toUpperCase().replace(/[^A-Z]/g,'');
         await client.query(`
@@ -2854,6 +2861,13 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
         END
         WHERE code IS NULL OR code = ''`).catch(() => {});
       for (const r of rows) {
+        // ⛔ אם הסאב-קטגוריה נמחקה בענן (pending_deletions) — אל תחייה אותה דרך UPSERT
+        const pendingDel = await client.query(
+          `SELECT 1 FROM pending_deletions WHERE entity_type='subcategory' AND entity_id=$1 LIMIT 1`,
+          [r.id]
+        ).catch(() => ({ rows: [] }));
+        if (pendingDel.rows.length > 0) continue;
+
         const subCode = r.code ? r.code.toUpperCase().replace(/[^A-Z]/g,'').slice(0,3)
           : (r.name || '').slice(0,3).toUpperCase().replace(/[^A-Z]/g,'');
         await client.query(`
@@ -2878,6 +2892,13 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
         created_at TIMESTAMPTZ DEFAULT NOW()
       )`).catch(() => {});
       for (const r of rows) {
+        // ⛔ אם ה-attribute נמחק בענן (pending_deletions) — אל תחייה אותו דרך UPSERT
+        const pendingDel = await client.query(
+          `SELECT 1 FROM pending_deletions WHERE entity_type='variant_attribute_type' AND entity_id=$1 LIMIT 1`,
+          [r.id]
+        ).catch(() => ({ rows: [] }));
+        if (pendingDel.rows.length > 0) continue;
+
         await client.query(`
           INSERT INTO variant_attribute_types (id, name, name_he, name_pt)
           VALUES ($1,$2,$3,$4)
@@ -2896,6 +2917,13 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
         name_he TEXT, name_pt TEXT, created_at TIMESTAMPTZ DEFAULT NOW()
       )`).catch(() => {});
       for (const r of rows) {
+        // ⛔ אם ה-product type נמחק בענן (pending_deletions) — אל תחייה אותו דרך UPSERT
+        const pendingDel = await client.query(
+          `SELECT 1 FROM pending_deletions WHERE entity_type='product_type_code' AND entity_id=$1 LIMIT 1`,
+          [r.id]
+        ).catch(() => ({ rows: [] }));
+        if (pendingDel.rows.length > 0) continue;
+
         await client.query(`
           INSERT INTO product_type_codes (id, code, name, name_he, name_pt)
           VALUES ($1,$2,$3,$4,$5)
