@@ -249,7 +249,13 @@ app.patch('/api/products/:id/discontinue', authenticateToken, async (req, res) =
 // ── Product Type Codes CRUD ───────────────────────────────────────────────────
 app.get('/api/product-type-codes', authenticateToken, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM product_type_codes ORDER BY code');
+    const result = await pool.query(`
+      SELECT * FROM product_type_codes
+      WHERE id NOT IN (
+        SELECT entity_id FROM pending_deletions WHERE entity_type='product_type_code'
+      )
+      ORDER BY code
+    `);
     res.json(result.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -288,7 +294,13 @@ app.delete('/api/product-type-codes/:id', authenticateToken, async (req, res) =>
 // ── Variant Attribute Types CRUD ──────────────────────────────────────────────
 app.get('/api/variant-attribute-types', authenticateToken, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM variant_attribute_types ORDER BY name');
+    const result = await pool.query(`
+      SELECT * FROM variant_attribute_types
+      WHERE id NOT IN (
+        SELECT entity_id FROM pending_deletions WHERE entity_type='variant_attribute_type'
+      )
+      ORDER BY name
+    `);
     res.json(result.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -3204,7 +3216,14 @@ app.get('/api/sync/pull/warehouse-alerts', authenticateToken, async (req, res) =
 // ── Sync: Pull categories + subcategories from cloud → local ─────────────────
 app.get('/api/sync/pull/categories', authenticateToken, async (req, res) => {
   try {
-    const r = await query('SELECT * FROM categories ORDER BY id');
+    // אל תחזיר קטגוריות שנמחקו ועדיין ממתינות ב-pending_deletions
+    const r = await query(`
+      SELECT * FROM categories
+      WHERE id NOT IN (
+        SELECT entity_id FROM pending_deletions WHERE entity_type='category'
+      )
+      ORDER BY id
+    `);
     res.json(r.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -3215,7 +3234,14 @@ app.get('/api/sync/pull/subcategories', authenticateToken, async (req, res) => {
       id SERIAL PRIMARY KEY, category_id INTEGER NOT NULL,
       name TEXT NOT NULL, name_he TEXT, name_pt TEXT
     )`).catch(() => {});
-    const r = await query('SELECT * FROM subcategories ORDER BY id');
+    // אל תחזיר סאב-קטגוריות שנמחקו ועדיין ממתינות ב-pending_deletions
+    const r = await query(`
+      SELECT * FROM subcategories
+      WHERE id NOT IN (
+        SELECT entity_id FROM pending_deletions WHERE entity_type='subcategory'
+      )
+      ORDER BY id
+    `);
     res.json(r.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
