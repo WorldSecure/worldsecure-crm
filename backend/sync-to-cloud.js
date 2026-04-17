@@ -261,6 +261,15 @@ async function syncInboundToCloud() {
   const deletedInbound = await sqliteAll('SELECT id FROM deleted_inbound').catch(() => []);
   for (const d of deletedInbound) {
     await apiRequest('DELETE', `/api/inbound/${d.id}`).catch(() => {});
+    // אחרי מחיקת inbound מהענן — הענן מעדכן כמות עם NOW()
+    // נעדכן quantity_updated_at מקומית ל-NOW()+1sec כדי שה-timestamp המקומי ינצח
+    const affectedItems = await sqliteAll('SELECT product_id FROM inbound_items WHERE transaction_id=?', [d.id]).catch(() => []);
+    for (const item of affectedItems) {
+      await sqliteRun(
+        "UPDATE products SET quantity_updated_at = datetime('now', '+1 second') WHERE id=?",
+        [item.product_id]
+      ).catch(() => {});
+    }
   }
   if (deletedInbound.length > 0) {
     await sqliteRun('DELETE FROM deleted_inbound').catch(() => {});
@@ -280,6 +289,15 @@ async function syncOutboundToCloud() {
   const deletedOutbound = await sqliteAll('SELECT id FROM deleted_outbound').catch(() => []);
   for (const d of deletedOutbound) {
     await apiRequest('DELETE', `/api/outbound/${d.id}`).catch(() => {});
+    // אחרי מחיקת outbound מהענן — הענן מעדכן כמות עם NOW()
+    // נעדכן quantity_updated_at מקומית ל-NOW()+1sec כדי שה-timestamp המקומי ינצח
+    const affectedItems = await sqliteAll('SELECT product_id FROM outbound_items WHERE transaction_id=?', [d.id]).catch(() => []);
+    for (const item of affectedItems) {
+      await sqliteRun(
+        "UPDATE products SET quantity_updated_at = datetime('now', '+1 second') WHERE id=?",
+        [item.product_id]
+      ).catch(() => {});
+    }
   }
   if (deletedOutbound.length > 0) {
     await sqliteRun('DELETE FROM deleted_outbound').catch(() => {});
@@ -370,14 +388,14 @@ async function syncProductsFromCloud() {
     // לוגיקת כמות — מי עדכן אחרון
     const cloudQtyTs = normalizeTs(p.quantity_updated_at);
     const localQtyTs = normalizeTs(existing?.quantity_updated_at);
-    const useCloudQty = !existing || cloudQtyTs >= localQtyTs;
+    const useCloudQty = !existing || cloudQtyTs > localQtyTs;
     const finalQty   = useCloudQty ? (p.quantity || 0) : existing.quantity;
     const finalQtyTs = useCloudQty ? (p.quantity_updated_at || null) : existing.quantity_updated_at;
 
     // לוגיקת meta (SKU/name/unit/category) — מי עדכן אחרון
     const cloudMetaTs = normalizeTs(p.meta_updated_at);
     const localMetaTs = normalizeTs(existing?.meta_updated_at);
-    const useCloudMeta = !existing || cloudMetaTs >= localMetaTs;
+    const useCloudMeta = !existing || cloudMetaTs > localMetaTs;
 
     if (!existing) {
       await sqliteRun(`
