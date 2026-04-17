@@ -3240,7 +3240,7 @@ app.get('/api/sync/pull/categories', authenticateToken, async (req, res) => {
     // אל תחזיר קטגוריות שנמחקו ועדיין ממתינות ב-pending_deletions
     const r = await query(`
       SELECT id, name, name_he, name_pt, description, code,
-             COALESCE(updated_at, created_at, NOW()) as updated_at
+             COALESCE(updated_at, NOW()) as updated_at
       FROM categories
       WHERE id NOT IN (
         SELECT entity_id FROM pending_deletions WHERE entity_type='category'
@@ -3260,7 +3260,7 @@ app.get('/api/sync/pull/subcategories', authenticateToken, async (req, res) => {
     // אל תחזיר סאב-קטגוריות שנמחקו ועדיין ממתינות ב-pending_deletions
     const r = await query(`
       SELECT id, category_id, name, name_he, name_pt, code,
-             COALESCE(updated_at, created_at, NOW()) as updated_at
+             COALESCE(updated_at, NOW()) as updated_at
       FROM subcategories
       WHERE id NOT IN (
         SELECT entity_id FROM pending_deletions WHERE entity_type='subcategory'
