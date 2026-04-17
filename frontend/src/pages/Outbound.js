@@ -143,7 +143,9 @@ function Outbound() {
     // Add packaging data if user chose to pack
     if (packagingData.use_packaging && packagingData.items_per_carton) {
       const numCartons = Math.ceil(currentItem.quantity / parseInt(packagingData.items_per_carton));
-      const totalCartonWeight = numCartons * (parseFloat(packagingData.carton_weight) || 0);
+      // חישוב נכון: משקל ליחידה × כמות (לא num_cartons × carton_weight כי קרטון אחרון עלול להיות חלקי)
+      const weightPerItem = (parseFloat(packagingData.carton_weight) || 0) / parseInt(packagingData.items_per_carton);
+      const totalCartonWeight = weightPerItem * currentItem.quantity;
       
       itemWithPackaging = {
         ...itemWithPackaging,
@@ -799,7 +801,7 @@ function Outbound() {
                         }}>
                           <p><strong>{t('num_cartons')}:</strong> {Math.ceil(currentItem.quantity / parseInt(packagingData.items_per_carton))} {t('cartons')}</p>
                           {packagingData.carton_weight && (
-                            <p><strong>{t('total_carton_weight')}:</strong> {(Math.ceil(currentItem.quantity / parseInt(packagingData.items_per_carton)) * parseFloat(packagingData.carton_weight)).toFixed(2)} ק"ג</p>
+                            <p><strong>{t('total_carton_weight')}:</strong> {((parseFloat(packagingData.carton_weight) / parseInt(packagingData.items_per_carton)) * currentItem.quantity).toFixed(2)} ק"ג</p>
                           )}
                         </div>
                       )}
