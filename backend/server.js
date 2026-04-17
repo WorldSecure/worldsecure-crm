@@ -860,6 +860,15 @@ db.run(`CREATE TABLE IF NOT EXISTS subcategories (
   FOREIGN KEY (category_id) REFERENCES categories(id)
 )`, () => {});
 db.run(`ALTER TABLE subcategories ADD COLUMN updated_at TEXT`, () => {});
+// Migration: מלא updated_at=NULL בכל 4 הישויות — מונע חזרת קטגוריות מחוקות
+db.run(`UPDATE categories SET updated_at=datetime('now') WHERE updated_at IS NULL`, () => {});
+db.run(`UPDATE subcategories SET updated_at=datetime('now') WHERE updated_at IS NULL`, () => {});
+db.run(`ALTER TABLE variant_attribute_types ADD COLUMN updated_at TEXT`, () => {
+  db.run(`UPDATE variant_attribute_types SET updated_at=datetime('now') WHERE updated_at IS NULL`, () => {});
+});
+db.run(`ALTER TABLE product_type_codes ADD COLUMN updated_at TEXT`, () => {
+  db.run(`UPDATE product_type_codes SET updated_at=datetime('now') WHERE updated_at IS NULL`, () => {});
+});
 
 app.get('/api/subcategories', authenticateToken, (req, res) => {
   const { category_id } = req.query;
@@ -1009,7 +1018,7 @@ app.post('/api/product-type-codes', authenticateToken, (req, res) => {
 
 app.put('/api/product-type-codes/:id', authenticateToken, (req, res) => {
   const { code, name, name_he, name_pt } = req.body;
-  db.run('UPDATE product_type_codes SET code=?, name=?, name_he=?, name_pt=? WHERE id=?',
+  db.run("UPDATE product_type_codes SET code=?, name=?, name_he=?, name_pt=?, updated_at=datetime('now') WHERE id=?",
     [code.toUpperCase().slice(0,3), name, name_he||null, name_pt||null, req.params.id],
     (err) => {
       if (err) return res.status(500).json({ error: err.message });
@@ -1048,7 +1057,7 @@ app.post('/api/variant-attribute-types', authenticateToken, (req, res) => {
 
 app.put('/api/variant-attribute-types/:id', authenticateToken, (req, res) => {
   const { name, name_he, name_pt } = req.body;
-  db.run('UPDATE variant_attribute_types SET name=?, name_he=?, name_pt=? WHERE id=?',
+  db.run("UPDATE variant_attribute_types SET name=?, name_he=?, name_pt=?, updated_at=datetime('now') WHERE id=?",
     [name, name_he||null, name_pt||null, req.params.id],
     (err) => {
       if (err) return res.status(500).json({ error: err.message });
@@ -2521,7 +2530,7 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
       const parsed = JSON.parse(contactJson);
       if (Array.isArray(parsed)) {
         return parsed.map(c => {
-          const phone = Array.isArray(c.phones) ? c.phones.filter(Boolean).join(', ') : (c.phone || '');
+          const phone = Array.isArray(c.phones) ? c.phones[0] : (c.phone || '');
           return [c.name, phone, c.email].filter(Boolean).join(', ');
         }).filter(Boolean);
       }
@@ -2829,36 +2838,12 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
       <div style="font-weight:bold; font-size:12px;">${transaction.customer_type === 'casual' ? transaction.casual_customer_name : transaction.customer_name || 'N/A'}</div>
       ${transaction.customer_address ? `<div style="font-size:11px; color:#555;">${transaction.customer_address}</div>` : ''}
       ${(() => {
-        // אם נבחר איש קשר ספציפי — מצא אותו ב-JSON והצג עם טלפון
-        if (contact) {
-          const selectedName = contact.split(' | ')[0].trim();
-          try {
-            const parsed = JSON.parse(transaction.customer_contact || '[]');
-            const found = parsed.find(c => c.name === selectedName);
-            if (found) {
-              const phone = Array.isArray(found.phones) ? found.phones.filter(Boolean).join(', ') : (found.phone || '');
-              let html = `<div style="font-size:11px; color:#555;">${t.contactPerson}:</div>`;
-              if (found.name) html += `<div style="font-size:11px; color:#555;">${found.name}</div>`;
-              if (phone) html += `<div style="font-size:11px; color:#555;">${phone}</div>`;
-              if (found.email) html += `<div style="font-size:11px; color:#555;">${found.email}</div>`;
-              return html;
-            }
-          } catch(e) {}
-          return `<div style="font-size:11px; color:#555;">${t.contactPerson}: ${contact.split(' | ').join(', ')}</div>`;
-        }
-        // אין בחירה — הצג את כולם
-        // הצג כל איש קשר בשורות נפרדות
-        try {
-          const parsed = JSON.parse(transaction.customer_contact || '[]');
-          return parsed.map(c => {
-            const phone = Array.isArray(c.phones) ? c.phones.filter(Boolean).join(', ') : (c.phone || '');
-            let html = `<div style="font-size:11px; color:#555;">${t.contactPerson}:</div>`;
-            if (c.name) html += `<div style="font-size:11px; color:#555;">${c.name}</div>`;
-            if (phone) html += `<div style="font-size:11px; color:#555;">${phone}</div>`;
-            if (c.email) html += `<div style="font-size:11px; color:#555;">${c.email}</div>`;
-            return html;
-          }).join('');
-        } catch(e) { return ''; }
+        // טלפון — מהשדה הישיר או מה-contact_person JSON
+        if (contact) return `<div style="font-size:11px; color:#555;">${t.contactPerson}: ${contact.split(' | ').join(', ')}</div>`;
+        let lines = [];
+        const contacts = extractContacts(transaction.customer_contact);
+        contacts.forEach(c => lines.push(`${t.contactPerson}: ${c}`));
+        return lines.map(l => `<div style="font-size:11px; color:#555;">${l}</div>`).join('');
       })()}
       <div style="font-size:11px; color:#555;">${t.status}: <strong style="color:#1a7a3c;">${transaction.status}</strong></div>
   </div>
@@ -3249,21 +3234,6 @@ app.get('/api/inbound/:id/receipt-note', async (req, res) => {
     const qrImgHtml = transaction.qr_image_url
       ? `<img src="${transaction.qr_image_url}" alt="QR Code" style="width: 55px; height: 55px; display: block; ${t.dir === 'rtl' ? 'margin-right: auto;' : 'margin-left: auto;'}">`
       : '';
-
-    // Helper: חילוץ פרטי קשר מ-JSON (phones הוא מערך)
-    const extractContacts = (contactJson) => {
-      if (!contactJson) return [];
-      try {
-        const parsed = JSON.parse(contactJson);
-        if (Array.isArray(parsed)) {
-          return parsed.map(c => {
-            const phone = Array.isArray(c.phones) ? c.phones.filter(Boolean).join(', ') : (c.phone || '');
-            return [c.name, phone, c.email].filter(Boolean).join(', ');
-          }).filter(Boolean);
-        }
-      } catch(e) {}
-      return [contactJson.split(';')[0].trim()];
-    };
     
     const html = `
 <!DOCTYPE html>
@@ -3376,36 +3346,9 @@ app.get('/api/inbound/:id/receipt-note', async (req, res) => {
     <div style="font-size:9px; font-weight:bold; color:#1a6fa8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">${t.supplierDetails}</div>
     <div style="font-weight:bold; font-size:12px;">${transaction.supplier_name || transaction.casual_supplier_name || '-'}</div>
     ${(() => {
-      // אם נבחר איש קשר ספציפי — מצא אותו ב-JSON והצג עם טלפון
-      if (contact) {
-        const selectedName = contact.split(' | ')[0].trim();
-        try {
-          const parsed = JSON.parse(transaction.supplier_contact || '[]');
-          const found = parsed.find(c => c.name === selectedName);
-          if (found) {
-            const phone = Array.isArray(found.phones) ? found.phones.filter(Boolean).join(', ') : (found.phone || '');
-            let html = '<div style="font-size:11px; color:#555;">' + t.contactPerson + ':</div>';
-            if (found.name) html += '<div style="font-size:11px; color:#555;">' + found.name + '</div>';
-            if (phone) html += '<div style="font-size:11px; color:#555;">' + phone + '</div>';
-            if (found.email) html += '<div style="font-size:11px; color:#555;">' + found.email + '</div>';
-            return html;
-          }
-        } catch(e) {}
-        return '<div style="font-size:11px; color:#555;">' + t.contactPerson + ': ' + contact.split(' | ').join(', ') + '</div>';
-      }
-      // אין בחירה — הצג את כולם
-      // הצג כל איש קשר בשורות נפרדות
-      try {
-        const parsed = JSON.parse(transaction.supplier_contact || '[]');
-        return parsed.map(c => {
-          const phone = Array.isArray(c.phones) ? c.phones.filter(Boolean).join(', ') : (c.phone || '');
-          let html = '<div style="font-size:11px; color:#555;">' + t.contactPerson + ':</div>';
-          if (c.name) html += '<div style="font-size:11px; color:#555;">' + c.name + '</div>';
-          if (phone) html += '<div style="font-size:11px; color:#555;">' + phone + '</div>';
-          if (c.email) html += '<div style="font-size:11px; color:#555;">' + c.email + '</div>';
-          return html;
-        }).join('');
-      } catch(e) { return ''; }
+      if (contact) return '<div style="font-size:11px; color:#555;">' + t.contactPerson + ': ' + contact.split(' | ').join(', ') + '</div>';
+      const contacts = extractContacts(transaction.supplier_contact);
+      return contacts.map(c => '<div style="font-size:11px; color:#555;">' + t.contactPerson + ': ' + c + '</div>').join('');
     })()}
   </div>
 

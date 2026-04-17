@@ -250,7 +250,9 @@ app.patch('/api/products/:id/discontinue', authenticateToken, async (req, res) =
 app.get('/api/product-type-codes', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT * FROM product_type_codes
+      SELECT id, code, name, name_he, name_pt,
+             COALESCE(created_at, NOW()) as created_at
+      FROM product_type_codes
       WHERE id NOT IN (
         SELECT entity_id FROM pending_deletions WHERE entity_type='product_type_code'
       )
@@ -276,7 +278,7 @@ app.put('/api/product-type-codes/:id', authenticateToken, async (req, res) => {
   const { code, name, name_he, name_pt } = req.body;
   try {
     await pool.query(
-      'UPDATE product_type_codes SET code=$1, name=$2, name_he=$3, name_pt=$4 WHERE id=$5',
+      'UPDATE product_type_codes SET code=$1, name=$2, name_he=$3, name_pt=$4, updated_at=NOW() WHERE id=$5',
       [code.toUpperCase().slice(0,3), name, name_he||null, name_pt||null, req.params.id]
     );
     res.json({ message: 'updated' });
@@ -295,7 +297,9 @@ app.delete('/api/product-type-codes/:id', authenticateToken, async (req, res) =>
 app.get('/api/variant-attribute-types', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT * FROM variant_attribute_types
+      SELECT id, name, name_he, name_pt,
+             COALESCE(created_at, NOW()) as created_at
+      FROM variant_attribute_types
       WHERE id NOT IN (
         SELECT entity_id FROM pending_deletions WHERE entity_type='variant_attribute_type'
       )
@@ -321,7 +325,7 @@ app.put('/api/variant-attribute-types/:id', authenticateToken, async (req, res) 
   const { name, name_he, name_pt } = req.body;
   try {
     await pool.query(
-      'UPDATE variant_attribute_types SET name=$1, name_he=$2, name_pt=$3 WHERE id=$4',
+      'UPDATE variant_attribute_types SET name=$1, name_he=$2, name_pt=$3, updated_at=NOW() WHERE id=$4',
       [name, name_he||null, name_pt||null, req.params.id]
     );
     res.json({ message: 'updated' });
@@ -1361,9 +1365,7 @@ app.get('/api/outbound/:id/delivery-note', authenticateToken, async (req, res) =
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
-    const hours = String(date.getHours()).padStart(2,'0');
-    const minutes = String(date.getMinutes()).padStart(2,'0');
-    return `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${date.getFullYear()} ${hours}:${minutes}`;
+    return `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${date.getFullYear()}`;
   };
 
   const buildPhoneString = (company) => {
@@ -1441,10 +1443,13 @@ app.get('/api/outbound/:id/delivery-note', authenticateToken, async (req, res) =
     .btn-close { background: #95a5a6; color: white; } .btn-close:hover { background: #7f8c8d; }
     .doc-footer { display:block; position:fixed; bottom:0; left:0; right:0; border-top:1px solid #ddd; padding:6px 0; text-align:center; font-size:8pt; color:#888; background:white; }
     body { font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: white; }
-    table { width:100%; border-collapse:collapse; margin:0 0 12px 0; }
-    th { background:#1a6fa8; color:white; padding:7px 8px; text-align:${t.dir==='rtl'?'right':'left'}; font-size:12px; }
-    td { border:none; border-bottom:1px solid #eee; padding:6px 8px; text-align:${t.dir==='rtl'?'right':'left'}; font-size:12px; }
-    tr:nth-child(even) td { background:#fafafa; }
+    .info-section { display: flex; justify-content: space-between; margin-bottom: 30px; }
+    .info-box { flex: 1; margin: 0 10px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+    .info-box h3 { margin-top: 0; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { border: 1px solid #ddd; padding: 12px; text-align: ${t.dir === 'rtl' ? 'right' : 'left'}; }
+    th { background-color: #3498db; color: white; text-align: center; }
+    tr:nth-child(even) { background-color: #f9f9f9; }
     .email-modal-overlay { display:none; position:fixed; top:0;left:0;right:0;bottom:0; background:rgba(0,0,0,0.5); z-index:99999; justify-content:center; align-items:center; }
     .email-modal-overlay.open { display:flex !important; }
     .email-modal-box { background:white; border-radius:10px; padding:2rem; width:420px; max-width:95vw; box-shadow:0 10px 40px rgba(0,0,0,0.3); direction:${t.dir}; }
@@ -1534,68 +1539,53 @@ app.get('/api/outbound/:id/delivery-note', authenticateToken, async (req, res) =
   }
   </script>
 
-  <!-- ═══ HEADER קומפקטי ═══ -->
-  <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:2px solid #1a6fa8; margin-bottom:12px;">
-    <div style="display:flex; align-items:center; gap:10px;">
-      ${logoHtml ? `<div style="flex-shrink:0;">${logoHtml.replace(/<div[^>]*>/, '<div style="margin:0;padding:0;">').replace(/max-height:\s*120px/, 'max-height:50px').replace(/max-height:120px/, 'max-height:50px')}</div>` : ''}
-      <div>
-        <div style="font-size:14px; font-weight:bold; color:#1a6fa8;">${company.company_name || ''}</div>
-        <div style="font-size:10px; color:#888; direction:ltr; text-align:left; line-height:1.6;">
-          ${company.address ? '<span>' + company.address + '</span><br>' : ''}
-          ${buildPhoneString(company) !== 'N/A' ? '<span>' + buildPhoneString(company) + '</span><br>' : ''}
-          ${company.email ? '<span>' + company.email + '</span><br>' : ''}
-          ${company.tax_id ? '<span>Tax: ' + company.tax_id + '</span>' : ''}
+  <table style="width:100%;border:none;margin-bottom:20px;">
+    <tr>
+      <td style="vertical-align:middle;border:none;padding:0;">
+        ${logoHtml ? logoHtml.replace('<div style="text-align:left;margin-bottom:20px;position:relative;z-index:1;">', '<div>') : ''}
+        <div>
+          <h1 style="margin:4px 0;font-size:28px;font-weight:bold;">${t.title}</h1>
+          <p style="margin:0;font-size:16px;color:#555;">${t.documentNumber}: ${id} | ${t.date}: ${formatDate(transaction.transaction_date)}</p>
         </div>
-      </div>
+      </td>
+      <td style="vertical-align:top;text-align:${t.dir==='rtl'?'left':'right'};border:none;padding:0;width:70px;">
+        ${qrImgHtml}
+      </td>
+    </tr>
+  </table>
+
+  <div class="info-section">
+    <div class="info-box">
+      <h3>${t.companyDetails}</h3>
+      <p><strong>${t.name}:</strong> ${company.company_name || 'N/A'}</p>
+      <p><strong>${t.address}:</strong> ${company.address || 'N/A'}</p>
+      <p><strong>${t.phone}:</strong> ${buildPhoneString(company)}</p>
+      <p><strong>${t.email}:</strong> ${company.email || 'N/A'}</p>
+      <p><strong>${t.taxId}:</strong> ${company.tax_id || 'N/A'}</p>
     </div>
-    <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
-      <div style="text-align:${t.dir === 'rtl' ? 'left' : 'right'};">
-        <div style="font-size:18px; font-weight:bold; color:#1a6fa8;">${t.title}</div>
-        <div style="font-size:11px; color:#666;">${t.documentNumber}: ${id} &nbsp;|&nbsp; ${t.date}: ${formatDate(transaction.transaction_date)}</div>
-      </div>
-      ${qrImgHtml ? `<div style="flex-shrink:0;">${qrImgHtml}</div>` : ''}
+    <div class="info-box">
+      <h3>${t.customerDetails}</h3>
+      <p><strong>${t.name}:</strong> ${transaction.customer_type === 'casual' ? transaction.casual_customer_name : transaction.customer_name || 'N/A'}</p>
+      ${transaction.customer_address ? `<p><strong>${t.address}:</strong> ${transaction.customer_address}</p>` : ''}
+      ${!contact && transaction.customer_phone ? `<p><strong>${t.phone}:</strong> ${transaction.customer_phone}</p>` : ''}
+      ${!contact && transaction.customer_email ? `<p><strong>${t.email}:</strong> ${transaction.customer_email}</p>` : ''}
+      ${(() => {
+        if (contact) return `<p><strong>${t.contactPerson}:</strong> ${contact.split(' | ').join(', ')}</p>`;
+        if (!transaction.customer_contact) return '';
+        try {
+          const parsed = JSON.parse(transaction.customer_contact);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const c = parsed[0];
+            return `<p><strong>${t.contactPerson}:</strong> ${[c.name, c.phone, c.email].filter(Boolean).join(', ')}</p>`;
+          }
+        } catch(e) {}
+        return `<p><strong>${t.contactPerson}:</strong> ${transaction.customer_contact.split(';')[0].trim()}</p>`;
+      })()}
+      <p><strong>${t.status}:</strong> ${transaction.status}</p>
     </div>
   </div>
 
-  <!-- ═══ CUSTOMER ═══ -->
-  ${(() => {
-    const extractContacts = (contactJson) => {
-      if (!contactJson) return [];
-      try {
-        const parsed = JSON.parse(contactJson);
-        if (Array.isArray(parsed)) return parsed;
-      } catch(e) {}
-      return [];
-    };
-    const renderContact = (found) => {
-      const phone = Array.isArray(found.phones) ? found.phones.filter(Boolean).join(', ') : (found.phone || '');
-      let html = `<div style="font-size:11px; color:#555;">${t.contactPerson}:</div>`;
-      if (found.name) html += `<div style="font-size:11px; color:#555;">${found.name}</div>`;
-      if (phone) html += `<div style="font-size:11px; color:#555;">${phone}</div>`;
-      if (found.email) html += `<div style="font-size:11px; color:#555;">${found.email}</div>`;
-      return html;
-    };
-    const allParsed = extractContacts(transaction.customer_contact);
-    let contactHtml = '';
-    if (contact) {
-      const selectedName = contact.split(' | ')[0].trim();
-      const found = allParsed.find(c => c.name === selectedName);
-      contactHtml = found ? renderContact(found) : `<div style="font-size:11px; color:#555;">${t.contactPerson}: ${contact.split(' | ').join(', ')}</div>`;
-    } else if (allParsed.length > 0) {
-      contactHtml = allParsed.map(c => renderContact(c)).join('');
-    }
-    return `
-  <div style="padding:8px 10px; background:#f7fbff; margin-bottom:12px;">
-    <div style="font-size:9px; font-weight:bold; color:#1a6fa8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">${t.customerDetails}</div>
-    <div style="font-weight:bold; font-size:12px;">${transaction.customer_type === 'casual' ? transaction.casual_customer_name : transaction.customer_name || 'N/A'}</div>
-    ${transaction.customer_address ? `<div style="font-size:11px; color:#555;">${transaction.customer_address}</div>` : ''}
-    ${contactHtml}
-    <div style="font-size:11px; color:#555;">${t.status}: <strong style="color:#1a7a3c;">${transaction.status}</strong></div>
-  </div>`;
-  })()}
-
-  <!-- ═══ ITEMS ═══ -->
-  <div style="font-size:10px; font-weight:bold; color:#888; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:5px;">${t.items}</div>
+  <h3>${t.items}</h3>
   <table>
     <thead>
       <tr><th>#</th><th>${t.sku}</th><th>${t.productName}</th><th>${t.quantity}</th><th>${lang==='he'?'אריזה':'Packaging'}</th></tr>
@@ -1678,9 +1668,7 @@ app.get('/api/inbound/:id/receipt-note', authenticateToken, async (req, res) => 
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
-    const hours = String(date.getHours()).padStart(2,'0');
-    const minutes = String(date.getMinutes()).padStart(2,'0');
-    return `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${date.getFullYear()} ${hours}:${minutes}`;
+    return `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${date.getFullYear()}`;
   };
 
   const translations = {
@@ -1742,10 +1730,8 @@ app.get('/api/inbound/:id/receipt-note', authenticateToken, async (req, res) => 
     body { font-family:Arial,sans-serif; max-width:800px; margin:20px auto; padding:20px; }
     .info-section { margin:20px 0; padding:15px; background:#f8f9fa; border-radius:5px; }
     h1 { color:#2c3e50; margin:0 0 10px 0; font-size:24px; }
-    table { width:100%; border-collapse:collapse; margin:0 0 12px 0; }
-    th { background:#1a6fa8; color:white; padding:7px 8px; text-align:${t.dir==='rtl'?'right':'left'}; font-size:12px; }
-    td { border:none; border-bottom:1px solid #eee; padding:6px 8px; text-align:${t.dir==='rtl'?'right':'left'}; font-size:12px; }
-    tr:nth-child(even) td { background:#fafafa; }
+    table { width:100%; border-collapse:collapse; margin:20px 0; }
+    th { background:#3498db; color:white; padding:12px; text-align:${t.dir==='rtl'?'right':'left'}; }
     td { padding:10px; border-bottom:1px solid #ddd; text-align:${t.dir==='rtl'?'right':'left'}; }
     .total { font-weight:bold; background:#f0f0f0; }
     .email-modal-overlay { display:none; position:fixed; top:0;left:0;right:0;bottom:0; background:rgba(0,0,0,0.5); z-index:99999; justify-content:center; align-items:center; }
@@ -1835,84 +1821,62 @@ app.get('/api/inbound/:id/receipt-note', authenticateToken, async (req, res) => 
   }
   </script>
 
-  <!-- ═══ HEADER קומפקטי ═══ -->
-  <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:2px solid #1a6fa8; margin-bottom:12px;">
-    <div style="display:flex; align-items:center; gap:10px;">
-      ${logoHtml ? `<div style="flex-shrink:0;">${logoHtml}</div>` : ''}
-      <div>
-        <div style="font-size:14px; font-weight:bold; color:#1a6fa8;">${company.company_name || ''}</div>
-        <div style="font-size:10px; color:#888; direction:ltr; text-align:left; line-height:1.6;">
-          ${company.address ? '<span>' + company.address + '</span><br>' : ''}
-          ${company.phone ? '<span>' + company.phone + '</span><br>' : ''}
-          ${company.email ? '<span>' + company.email + '</span><br>' : ''}
-          ${company.tax_id ? '<span>Tax: ' + company.tax_id + '</span>' : ''}
+  <table style="width:100%;border:none;margin-bottom:20px;">
+    <tr>
+      <td style="vertical-align:middle;border:none;padding:0;">
+        ${logoHtml}
+        <div>
+          <h1 style="margin:4px 0;">${t.title}</h1>
+          <p style="margin:0;">${t.documentNumber}: ${id} | ${t.date}: ${formatDate(transaction.transaction_date)}</p>
         </div>
-      </div>
-    </div>
-    <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
-      <div style="text-align:${t.dir === 'rtl' ? 'left' : 'right'};">
-        <div style="font-size:18px; font-weight:bold; color:#1a6fa8;">${t.title}</div>
-        <div style="font-size:11px; color:#666;">${t.documentNumber}: ${id} &nbsp;|&nbsp; ${t.date}: ${formatDate(transaction.transaction_date)}</div>
-      </div>
-      ${qrImgHtml ? `<div style="flex-shrink:0;">${qrImgHtml}</div>` : ''}
-    </div>
+      </td>
+      <td style="vertical-align:top;text-align:${t.dir==='rtl'?'left':'right'};border:none;padding:0;width:70px;">
+        ${qrImgHtml}
+      </td>
+    </tr>
+  </table>
+
+  <div class="info-section">
+    <h3>${t.supplierDetails}</h3>
+    <p><strong>${t.name}:</strong> ${transaction.supplier_name || '-'}</p>
+    ${!contact && transaction.supplier_phone ? `<p><strong>${t.phone}:</strong> ${transaction.supplier_phone}</p>` : ''}
+    ${!contact && transaction.supplier_email ? `<p><strong>${t.email}:</strong> ${transaction.supplier_email}</p>` : ''}
+    ${(() => {
+      if (contact) return `<p><strong>${t.contactPerson}:</strong> ${contact.split(' | ').join(', ')}</p>`;
+      if (!transaction.supplier_contact) return '';
+      try {
+        const parsed = JSON.parse(transaction.supplier_contact);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const c = parsed[0];
+          return `<p><strong>${t.contactPerson}:</strong> ${[c.name, c.phone, c.email].filter(Boolean).join(', ')}</p>`;
+        }
+      } catch(e) {}
+      return `<p><strong>${t.contactPerson}:</strong> ${transaction.supplier_contact.split(';')[0].trim()}</p>`;
+    })()}
   </div>
 
-  <!-- ═══ SUPPLIER ═══ -->
-  ${(() => {
-    const renderContact = (found) => {
-      const phone = Array.isArray(found.phones) ? found.phones.filter(Boolean).join(', ') : (found.phone || '');
-      let html = `<div style="font-size:11px; color:#555;">${t.contactPerson}:</div>`;
-      if (found.name) html += `<div style="font-size:11px; color:#555;">${found.name}</div>`;
-      if (phone) html += `<div style="font-size:11px; color:#555;">${phone}</div>`;
-      if (found.email) html += `<div style="font-size:11px; color:#555;">${found.email}</div>`;
-      return html;
-    };
-    let allParsed = [];
-    try { allParsed = JSON.parse(transaction.supplier_contact || '[]'); } catch(e) {}
-    let contactHtml = '';
-    if (contact) {
-      const selectedName = contact.split(' | ')[0].trim();
-      const found = allParsed.find(c => c.name === selectedName);
-      contactHtml = found ? renderContact(found) : `<div style="font-size:11px; color:#555;">${t.contactPerson}: ${contact.split(' | ').join(', ')}</div>`;
-    } else if (allParsed.length > 0) {
-      contactHtml = allParsed.map(c => renderContact(c)).join('');
-    }
-    return `
-  <div style="padding:8px 10px; background:#f7fbff; margin-bottom:12px;">
-    <div style="font-size:9px; font-weight:bold; color:#1a6fa8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">${t.supplierDetails}</div>
-    <div style="font-weight:bold; font-size:12px;">${transaction.supplier_name || transaction.casual_supplier_name || '-'}</div>
-    ${contactHtml}
-  </div>`;
-  })()}
-
-  <!-- ═══ ITEMS ═══ -->
-  <div style="font-size:10px; font-weight:bold; color:#888; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:5px;">${t.items}</div>
-  <table style="margin-bottom:12px;">
+  <h3>${t.items}</h3>
+  <table>
     <thead>
-      <tr>
-        <th style="width:130px;">${t.sku}</th>
-        <th>${t.productName}</th>
-        <th style="width:70px; text-align:center;">${t.quantity}</th>
-      </tr>
+      <tr><th>${t.sku}</th><th>${t.productName}</th><th>${t.quantity}</th></tr>
     </thead>
     <tbody>
       ${items.map(item => `
         <tr>
-          <td style="font-family:monospace; font-size:11px;">${item.sku}</td>
+          <td>${item.sku}</td>
           <td>${lang==='he'&&item.name_he?item.name_he:lang==='pt'&&item.name_pt?item.name_pt:item.name}</td>
-          <td style="text-align:center; font-weight:bold;">${item.quantity}</td>
+          <td>${item.quantity}</td>
         </tr>
       `).join('')}
-      <tr style="background:#f0f0f0; font-weight:bold; border-top:2px solid #ddd;">
-        <td colspan="2">${t.dir==='rtl'?'סה\"כ פריטים':'Total Items'}</td>
-        <td style="text-align:center;">${items.reduce((sum, item) => sum + item.quantity, 0)}</td>
+      <tr class="total">
+        <td colspan="2">${t.dir==='rtl'?'סה"כ פריטים':'Total Items'}</td>
+        <td>${items.reduce((sum, item) => sum + item.quantity, 0)}</td>
       </tr>
     </tbody>
   </table>
 
-  ${transaction.notes ? `<div style="margin-bottom:10px; padding:8px 10px; background:#f8f9fa; border-radius:4px; font-size:12px;"><strong>${t.notes}:</strong> ${transaction.notes}</div>` : ''}
-  <p style="margin-top:16px; font-size:12px;"><strong>${t.receivedBy}:</strong> ${transaction.username}</p>
+  ${transaction.notes ? `<div class="info-section"><strong>${t.notes}:</strong> ${transaction.notes}</div>` : ''}
+  <p style="margin-top:30px;"><strong>${t.receivedBy}:</strong> ${transaction.username}</p>
 
   <div class="email-modal-overlay no-print" id="emailModal">
     <div class="email-modal-box">
@@ -2892,7 +2856,7 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
             description = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $5 ELSE categories.description END,
             code        = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $6 ELSE categories.code END,
             updated_at  = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $7::timestamptz ELSE categories.updated_at END`,
-          [r.id, r.name, r.name_he||null, r.name_pt||null, r.description||null, catCode, r.updated_at||null]);
+          [r.id, r.name, r.name_he||null, r.name_pt||null, r.description||null, catCode, r.updated_at || new Date().toISOString()]);
       }
       // אפס את ה-sequence
       await client.query(`SELECT setval('categories_id_seq', COALESCE((SELECT MAX(id) FROM categories), 0) + 1, false)`).catch(() => {});
@@ -2936,7 +2900,7 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
             name_pt     = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $5 ELSE subcategories.name_pt END,
             code        = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $6 ELSE subcategories.code END,
             updated_at  = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $7::timestamptz ELSE subcategories.updated_at END`,
-          [r.id, r.category_id, r.name, r.name_he||null, r.name_pt||null, subCode, r.updated_at||null]);
+          [r.id, r.category_id, r.name, r.name_he||null, r.name_pt||null, subCode, r.updated_at || new Date().toISOString()]);
       }
       // אפס את ה-sequence
       await client.query(`SELECT setval('subcategories_id_seq', COALESCE((SELECT MAX(id) FROM subcategories), 0) + 1, false)`).catch(() => {});
@@ -3258,11 +3222,26 @@ app.get('/api/sync/pull/warehouse-alerts', authenticateToken, async (req, res) =
 });
 
 // ── Sync: Pull categories + subcategories from cloud → local ─────────────────
+// Migration: מלא updated_at=NULL בכל הישויות — פעם אחת בהפעלה
+(async () => {
+  try {
+    await query(`UPDATE categories SET updated_at=NOW() WHERE updated_at IS NULL`).catch(()=>{});
+    await query(`UPDATE subcategories SET updated_at=NOW() WHERE updated_at IS NULL`).catch(()=>{});
+    await query(`ALTER TABLE variant_attribute_types ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ`).catch(()=>{});
+    await query(`UPDATE variant_attribute_types SET updated_at=NOW() WHERE updated_at IS NULL`).catch(()=>{});
+    await query(`ALTER TABLE product_type_codes ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ`).catch(()=>{});
+    await query(`UPDATE product_type_codes SET updated_at=NOW() WHERE updated_at IS NULL`).catch(()=>{});
+    console.log('✅ updated_at migration complete');
+  } catch(e) { console.error('migration error:', e.message); }
+})();
+
 app.get('/api/sync/pull/categories', authenticateToken, async (req, res) => {
   try {
     // אל תחזיר קטגוריות שנמחקו ועדיין ממתינות ב-pending_deletions
     const r = await query(`
-      SELECT * FROM categories
+      SELECT id, name, name_he, name_pt, description, code,
+             COALESCE(updated_at, created_at, NOW()) as updated_at
+      FROM categories
       WHERE id NOT IN (
         SELECT entity_id FROM pending_deletions WHERE entity_type='category'
       )
@@ -3280,7 +3259,9 @@ app.get('/api/sync/pull/subcategories', authenticateToken, async (req, res) => {
     )`).catch(() => {});
     // אל תחזיר סאב-קטגוריות שנמחקו ועדיין ממתינות ב-pending_deletions
     const r = await query(`
-      SELECT * FROM subcategories
+      SELECT id, category_id, name, name_he, name_pt, code,
+             COALESCE(updated_at, created_at, NOW()) as updated_at
+      FROM subcategories
       WHERE id NOT IN (
         SELECT entity_id FROM pending_deletions WHERE entity_type='subcategory'
       )
