@@ -1231,7 +1231,9 @@ app.delete('/api/inbound/:id', authenticateToken, async (req, res) => {
     // החזר כמויות למלאי
     const items = await client.query('SELECT product_id, quantity FROM inbound_items WHERE transaction_id=$1', [req.params.id]);
     for (const item of items.rows) {
-      await client.query('UPDATE products SET quantity = quantity - $1, quantity_updated_at = NOW() WHERE id=$2', [item.quantity, item.product_id]);
+      // לא מעדכנים quantity_updated_at — המקומי הוא מקור האמת לכמות
+      // last-write-wins: המקומי שלח quantity_updated_at + 3 seconds לפני הsync
+      await client.query('UPDATE products SET quantity = quantity - $1 WHERE id=$2', [item.quantity, item.product_id]);
     }
     await client.query('DELETE FROM inbound_items WHERE transaction_id=$1', [req.params.id]);
     await client.query('DELETE FROM inbound_transactions WHERE id=$1', [req.params.id]);
@@ -1252,7 +1254,9 @@ app.delete('/api/outbound/:id', authenticateToken, async (req, res) => {
     // החזר כמויות למלאי
     const items = await client.query('SELECT product_id, quantity FROM outbound_items WHERE transaction_id=$1', [req.params.id]);
     for (const item of items.rows) {
-      await client.query('UPDATE products SET quantity = quantity + $1, quantity_updated_at = NOW() WHERE id=$2', [item.quantity, item.product_id]);
+      // לא מעדכנים quantity_updated_at — המקומי הוא מקור האמת לכמות
+      // last-write-wins: המקומי שלח quantity_updated_at + 3 seconds לפני הsync
+      await client.query('UPDATE products SET quantity = quantity + $1 WHERE id=$2', [item.quantity, item.product_id]);
     }
     await client.query('DELETE FROM outbound_items WHERE transaction_id=$1', [req.params.id]);
     await client.query('DELETE FROM outbound_transactions WHERE id=$1', [req.params.id]);

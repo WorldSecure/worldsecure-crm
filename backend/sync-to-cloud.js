@@ -133,15 +133,16 @@ async function syncLocalToCloud() {
     await syncDeletedVariantAttrTypesToCloud();
     await syncEntityToCloud('product_type_codes', 'SELECT id, code, name, name_he, name_pt, created_at FROM product_type_codes');
     await syncDeletedProductTypeCodesToCloud();
+    await syncEmailSignaturesToCloud();
+    await syncOutboundSignaturesToCloud();
+    await syncProformaSignaturesToCloud();
+    // ⚡ inbound/outbound BEFORE products — כך כל מחיקות עדכנות ה-timestamp לפני שנשלח כמות
+    await syncInboundToCloud();
+    await syncOutboundToCloud();
     await syncDeletedProductsToCloud();
     await syncEntityToCloud('products',   'SELECT id, sku, name, name_he, name_pt, description, category_id, subcategory_id, supplier_id, manufacturer_id, price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at, is_parent, variant_attrs, parent_id, is_active, product_type_code FROM products');
     await syncEntityToCloud('suppliers',  'SELECT id, name, address, phone, email, tax_id, country, contact_person, notes, created_at, updated_at FROM suppliers');
     await syncEntityToCloud('manufacturers', 'SELECT id, name, address, phone, email, tax_id, country, contact_person, notes, created_at, updated_at FROM manufacturers');
-    await syncEmailSignaturesToCloud();
-    await syncOutboundSignaturesToCloud();
-    await syncProformaSignaturesToCloud();
-    await syncInboundToCloud();
-    await syncOutboundToCloud();
     await syncSupportToCloud();
     await syncWarehouseAlertsToCloud();
     await syncNotificationAcksToCloud();
@@ -266,7 +267,7 @@ async function syncInboundToCloud() {
     const affectedItems = await sqliteAll('SELECT product_id FROM inbound_items WHERE transaction_id=?', [d.id]).catch(() => []);
     for (const item of affectedItems) {
       await sqliteRun(
-        "UPDATE products SET quantity_updated_at = datetime('now', '+1 second') WHERE id=?",
+        "UPDATE products SET quantity_updated_at = datetime('now', '+3 seconds') WHERE id=?",
         [item.product_id]
       ).catch(() => {});
     }
@@ -294,7 +295,7 @@ async function syncOutboundToCloud() {
     const affectedItems = await sqliteAll('SELECT product_id FROM outbound_items WHERE transaction_id=?', [d.id]).catch(() => []);
     for (const item of affectedItems) {
       await sqliteRun(
-        "UPDATE products SET quantity_updated_at = datetime('now', '+1 second') WHERE id=?",
+        "UPDATE products SET quantity_updated_at = datetime('now', '+3 seconds') WHERE id=?",
         [item.product_id]
       ).catch(() => {});
     }
