@@ -3668,29 +3668,40 @@ Product: ${name}`;
   }
 });
 
-// ── Translate Existing Products ───────────────────────────────────────────────
+// ── Translate Existing Products + Categories + Subcategories + Attributes + Types ──
 app.post('/api/products/translate-existing', authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
-  try {
-    const { rows } = await query('SELECT id, name, parent_id FROM products WHERE name_he IS NULL OR name_pt IS NULL');
-    if (rows.length === 0) return res.json({ message: 'All products already translated', count: 0 });
 
-    const parents = rows.filter(r => !r.parent_id);
-    const variants = rows.filter(r => r.parent_id);
-    let count = 0;
+  const force = req.body.force === true; // force=true → תרגם הכל מחדש
+  const delay = (ms) => new Promise(r => setTimeout(r, ms));
+
+  let count = 0;
+  const details = { products: 0, categories: 0, subcategories: 0, attributes: 0, productTypes: 0 };
+
+  // פילטר translation_done — אם force=true, תרגם הכל; אחרת, רק שלא תורגמו
+  const doneFilter = force ? '1=1' : '(translation_done IS NULL OR translation_done=0)';
+
+  try {
+    // Migration — הוסף עמודת translation_done לכל 4 הטבלאות
+    await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS translation_done INTEGER DEFAULT 0');
+    await query('ALTER TABLE subcategories ADD COLUMN IF NOT EXISTS translation_done INTEGER DEFAULT 0');
+    await query('ALTER TABLE variant_attribute_types ADD COLUMN IF NOT EXISTS translation_done INTEGER DEFAULT 0');
+    await query('ALTER TABLE product_type_codes ADD COLUMN IF NOT EXISTS translation_done INTEGER DEFAULT 0');
+
+    // ── 1. PRODUCTS ──────────────────────────────────────────────────────────
+    const { rows } = await query("SELECT id, name, parent_id FROM products WHERE (name_he IS NULL OR name_he = '') OR (name_pt IS NULL OR name_pt = '')");
+    const parents  = rows.filter(r => !r.parent_id);
+    const variants = rows.filter(r =>  r.parent_id);
 
     for (const product of parents) {
       try {
-        const translations = await callAnthropicAPI(
-          `Translate this product name. Return ONLY a JSON object with no extra text:
-{"he": "<Hebrew translation>", "pt": "<Portuguese translation>"}
-
-Product name: ${product.name}`
+        const t = await callAnthropicAPI(
+          'Translate this product name. Return ONLY a JSON object: {"he":"...","pt":"..."}\n\nProduct name: ' + product.name
         );
-        await query('UPDATE products SET name_he=$1, name_pt=$2 WHERE id=$3', [translations.he, translations.pt, product.id]);
-        count++;
-        await new Promise(r => setTimeout(r, 600));
-      } catch (e) { console.error('Failed to translate product ' + product.id + ':', e.message); }
+        await query('UPDATE products SET name_he=$1, name_pt=$2 WHERE id=$3', [t.he, t.pt, product.id]);
+        details.products++; count++;
+        await delay(600);
+      } catch (e) { console.error('product translate failed:', product.id, e.message); }
     }
 
     for (const variant of variants) {
@@ -3702,22 +3713,81 @@ Product name: ${product.name}`
           const label = variant.name.replace(baseName, '').trim();
           await query('UPDATE products SET name_he=$1, name_pt=$2 WHERE id=$3',
             [parentRow.name_he + (label ? ' ' + label : ''), parentRow.name_pt + (label ? ' ' + label : ''), variant.id]);
-          count++;
         } else {
-          const translations = await callAnthropicAPI(
-            'Translate this product name. Return ONLY a JSON object with no extra text:\n{"he": "<Hebrew translation>", "pt": "<Portuguese translation>"}\n\nProduct name: ' + variant.name
+          const t = await callAnthropicAPI(
+            'Translate this product name. Return ONLY a JSON object: {"he":"...","pt":"..."}\n\nProduct name: ' + variant.name
           );
-          await query('UPDATE products SET name_he=$1, name_pt=$2 WHERE id=$3', [translations.he, translations.pt, variant.id]);
-          count++;
-          await new Promise(r => setTimeout(r, 600));
+          await query('UPDATE products SET name_he=$1, name_pt=$2 WHERE id=$3', [t.he, t.pt, variant.id]);
+          await delay(600);
         }
-      } catch (e) { console.error('Failed to translate variant ' + variant.id + ':', e.message); }
+        details.products++; count++;
+      } catch (e) { console.error('variant translate failed:', variant.id, e.message); }
     }
 
-    res.json({ message: 'Translated ' + count + ' products', count });
+    // ── 2. CATEGORIES ────────────────────────────────────────────────────────
+    await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_he TEXT');
+    await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_pt TEXT');
+    const { rows: catRows } = await query(`SELECT id, name FROM categories WHERE ${doneFilter} AND ((name_he IS NULL OR name_he = '' OR name_he = name) OR (name_pt IS NULL OR name_pt = '' OR name_pt = name))`);
+    for (const row of catRows) {
+      try {
+        const t = await callAnthropicAPI(
+          'Translate this product category name. Return ONLY a JSON object: {"he":"...","pt":"..."}\n\nCategory: ' + row.name
+        );
+        await query('UPDATE categories SET name_he=$1, name_pt=$2, translation_done=1 WHERE id=$3', [t.he, t.pt, row.id]);
+        details.categories++; count++;
+        await delay(600);
+      } catch (e) { console.error('category translate failed:', row.id, e.message); }
+    }
+
+    // ── 3. SUBCATEGORIES ─────────────────────────────────────────────────────
+    await query('ALTER TABLE subcategories ADD COLUMN IF NOT EXISTS name_he TEXT');
+    await query('ALTER TABLE subcategories ADD COLUMN IF NOT EXISTS name_pt TEXT');
+    const { rows: subRows } = await query(`SELECT id, name FROM subcategories WHERE ${doneFilter} AND ((name_he IS NULL OR name_he = '' OR name_he = name) OR (name_pt IS NULL OR name_pt = '' OR name_pt = name))`);
+    for (const row of subRows) {
+      try {
+        const t = await callAnthropicAPI(
+          'Translate this product subcategory name. Return ONLY a JSON object: {"he":"...","pt":"..."}\n\nSubcategory: ' + row.name
+        );
+        await query('UPDATE subcategories SET name_he=$1, name_pt=$2, translation_done=1 WHERE id=$3', [t.he, t.pt, row.id]);
+        details.subcategories++; count++;
+        await delay(600);
+      } catch (e) { console.error('subcategory translate failed:', row.id, e.message); }
+    }
+
+    // ── 4. VARIANT ATTRIBUTE TYPES ───────────────────────────────────────────
+    await query('ALTER TABLE variant_attribute_types ADD COLUMN IF NOT EXISTS name_he TEXT');
+    await query('ALTER TABLE variant_attribute_types ADD COLUMN IF NOT EXISTS name_pt TEXT');
+    const { rows: attrRows } = await query(`SELECT id, name FROM variant_attribute_types WHERE ${doneFilter} AND ((name_he IS NULL OR name_he = '' OR name_he = name) OR (name_pt IS NULL OR name_pt = '' OR name_pt = name))`);
+    for (const row of attrRows) {
+      try {
+        const t = await callAnthropicAPI(
+          'Translate this product attribute type name. Return ONLY a JSON object: {"he":"...","pt":"..."}\n\nAttribute: ' + row.name
+        );
+        await query('UPDATE variant_attribute_types SET name_he=$1, name_pt=$2, translation_done=1 WHERE id=$3', [t.he, t.pt, row.id]);
+        details.attributes++; count++;
+        await delay(600);
+      } catch (e) { console.error('attr type translate failed:', row.id, e.message); }
+    }
+
+    // ── 5. PRODUCT TYPE CODES ────────────────────────────────────────────────
+    await query('ALTER TABLE product_type_codes ADD COLUMN IF NOT EXISTS name_he TEXT');
+    await query('ALTER TABLE product_type_codes ADD COLUMN IF NOT EXISTS name_pt TEXT');
+    const { rows: ptRows } = await query(`SELECT id, name FROM product_type_codes WHERE ${doneFilter} AND ((name_he IS NULL OR name_he = '' OR name_he = name) OR (name_pt IS NULL OR name_pt = '' OR name_pt = name))`);
+    for (const row of ptRows) {
+      try {
+        const t = await callAnthropicAPI(
+          'Translate this product type name. Return ONLY a JSON object: {"he":"...","pt":"..."}\n\nProduct type: ' + row.name
+        );
+        await query('UPDATE product_type_codes SET name_he=$1, name_pt=$2, translation_done=1 WHERE id=$3', [t.he, t.pt, row.id]);
+        details.productTypes++; count++;
+        await delay(600);
+      } catch (e) { console.error('product type translate failed:', row.id, e.message); }
+    }
+
+    res.json({ message: 'Translated ' + count + ' items', count, details });
+
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
-
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
 // ════════════════════════════════════════════════════════════════════════════
