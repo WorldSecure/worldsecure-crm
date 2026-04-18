@@ -1943,7 +1943,7 @@ app.get('/api/inbound/:id/receipt-note', authenticateToken, async (req, res) => 
         <div style="font-size:14px; font-weight:bold; color:#1a6fa8;">${company.company_name || ''}</div>
         <div style="font-size:10px; color:#888; direction:ltr; text-align:left; line-height:1.6;">
           ${company.address ? '<span>' + company.address + '</span><br>' : ''}
-          ${company.phone ? '<span>' + company.phone + '</span><br>' : ''}
+          ${buildPhoneString(company) !== 'N/A' ? '<span>' + buildPhoneString(company) + '</span><br>' : ''}
           ${company.email ? '<span>' + company.email + '</span><br>' : ''}
           ${company.tax_id ? '<span>Tax: ' + company.tax_id + '</span>' : ''}
         </div>
@@ -3510,7 +3510,7 @@ ${logoHtml ? `<div style="margin-bottom:15px">${logoHtml}</div>` : ''}
 <div class="info-row">
   <div class="info-box"><h3>${lang==='he'?'פרטי החברה':'Company Details'}</h3>
     <p><strong>${lang==='he'?'שם':'Name'}:</strong> ${company.company_name||''}</p>
-    <p><strong>${lang==='he'?'טלפון':'Phone'}:</strong> ${company.phone||''}</p>
+    <p><strong>${lang==='he'?'טלפון':'Phone'}:</strong> ${buildPhoneString(company)}</p>
     <p><strong>${lang==='he'?'אימייל':'Email'}:</strong> ${company.email||''}</p>
   </div>
   <div class="info-box"><h3>${lang==='he'?'פרטי הלקוח':'Customer Details'}</h3>
@@ -3613,7 +3613,7 @@ ${tx?.notes?`<p><strong>${lang==='he'?'הערות':'Notes'}:</strong> ${tx.notes
       const logoHtmlSignature = logoSrc ? `<tr><td colspan="2" style="padding-top:8px;text-align:left;"><img src="${logoSrc}" alt="${company.company_name||''}" style="max-height:60px;max-width:200px;object-fit:contain;"></td></tr>` : '';
       signatureHtml = `<table style="font-size:13px;color:#333;line-height:1.6;">
         <tr><td colspan="2" style="font-weight:700;font-size:16px;padding-bottom:12px;color:#1a1a1a;">${company.company_name || 'WorldSecure'}</td></tr>
-        ${company.phone ? `<tr><td style="padding-right:8px;color:#666;">📞</td><td>${company.phone}</td></tr>` : ''}
+        ${buildPhoneString(company) ? `<tr><td style="padding-right:8px;color:#666;">📞</td><td>${buildPhoneString(company)}</td></tr>` : ''}
         ${company.email ? `<tr><td style="padding-right:8px;color:#666;">✉️</td><td>${company.email}</td></tr>` : ''}
         ${company.website ? `<tr><td colspan="2"><a href="${company.website}" target="_blank" style="color:#1a73e8;text-decoration:none;font-weight:600;">${company.website}</a></td></tr>` : ''}
         ${logoHtmlSignature}

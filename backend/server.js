@@ -469,7 +469,7 @@ app.post('/api/send-email', authenticateToken, async (req, res) => {
       }
       signatureHtml = `<table style="font-size:13px;color:#333;line-height:1.6;">
         <tr><td colspan="2" style="font-weight:700;font-size:16px;padding-bottom:12px;color:#1a1a1a;">${company.company_name || 'WorldSecure'}</td></tr>
-        ${company.phone ? `<tr><td style="padding-right:8px;color:#666;">📞</td><td>${company.phone}</td></tr>` : ''}
+        ${buildPhoneString(company) ? `<tr><td style="padding-right:8px;color:#666;">📞</td><td>${buildPhoneString(company)}</td></tr>` : ''}
         ${company.email ? `<tr><td style="padding-right:8px;color:#666;">✉️</td><td>${company.email}</td></tr>` : ''}
         ${company.website ? `<tr><td colspan="2"><a href="${company.website}" target="_blank" style="color:#1a73e8;text-decoration:none;font-weight:600;">${company.website}</a></td></tr>` : ''}
         ${logoHtmlSignature}
@@ -3352,7 +3352,7 @@ app.get('/api/inbound/:id/receipt-note', async (req, res) => {
         <div style="font-size:14px; font-weight:bold; color:#1a6fa8;">${company.company_name || ''}</div>
         <div style="font-size:10px; color:#888; direction:ltr; text-align:left; line-height:1.6;">
           ${company.address ? '<span>' + company.address + '</span><br>' : ''}
-          ${company.phone ? '<span>' + company.phone + '</span><br>' : ''}
+          ${buildPhoneString(company) !== 'N/A' ? '<span>' + buildPhoneString(company) + '</span><br>' : ''}
           ${company.email ? '<span>' + company.email + '</span><br>' : ''}
           ${company.tax_id ? '<span>Tax: ' + company.tax_id + '</span>' : ''}
         </div>
