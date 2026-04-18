@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import axios from 'axios';
 import { useLanguage } from '../utils/LanguageContext';
 import { useAuth } from '../utils/AuthContext';
@@ -30,6 +30,9 @@ function WarehouseReports() {
   }, []);
 
   // ── State: דוח 1 - מלאי נוכחי ──
+  const inventoryRef = useRef(null);
+  const valueRef = useRef(null);
+  const turnoverRef = useRef(null);
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [inventoryData, setInventoryData] = useState(null);
   const [inventoryLoading, setInventoryLoading] = useState(false);
@@ -465,7 +468,7 @@ function WarehouseReports() {
       </div>
 
       {/* ── דוח 1: מלאי נוכחי ── */}
-      <div style={{ marginBottom: '1rem' }}>
+      <div ref={inventoryRef} style={{ marginBottom: '1rem' }}>
         <AccordionBtn open={inventoryOpen} onClick={toggleInventory} color={{ base: '#007bff', dark: '#0056b3' }}>
           📦 {t('current_inventory') || 'מלאי נוכחי'}
         </AccordionBtn>
@@ -651,14 +654,14 @@ function WarehouseReports() {
                   </div>
                   {totalPages > 1 && inventoryPageSize !== 'all' && (
                     <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
-                      <button onClick={() => setInventoryCurrentPage(1)} disabled={inventoryCurrentPage === 1}
+                      <button onClick={() => { setInventoryCurrentPage(1); inventoryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} disabled={inventoryCurrentPage === 1}
                         style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: inventoryCurrentPage === 1 ? '#f3f4f6' : '#fff', cursor: inventoryCurrentPage === 1 ? 'default' : 'pointer' }}>«</button>
-                      <button onClick={() => setInventoryCurrentPage(p => Math.max(1, p - 1))} disabled={inventoryCurrentPage === 1}
+                      <button onClick={() => { setInventoryCurrentPage(p => Math.max(1, p - 1)); inventoryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} disabled={inventoryCurrentPage === 1}
                         style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: inventoryCurrentPage === 1 ? '#f3f4f6' : '#fff', cursor: inventoryCurrentPage === 1 ? 'default' : 'pointer' }}>‹</button>
                       <span style={{ fontSize: '0.85rem', padding: '0 0.3rem' }}>{inventoryCurrentPage} / {totalPages}</span>
-                      <button onClick={() => setInventoryCurrentPage(p => Math.min(totalPages, p + 1))} disabled={inventoryCurrentPage === totalPages}
+                      <button onClick={() => { setInventoryCurrentPage(p => Math.min(totalPages, p + 1)); inventoryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} disabled={inventoryCurrentPage === totalPages}
                         style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: inventoryCurrentPage === totalPages ? '#f3f4f6' : '#fff', cursor: inventoryCurrentPage === totalPages ? 'default' : 'pointer' }}>›</button>
-                      <button onClick={() => setInventoryCurrentPage(totalPages)} disabled={inventoryCurrentPage === totalPages}
+                      <button onClick={() => { setInventoryCurrentPage(totalPages); inventoryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} disabled={inventoryCurrentPage === totalPages}
                         style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: inventoryCurrentPage === totalPages ? '#f3f4f6' : '#fff', cursor: inventoryCurrentPage === totalPages ? 'default' : 'pointer' }}>»</button>
                     </div>
                   )}
@@ -996,7 +999,7 @@ function WarehouseReports() {
 
       {/* ── דוח 5: ערך מלאי כולל (Admin only) ── */}
       {isAdmin && window.location.pathname.startsWith('/admin') && (
-      <div style={{ marginBottom: '1rem' }}>
+      <div ref={valueRef} style={{ marginBottom: '1rem' }}>
         <AccordionBtn open={valueOpen} onClick={toggleValue} color={{ base: '#20c997', dark: '#12b886' }}>
           💰 {t('inventory_value_report') || 'Inventory Value Report'}
         </AccordionBtn>
@@ -1138,14 +1141,14 @@ function WarehouseReports() {
                   </div>
                   {valuePageSize !== 'all' && totalPages > 1 && (
                     <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
-                      <button onClick={() => setValueCurrentPage(1)} disabled={valueCurrentPage === 1}
+                      <button onClick={() => { setValueCurrentPage(1); valueRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} disabled={valueCurrentPage === 1}
                         style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: valueCurrentPage === 1 ? '#f3f4f6' : '#fff', cursor: valueCurrentPage === 1 ? 'default' : 'pointer' }}>«</button>
-                      <button onClick={() => setValueCurrentPage(p => Math.max(1, p - 1))} disabled={valueCurrentPage === 1}
+                      <button onClick={() => { setValueCurrentPage(p => Math.max(1, p - 1)); valueRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} disabled={valueCurrentPage === 1}
                         style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: valueCurrentPage === 1 ? '#f3f4f6' : '#fff', cursor: valueCurrentPage === 1 ? 'default' : 'pointer' }}>‹</button>
                       <span style={{ fontSize: '0.85rem', padding: '0 0.3rem' }}>{valueCurrentPage} / {totalPages}</span>
-                      <button onClick={() => setValueCurrentPage(p => Math.min(totalPages, p + 1))} disabled={valueCurrentPage === totalPages}
+                      <button onClick={() => { setValueCurrentPage(p => Math.min(totalPages, p + 1)); valueRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} disabled={valueCurrentPage === totalPages}
                         style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: valueCurrentPage === totalPages ? '#f3f4f6' : '#fff', cursor: valueCurrentPage === totalPages ? 'default' : 'pointer' }}>›</button>
-                      <button onClick={() => setValueCurrentPage(totalPages)} disabled={valueCurrentPage === totalPages}
+                      <button onClick={() => { setValueCurrentPage(totalPages); valueRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} disabled={valueCurrentPage === totalPages}
                         style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: valueCurrentPage === totalPages ? '#f3f4f6' : '#fff', cursor: valueCurrentPage === totalPages ? 'default' : 'pointer' }}>»</button>
                     </div>
                   )}
@@ -1172,7 +1175,7 @@ function WarehouseReports() {
 
       {/* ── דוח 6: Inventory Turnover (Admin only) ── */}
       {isAdmin && window.location.pathname.startsWith('/admin') && (
-      <div style={{ marginBottom: '1rem' }}>
+      <div ref={turnoverRef} style={{ marginBottom: '1rem' }}>
         <AccordionBtn open={turnoverOpen} onClick={toggleTurnover} color={{ base: '#e67e22', dark: '#ca6f1e' }}>
           🔁 {t('inventory_turnover_report') || 'Inventory Turnover Report'}
         </AccordionBtn>
@@ -1303,14 +1306,14 @@ function WarehouseReports() {
                   </div>
                   {turnoverPageSize !== 'all' && totalPages > 1 && (
                     <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
-                      <button onClick={() => setTurnoverCurrentPage(1)} disabled={turnoverCurrentPage === 1}
+                      <button onClick={() => { setTurnoverCurrentPage(1); turnoverRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} disabled={turnoverCurrentPage === 1}
                         style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: turnoverCurrentPage === 1 ? '#f3f4f6' : '#fff', cursor: turnoverCurrentPage === 1 ? 'default' : 'pointer' }}>«</button>
-                      <button onClick={() => setTurnoverCurrentPage(p => Math.max(1, p - 1))} disabled={turnoverCurrentPage === 1}
+                      <button onClick={() => { setTurnoverCurrentPage(p => Math.max(1, p - 1)); turnoverRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} disabled={turnoverCurrentPage === 1}
                         style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: turnoverCurrentPage === 1 ? '#f3f4f6' : '#fff', cursor: turnoverCurrentPage === 1 ? 'default' : 'pointer' }}>‹</button>
                       <span style={{ fontSize: '0.85rem', padding: '0 0.3rem' }}>{turnoverCurrentPage} / {totalPages}</span>
-                      <button onClick={() => setTurnoverCurrentPage(p => Math.min(totalPages, p + 1))} disabled={turnoverCurrentPage === totalPages}
+                      <button onClick={() => { setTurnoverCurrentPage(p => Math.min(totalPages, p + 1)); turnoverRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} disabled={turnoverCurrentPage === totalPages}
                         style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: turnoverCurrentPage === totalPages ? '#f3f4f6' : '#fff', cursor: turnoverCurrentPage === totalPages ? 'default' : 'pointer' }}>›</button>
-                      <button onClick={() => setTurnoverCurrentPage(totalPages)} disabled={turnoverCurrentPage === totalPages}
+                      <button onClick={() => { setTurnoverCurrentPage(totalPages); turnoverRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} disabled={turnoverCurrentPage === totalPages}
                         style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: turnoverCurrentPage === totalPages ? '#f3f4f6' : '#fff', cursor: turnoverCurrentPage === totalPages ? 'default' : 'pointer' }}>»</button>
                     </div>
                   )}
