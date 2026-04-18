@@ -1493,9 +1493,18 @@ app.put('/api/products/:id', authenticateToken, (req, res) => {
                 const existingSkus = existingVariants.map(v => v.sku);
 
                 // מחק דגמים שלא נמצאים יותר בהגדרה החדשה
-                toDelete.forEach(v => {
-                  db.run('DELETE FROM products WHERE id=?', [v.id]);
-                });
+                // + רשום ב-deleted_products כדי שהסינק לא יחזיר אותם מהענן
+                const deleteNext = (di, afterDelete) => {
+                  if (di >= toDelete.length) { afterDelete(); return; }
+                  const v = toDelete[di];
+                  db.run('DELETE FROM products WHERE id=?', [v.id], () => {
+                    db.run('CREATE TABLE IF NOT EXISTS deleted_products (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)', () => {
+                      db.run('INSERT OR IGNORE INTO deleted_products (id) VALUES (?)', [v.id], () => {
+                        deleteNext(di + 1, afterDelete);
+                      });
+                    });
+                  });
+                };
 
                 // צור דגמים חדשים שלא קיימים עדיין
                 const toCreate = combos.filter(combo => !existingSkus.includes(`${skuBase}-${combo.join('-')}`));
@@ -1523,11 +1532,13 @@ app.put('/api/products/:id', authenticateToken, (req, res) => {
                     }
                   });
                 };
-                if (toCreate.length > 0) {
-                insertNext(0, () => res.json({ message: 'Product updated', sku: finalSku }));
-              } else {
-                res.json({ message: 'Product updated', sku: finalSku });
-              }
+                deleteNext(0, () => {
+                  if (toCreate.length > 0) {
+                    insertNext(0, () => res.json({ message: 'Product updated', sku: finalSku }));
+                  } else {
+                    res.json({ message: 'Product updated', sku: finalSku });
+                  }
+                });
               });
             }
           } catch (e) {
