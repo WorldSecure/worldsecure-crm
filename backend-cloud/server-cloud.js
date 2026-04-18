@@ -2556,7 +2556,11 @@ app.post('/api/sync/inbound', authenticateToken, async (req, res) => {
       );
     }
 
+    // הכנס רק items של עסקאות שנשלחו מהמקומי (localIds)
+    // מנע כפל של items של עסקאות שנוצרו בענן
+    const localIdSet = new Set((localIds||[]).map(Number));
     for (const item of (items||[])) {
+      if (!localIdSet.has(Number(item.transaction_id))) continue;
       await client.query(`
         INSERT INTO inbound_items (id, transaction_id, product_id, quantity, notes)
         VALUES ($1,$2,$3,$4,$5)
@@ -2605,7 +2609,10 @@ app.post('/api/sync/outbound', authenticateToken, async (req, res) => {
       );
     }
 
+    // הכנס רק items של עסקאות שנשלחו מהמקומי (localIds)
+    const localIdSetOut = new Set((localIds||[]).map(Number));
     for (const item of (items||[])) {
+      if (!localIdSetOut.has(Number(item.transaction_id))) continue;
       await client.query(`
         INSERT INTO outbound_items
           (id, transaction_id, product_id, quantity, use_packaging, items_per_carton,
