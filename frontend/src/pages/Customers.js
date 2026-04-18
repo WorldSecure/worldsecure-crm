@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useLanguage } from '../utils/LanguageContext';
 import { useAuth } from '../utils/AuthContext';
@@ -51,6 +51,9 @@ function Customers() {
   const [showModal, setShowModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [pageSize, setPageSize] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+  const tableRef = useRef(null);
   const [sortField, setSortField] = useState('name');
   const [sortDirection, setSortDirection] = useState('asc');
   const [contacts, setContacts] = useState([{ name: '', phones: [''], email: '', show_in_table: true }]);
@@ -225,13 +228,19 @@ function Customers() {
     return <div className="loading"><div className="spinner"></div></div>;
   }
 
+  const _paginatedAll = getSortedCustomers(filteredCustomers);
+  const totalFiltered = _paginatedAll.length;
+  const _pageSize = pageSize === 'all' ? totalFiltered : pageSize;
+  const totalPages = _pageSize > 0 ? Math.ceil(totalFiltered / _pageSize) : 1;
+  const paginatedCustomer = _paginatedAll.slice((currentPage - 1) * _pageSize, currentPage * _pageSize);
+
   return (
     <div>
       <div className="page-header">
         <h2>{t('customers')}</h2>
       </div>
 
-      <div className="card">
+      <div className="card" ref={tableRef}>
         <div className="card-header">
           <h3 className="card-title">{t('customers')}</h3>
           {isAdmin && (
@@ -253,17 +262,17 @@ function Customers() {
             className="form-input"
             placeholder={t('search')}
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
           />
         </div>
 
         {isMobile ? (
           /* ===== MOBILE CARD VIEW ===== */
           <div style={{ padding: '0.5rem' }}>
-            {getSortedCustomers(filteredCustomers).length === 0 ? (
+            {paginatedCustomer.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>{t('no_data')}</div>
             ) : (
-              getSortedCustomers(filteredCustomers).map(customer => (
+              paginatedCustomer.map(customer => (
                 <div key={customer.id} style={{
                   background: '#fff',
                   border: '1px solid #e0e0e0',
@@ -363,12 +372,12 @@ function Customers() {
               </tr>
             </thead>
             <tbody>
-              {getSortedCustomers(filteredCustomers).length === 0 ? (
+              {paginatedCustomer.length === 0 ? (
                 <tr>
                   <td colSpan={isAdmin ? "6" : "3"} className="text-center">{t('no_data')}</td>
                 </tr>
               ) : (
-                getSortedCustomers(filteredCustomers).map(customer => (
+                paginatedCustomer.map(customer => (
                   <tr key={customer.id}>
                     <td>
                       <strong>
@@ -430,6 +439,32 @@ function Customers() {
               )}
             </tbody>
           </table>
+          </div>
+        )}
+        {/* ── Pagination ── */}
+        {totalPages > 1 && pageSize !== 'all' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', justifyContent: 'space-between', padding: '0.75rem 0 0.25rem', borderTop: '1px solid #e5e7eb', marginTop: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: '#6b7280' }}>
+              <span>{totalFiltered} {t('items') || 'items'}</span>
+              <span style={{ margin: '0 0.25rem' }}>|</span>
+              <label>{t('per_page') || 'Per page'}:</label>
+              <select value={pageSize} onChange={e => { setPageSize(e.target.value === 'all' ? 'all' : parseInt(e.target.value)); setCurrentPage(1); }}
+                style={{ fontSize: '0.85rem', padding: '0.15rem 0.3rem', border: '1px solid #d1d5db', borderRadius: '4px' }}>
+                {[10, 25, 50].map(n => <option key={n} value={n}>{n}</option>)}
+                <option value="all">{t('all') || 'All'}</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+              <button onClick={() => { setCurrentPage(1); tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} disabled={currentPage === 1}
+                style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: currentPage === 1 ? '#f3f4f6' : '#fff', cursor: currentPage === 1 ? 'default' : 'pointer' }}>«</button>
+              <button onClick={() => { setCurrentPage(p => Math.max(1, p - 1)); tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} disabled={currentPage === 1}
+                style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: currentPage === 1 ? '#f3f4f6' : '#fff', cursor: currentPage === 1 ? 'default' : 'pointer' }}>‹</button>
+              <span style={{ fontSize: '0.85rem', padding: '0 0.3rem' }}>{currentPage} / {totalPages}</span>
+              <button onClick={() => { setCurrentPage(p => Math.min(totalPages, p + 1)); tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} disabled={currentPage === totalPages}
+                style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: currentPage === totalPages ? '#f3f4f6' : '#fff', cursor: currentPage === totalPages ? 'default' : 'pointer' }}>›</button>
+              <button onClick={() => { setCurrentPage(totalPages); tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} disabled={currentPage === totalPages}
+                style={{ padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid #d1d5db', background: currentPage === totalPages ? '#f3f4f6' : '#fff', cursor: currentPage === totalPages ? 'default' : 'pointer' }}>»</button>
+            </div>
           </div>
         )}
       </div>
