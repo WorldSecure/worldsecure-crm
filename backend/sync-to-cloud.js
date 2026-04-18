@@ -1026,12 +1026,34 @@ async function pullDeletionsFromCloud() {
         await sqliteRun('DELETE FROM inbound_items WHERE transaction_id = ?', [d.entity_id]).catch(() => {});
         await sqliteRun('DELETE FROM inbound_transactions WHERE id = ?', [d.entity_id]).catch(() => {});
         await sqliteRun('DELETE FROM deleted_inbound WHERE id = ?', [d.entity_id]).catch(() => {});
+        // מחק קובץ PDF של תעודת קבלה
+        try {
+          const path = require('path');
+          const fs = require('fs');
+          const docsDir = path.join(__dirname, 'documents', 'receipt');
+          if (fs.existsSync(docsDir)) {
+            const files = fs.readdirSync(docsDir).filter(f => f.includes(`_ID${d.entity_id}_`) || f.includes(`_${d.entity_id}_`));
+            files.forEach(f => { try { fs.unlinkSync(path.join(docsDir, f)); } catch(e) {} });
+          }
+        } catch(e) {}
+        await sqliteRun('DELETE FROM documents WHERE type=? AND reference_id=?', ['receipt', d.entity_id]).catch(() => {});
         handled.push(d);
         log(`  ↳ pulled deletion: inbound #${d.entity_id}`);
       } else if (d.entity_type === 'outbound') {
         await sqliteRun('DELETE FROM outbound_items WHERE transaction_id = ?', [d.entity_id]).catch(() => {});
         await sqliteRun('DELETE FROM outbound_transactions WHERE id = ?', [d.entity_id]).catch(() => {});
         await sqliteRun('DELETE FROM deleted_outbound WHERE id = ?', [d.entity_id]).catch(() => {});
+        // מחק קובץ PDF של תעודת משלוח
+        try {
+          const path = require('path');
+          const fs = require('fs');
+          const docsDir = path.join(__dirname, 'documents', 'delivery');
+          if (fs.existsSync(docsDir)) {
+            const files = fs.readdirSync(docsDir).filter(f => f.includes(`_ID${d.entity_id}_`) || f.includes(`_${d.entity_id}_`));
+            files.forEach(f => { try { fs.unlinkSync(path.join(docsDir, f)); } catch(e) {} });
+          }
+        } catch(e) {}
+        await sqliteRun('DELETE FROM documents WHERE type=? AND reference_id=?', ['delivery', d.entity_id]).catch(() => {});
         handled.push(d);
         log(`  ↳ pulled deletion: outbound #${d.entity_id}`);
       } else if (d.entity_type === 'product') {
