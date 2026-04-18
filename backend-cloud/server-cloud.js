@@ -3144,8 +3144,9 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
         const cloudMetaTs = existing.rows[0]?.meta_updated_at;
         const localQtyTs  = r.quantity_updated_at;
         const localMetaTs = r.meta_updated_at;
-        const useLocalQty  = !cloudQtyTs  || (localQtyTs  && localQtyTs  > cloudQtyTs.toISOString().slice(0,19));
-        const useLocalMeta = !cloudMetaTs || (localMetaTs && localMetaTs > cloudMetaTs.toISOString().slice(0,19));
+        const normalizeTs = (v) => v ? String(v).replace(' ', 'T').slice(0, 19) : '';
+        const useLocalQty  = !cloudQtyTs  || (localQtyTs  && normalizeTs(localQtyTs)  > normalizeTs(cloudQtyTs));
+        const useLocalMeta = !cloudMetaTs || (localMetaTs && normalizeTs(localMetaTs) > normalizeTs(cloudMetaTs));
         await client.query(`
           INSERT INTO products (id, sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at, supplier_id, manufacturer_id, is_parent, variant_attrs, parent_id, created_at, product_type_code)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
