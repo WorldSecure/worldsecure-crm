@@ -1023,6 +1023,11 @@ async function pullDeletionsFromCloud() {
         handled.push(d);
         log(`  ↳ pulled deletion: support_ticket #${d.entity_id}`);
       } else if (d.entity_type === 'inbound') {
+        // החזר כמויות למלאי לפני מחיקה
+        const inboundItems = await sqliteAll('SELECT product_id, quantity FROM inbound_items WHERE transaction_id = ?', [d.entity_id]).catch(() => []);
+        for (const item of inboundItems) {
+          await sqliteRun("UPDATE products SET quantity = quantity - ?, quantity_updated_at = datetime('now') WHERE id = ?", [item.quantity, item.product_id]).catch(() => {});
+        }
         await sqliteRun('DELETE FROM inbound_items WHERE transaction_id = ?', [d.entity_id]).catch(() => {});
         await sqliteRun('DELETE FROM inbound_transactions WHERE id = ?', [d.entity_id]).catch(() => {});
         await sqliteRun('DELETE FROM deleted_inbound WHERE id = ?', [d.entity_id]).catch(() => {});
@@ -1040,6 +1045,11 @@ async function pullDeletionsFromCloud() {
         handled.push(d);
         log(`  ↳ pulled deletion: inbound #${d.entity_id}`);
       } else if (d.entity_type === 'outbound') {
+        // החזר כמויות למלאי לפני מחיקה
+        const outboundItems = await sqliteAll('SELECT product_id, quantity FROM outbound_items WHERE transaction_id = ?', [d.entity_id]).catch(() => []);
+        for (const item of outboundItems) {
+          await sqliteRun("UPDATE products SET quantity = quantity + ?, quantity_updated_at = datetime('now') WHERE id = ?", [item.quantity, item.product_id]).catch(() => {});
+        }
         await sqliteRun('DELETE FROM outbound_items WHERE transaction_id = ?', [d.entity_id]).catch(() => {});
         await sqliteRun('DELETE FROM outbound_transactions WHERE id = ?', [d.entity_id]).catch(() => {});
         await sqliteRun('DELETE FROM deleted_outbound WHERE id = ?', [d.entity_id]).catch(() => {});
