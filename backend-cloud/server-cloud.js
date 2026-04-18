@@ -247,6 +247,15 @@ app.patch('/api/products/:id/discontinue', authenticateToken, async (req, res) =
 });
 
 // ── Product Type Codes CRUD ───────────────────────────────────────────────────
+// ── Helper: build phone string from primary flags ─────────────────────────────
+const buildPhoneString = (company) => {
+  const phones = [];
+  if (company.phone && company.phone1_primary) phones.push(company.phone);
+  if (company.phone2 && company.phone2_primary) phones.push(company.phone2);
+  if (company.phone3 && company.phone3_primary) phones.push(company.phone3);
+  return phones.length > 0 ? phones.join(', ') : (company.phone || 'N/A');
+};
+
 app.get('/api/product-type-codes', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(`
@@ -1465,13 +1474,7 @@ app.get('/api/outbound/:id/delivery-note', authenticateToken, async (req, res) =
     return `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${date.getFullYear()} ${h}:${m}`;
   };
 
-  const buildPhoneString = (company) => {
-    const phones = [];
-    if (company.phone && company.phone1_primary) phones.push(company.phone);
-    if (company.phone2 && company.phone2_primary) phones.push(company.phone2);
-    if (company.phone3 && company.phone3_primary) phones.push(company.phone3);
-    return phones.length > 0 ? phones.join(', ') : (company.phone || 'N/A');
-  };
+  // buildPhoneString is defined globally above
 
   const translations = {
     he: { title:'תעודת משלוח', documentNumber:'מספר', date:'תאריך', companyDetails:'פרטי החברה', customerDetails:'פרטי הלקוח', name:'שם', address:'כתובת', phone:'טלפון', email:'אימייל', contactPerson:'איש קשר', taxId:'ע.מ / ח.פ', status:'סטטוס', items:'פריטים', sku:'מק"ט', productName:'שם מוצר', quantity:'כמות', notes:'הערות', preparedBy:'נערך על ידי', print:'הדפס / שמור כ-PDF', close:'סגור', sendEmail:'שלח במייל', emailTo:'כתובת מייל', emailSubject:'נושא', emailBody:'הודעה', emailSend:'שלח', emailCancel:'ביטול', emailSuccess:'המייל נשלח בהצלחה!', emailError:'שגיאה בשליחת המייל', emailSmtpMissing:'יש להגדיר SMTP בהגדרות החברה', dir:'rtl' },
