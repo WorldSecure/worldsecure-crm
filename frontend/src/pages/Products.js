@@ -46,11 +46,36 @@ function Products() {
     setTranslating(true);
     setTranslateResult(null);
     try {
-      const res = await axios.post('/api/products/translate-existing');
+      const res = await axios.post('/api/products/translate-existing', { force: false });
       setTranslateResult(res.data);
       if (res.data.count > 0) {
         fetchProducts();
-        // רענן גם categories, subcategories, attrTypes, productTypes
+        const [catsRes, subsRes, attrsRes, ptRes] = await Promise.all([
+          axios.get('/api/categories'),
+          axios.get('/api/subcategories'),
+          axios.get('/api/variant-attribute-types'),
+          axios.get('/api/product-type-codes'),
+        ]);
+        setCategories((catsRes.data || []).filter(c => !c.is_deleted));
+        setSubcategories((subsRes.data || []).filter(s => !s.is_deleted));
+        setAttrTypes((attrsRes.data || []).filter(a => !a.is_deleted));
+        setProductTypeCodes((ptRes.data || []).filter(p => !p.is_deleted));
+      }
+    } catch (e) {
+      setTranslateResult({ error: e.message });
+    }
+    setTranslating(false);
+  };
+
+  const handleTranslateAll = async () => {
+    if (!window.confirm('Translate ALL items again? This will overwrite existing translations.')) return;
+    setTranslating(true);
+    setTranslateResult(null);
+    try {
+      const res = await axios.post('/api/products/translate-existing', { force: true });
+      setTranslateResult(res.data);
+      if (res.data.count > 0) {
+        fetchProducts();
         const [catsRes, subsRes, attrsRes, ptRes] = await Promise.all([
           axios.get('/api/categories'),
           axios.get('/api/subcategories'),
@@ -190,8 +215,8 @@ function Products() {
       ]);
       
       setProducts(productsRes.data);
-      setCategories((categoriesRes.data || []).filter(c => !c.is_deleted));
-      setSubcategories((subcategoriesRes.data || []).filter(s => !s.is_deleted));
+      setCategories(categoriesRes.data);
+      setSubcategories(subcategoriesRes.data);
       setSuppliers(suppliersRes.data);
       setManufacturers(manufacturersRes.data);
       setAttrTypes(attrTypesRes.data || []);
@@ -213,14 +238,14 @@ function Products() {
   const fetchAttrTypes = async () => {
     try {
       const res = await axios.get('/api/variant-attribute-types');
-      setAttrTypes((res.data || []).filter(a => !a.is_deleted));
+      setAttrTypes(res.data || []);
     } catch (e) { console.error(e); }
   };
 
   const fetchProductTypeCodes = async () => {
     try {
       const res = await axios.get('/api/product-type-codes');
-      setProductTypeCodes((res.data || []).filter(p => !p.is_deleted));
+      setProductTypeCodes(res.data || []);
     } catch (e) { console.error(e); }
   };
 
@@ -420,7 +445,7 @@ function Products() {
         }
       }
       const res = await axios.get('/api/categories');
-      setCategories((res.data || []).filter(c => !c.is_deleted));
+      setCategories(res.data);
       setImportCsvResultCat({ success, skipped, errors });
     } catch(e) { setImportCsvResultCat({ error: e.message }); }
     setImportingCsvCat(false);
@@ -463,7 +488,7 @@ function Products() {
         }
       }
       const res = await axios.get('/api/subcategories');
-      setSubcategories((res.data || []).filter(s => !s.is_deleted));
+      setSubcategories(res.data);
       setImportCsvResultSub({ success, skipped, errors });
     } catch(e) { setImportCsvResultSub({ error: e.message }); }
     setImportingCsvSub(false);
@@ -501,7 +526,7 @@ function Products() {
         }
       }
       const res = await axios.get('/api/variant-attribute-types');
-      setAttrTypes((res.data || []).filter(a => !a.is_deleted));
+      setAttrTypes(res.data);
       setImportCsvResultAttr({ success, skipped, errors });
     } catch(e) { setImportCsvResultAttr({ error: e.message }); }
     setImportingCsvAttr(false);
@@ -544,7 +569,7 @@ function Products() {
         await axios.post('/api/categories', payload);
       }
       const res = await axios.get('/api/categories');
-      setCategories((res.data || []).filter(c => !c.is_deleted));
+      setCategories(res.data);
       setEditingCategory(null);
       setCategoryForm({ code: '', name: '' });
     } catch(e) { alert(e.response?.data?.error || e.message); }
@@ -556,7 +581,7 @@ function Products() {
     try {
       await axios.delete(`/api/categories/${id}`);
       const res = await axios.get('/api/categories');
-      setCategories((res.data || []).filter(c => !c.is_deleted));
+      setCategories(res.data);
       if (editingCategory?.id === id) {
         setEditingCategory(null);
         setCategoryForm({ code: '', name: '' });
@@ -611,7 +636,7 @@ function Products() {
         await axios.post('/api/subcategories', payload);
       }
       const res = await axios.get('/api/subcategories');
-      setSubcategories((res.data || []).filter(s => !s.is_deleted));
+      setSubcategories(res.data);
       setEditingSubcategory(null);
       setSubcategoryForm({ code: '', name: '' });
     } catch(e) { alert(e.response?.data?.error || e.message); }
@@ -623,7 +648,7 @@ function Products() {
     try {
       await axios.delete(`/api/subcategories/${id}`);
       const res = await axios.get('/api/subcategories');
-      setSubcategories((res.data || []).filter(s => !s.is_deleted));
+      setSubcategories(res.data);
       if (editingSubcategory?.id === id) {
         setEditingSubcategory(null);
         setSubcategoryForm({ code: '', name: '' });
@@ -1004,14 +1029,13 @@ function Products() {
                 </button>
                 )}
                 {isAdmin && (
+                <>
                 <button
                   className="btn btn-secondary"
                   onClick={handleTranslateMissing}
                   disabled={translating}
-                  title={translateResult && !translating && translateResult.details
-                    ? `Products: ${translateResult.details.products} | Categories: ${translateResult.details.categories} | Subcategories: ${translateResult.details.subcategories} | Attributes: ${translateResult.details.attributes} | Product Types: ${translateResult.details.productTypes}`
-                    : 'Translate missing names (products, categories, subcategories, attributes, product types)'}
-                  style={{ background: translating ? '#6c757d' : '#17a2b8', color: 'white', border: 'none' }}
+                  title="Translate missing translations only"
+                  style={{ background: translating ? '#6c757d' : '#17a2b8', color: 'white', border: 'none', marginRight: '4px' }}
                 >
                   {translating ? '⏳ ...' : '🌐'}
                   {translateResult && !translating && (
@@ -1020,6 +1044,16 @@ function Products() {
                     </span>
                   )}
                 </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={handleTranslateAll}
+                  disabled={translating}
+                  title="Re-translate ALL items (overwrite existing)"
+                  style={{ background: translating ? '#6c757d' : '#e67e22', color: 'white', border: 'none' }}
+                >
+                  {translating ? '⏳' : '🔄'}
+                </button>
+                </>
                 )}
                 {isAdmin && (
                 <button className="btn btn-primary" onClick={() => { resetForm(); setShowModal(true); }}>
