@@ -1236,6 +1236,45 @@ app.get('/api/outbound/:id/details', authenticateToken, async (req, res) => {
 
 
 // ── DELETE: Inbound Transaction ───────────────────────────────────────────────
+// ── PUT: Edit Inbound Transaction ────────────────────────────────────────────
+app.put('/api/inbound/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { supplier_id, supplier_type, casual_supplier_name, items, notes, qr_code_id } = req.body;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // 1. בטל כמויות ישנות
+    const oldItems = await client.query('SELECT product_id, quantity FROM inbound_items WHERE transaction_id=$1', [id]);
+    for (const item of oldItems.rows) {
+      await client.query('UPDATE products SET quantity = quantity - $1, quantity_updated_at = NOW() WHERE id=$2', [item.quantity, item.product_id]);
+    }
+    // 2. מחק items ישנים
+    await client.query('DELETE FROM inbound_items WHERE transaction_id=$1', [id]);
+    // 3. עדכן header
+    await client.query(
+      'UPDATE inbound_transactions SET supplier_id=$1, supplier_type=$2, casual_supplier_name=$3, notes=$4, qr_code_id=$5 WHERE id=$6',
+      [supplier_id, supplier_type, casual_supplier_name, notes, qr_code_id||null, id]
+    );
+    // 4. הוסף items חדשים + עדכן מלאי
+    for (const item of items) {
+      await client.query(
+        'INSERT INTO inbound_items (transaction_id, product_id, quantity, notes) VALUES ($1,$2,$3,$4)',
+        [id, item.product_id, item.quantity, item.notes||null]
+      );
+      await client.query(
+        'UPDATE products SET quantity = quantity + $1, quantity_updated_at = NOW() WHERE id = $2',
+        [item.quantity, item.product_id]
+      );
+    }
+    await client.query('COMMIT');
+    await logActivity(req.user.id, 'UPDATE_INBOUND', 'inbound', id, { items: items.length });
+    res.json({ id: parseInt(id), message: 'Inbound transaction updated' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally { client.release(); }
+});
+
 app.delete('/api/inbound/:id', authenticateToken, async (req, res) => {
   const client = await pool.connect();
   try {
@@ -1259,6 +1298,54 @@ app.delete('/api/inbound/:id', authenticateToken, async (req, res) => {
 });
 
 // ── DELETE: Outbound Transaction ──────────────────────────────────────────────
+// ── PUT: Edit Outbound Transaction ───────────────────────────────────────────
+app.put('/api/outbound/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { customer_id, customer_type, casual_customer_name, items, notes, status, qr_code_id } = req.body;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // 1. החזר כמויות ישנות למלאי
+    const oldItems = await client.query('SELECT product_id, quantity FROM outbound_items WHERE transaction_id=$1', [id]);
+    for (const item of oldItems.rows) {
+      await client.query('UPDATE products SET quantity = quantity + $1, quantity_updated_at = NOW() WHERE id=$2', [item.quantity, item.product_id]);
+    }
+    // 2. מחק items ישנים
+    await client.query('DELETE FROM outbound_items WHERE transaction_id=$1', [id]);
+    // 3. בדוק מלאי
+    for (const item of items) {
+      const p = await client.query('SELECT quantity FROM products WHERE id=$1', [item.product_id]);
+      if (!p.rows[0] || p.rows[0].quantity < item.quantity) {
+        await client.query('ROLLBACK');
+        client.release();
+        return res.status(400).json({ error: 'Insufficient inventory for product ' + item.product_id });
+      }
+    }
+    // 4. עדכן header
+    await client.query(
+      'UPDATE outbound_transactions SET customer_id=$1, customer_type=$2, casual_customer_name=$3, notes=$4, status=$5, qr_code_id=$6 WHERE id=$7',
+      [customer_id, customer_type, casual_customer_name, notes, status||'pending', qr_code_id||null, id]
+    );
+    // 5. הוסף items חדשים + הורד ממלאי
+    for (const item of items) {
+      await client.query(
+        `INSERT INTO outbound_items (transaction_id, product_id, quantity, use_packaging, items_per_carton, carton_weight, num_cartons, use_pallets, cartons_per_pallet, pallet_dimensions, pallet_weight, num_pallets) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [id, item.product_id, item.quantity,
+         item.use_packaging||false, item.items_per_carton||null, item.carton_weight||null,
+         item.num_cartons||null, item.use_pallets||false, item.cartons_per_pallet||null,
+         item.pallet_dimensions||null, item.pallet_weight||null, item.num_pallets||null]
+      );
+      await client.query('UPDATE products SET quantity = quantity - $1, quantity_updated_at = NOW() WHERE id = $2', [item.quantity, item.product_id]);
+    }
+    await client.query('COMMIT');
+    await logActivity(req.user.id, 'UPDATE_OUTBOUND', 'outbound', id, { items: items.length });
+    res.json({ id: parseInt(id), message: 'Outbound transaction updated' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally { client.release(); }
+});
+
 app.delete('/api/outbound/:id', authenticateToken, async (req, res) => {
   const client = await pool.connect();
   try {
