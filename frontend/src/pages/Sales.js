@@ -259,7 +259,7 @@ function Sales() {
         ...currentItem,
         product_name: product.name,
         product_sku: product.sku,
-        total: currentItem.quantity * parseFloat(String(currentItem.unit_price).replace(/,/g, ''))
+        total: parseInt(String(currentItem.quantity).replace(/,/g, '')) * parseFloat(String(currentItem.unit_price).replace(/,/g, ''))
       };
       setFormData({
         ...formData,
@@ -274,7 +274,7 @@ function Sales() {
           ...currentItem,
           product_name: product.name,
           product_sku: product.sku,
-          total: currentItem.quantity * parseFloat(String(currentItem.unit_price).replace(/,/g, ''))
+          total: parseInt(String(currentItem.quantity).replace(/,/g, '')) * parseFloat(String(currentItem.unit_price).replace(/,/g, ''))
         }]
       });
     }
@@ -1010,11 +1010,13 @@ function Sales() {
                   <div className="form-group" style={{ flex: 1 }}>
                     <label className="form-label">{t('quantity')}</label>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       className="form-input"
                       value={currentItem.quantity}
-                      onChange={(e) => setCurrentItem({...currentItem, quantity: e.target.value})}
-                      min="1"
+                      onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (raw === '' || /^\d*$/.test(raw)) { const fmt = raw.replace(/\B(?=(\d{3})+(?!\d))/g, ','); setCurrentItem({...currentItem, quantity: fmt}); } }}
+                      onBlur={(e) => { const num = parseInt(String(e.target.value).replace(/,/g, '')); if (!isNaN(num)) { setCurrentItem({...currentItem, quantity: num.toLocaleString('en-US')}); } }}
+                      style={{ textAlign: 'right', fontFamily: 'monospace' }}
                     />
                   </div>
 

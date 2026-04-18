@@ -104,14 +104,14 @@ function Outbound() {
   };
 
   const handleAddItem = () => {
-    if (!currentItem.product_id || currentItem.quantity <= 0) {
+    if (!currentItem.product_id || parseInt(String(currentItem.quantity).replace(/,/g, '')) <= 0) {
       alert(t('error') + ': ' + t('select_at_least_one'));
       return;
     }
 
     const product = products.find(p => p.id === parseInt(currentItem.product_id));
     
-    if (product.quantity < currentItem.quantity) {
+    if (product.quantity < parseInt(String(currentItem.quantity).replace(/,/g, ''))) {
       alert(t('insufficient_stock') + `! ${t('available_stock')}: ${product.quantity}`);
       return;
     }
@@ -135,6 +135,7 @@ function Outbound() {
     
     let itemWithPackaging = {
       ...currentItem,
+      quantity: parseInt(String(currentItem.quantity).replace(/,/g, '')),
       product_name: getProductName(product),
       product_sku: product.sku,
       available: product.quantity
@@ -142,10 +143,10 @@ function Outbound() {
     
     // Add packaging data if user chose to pack
     if (packagingData.use_packaging && packagingData.items_per_carton) {
-      const numCartons = Math.ceil(currentItem.quantity / parseInt(packagingData.items_per_carton));
+      const numCartons = Math.ceil(parseInt(String(currentItem.quantity).replace(/,/g, '')) / parseInt(packagingData.items_per_carton));
       // חישוב נכון: משקל ליחידה × כמות (לא num_cartons × carton_weight כי קרטון אחרון עלול להיות חלקי)
       const weightPerItem = (parseFloat(packagingData.carton_weight) || 0) / parseInt(packagingData.items_per_carton);
-      const totalCartonWeight = weightPerItem * currentItem.quantity;
+      const totalCartonWeight = weightPerItem * parseInt(String(currentItem.quantity).replace(/,/g, ''));
       
       itemWithPackaging = {
         ...itemWithPackaging,
@@ -700,11 +701,13 @@ function Outbound() {
                   <div className="form-group" style={{ flex: 1 }}>
                     <label className="form-label">{t('quantity')}</label>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       className="form-input"
                       value={currentItem.quantity}
-                      onChange={(e) => setCurrentItem({...currentItem, quantity: e.target.value})}
-                      min="1"
+                      onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (raw === '' || /^\d*$/.test(raw)) { const fmt = raw.replace(/\B(?=(\d{3})+(?!\d))/g, ','); setCurrentItem({...currentItem, quantity: fmt}); } }}
+                      onBlur={(e) => { const num = parseInt(String(e.target.value).replace(/,/g, '')); if (!isNaN(num)) { setCurrentItem({...currentItem, quantity: num.toLocaleString('en-US')}); } }}
+                      style={{ textAlign: 'right', fontFamily: 'monospace' }}
                     />
                   </div>
                 </div>
@@ -799,9 +802,9 @@ function Outbound() {
                           borderRadius: '4px',
                           marginTop: '1rem'
                         }}>
-                          <p><strong>{t('num_cartons')}:</strong> {Math.ceil(currentItem.quantity / parseInt(packagingData.items_per_carton))} {t('cartons')}</p>
+                          <p><strong>{t('num_cartons')}:</strong> {Math.ceil(parseInt(String(currentItem.quantity).replace(/,/g, '')) / parseInt(packagingData.items_per_carton))} {t('cartons')}</p>
                           {packagingData.carton_weight && (
-                            <p><strong>{t('total_carton_weight')}:</strong> {((parseFloat(packagingData.carton_weight) / parseInt(packagingData.items_per_carton)) * currentItem.quantity).toFixed(2)} ק"ג</p>
+                            <p><strong>{t('total_carton_weight')}:</strong> {((parseFloat(packagingData.carton_weight) / parseInt(packagingData.items_per_carton)) * parseInt(String(currentItem.quantity).replace(/,/g, ''))).toFixed(2)} ק"ג</p>
                           )}
                         </div>
                       )}
@@ -893,7 +896,7 @@ function Outbound() {
                               borderRadius: '4px',
                               marginTop: '1rem'
                             }}>
-                              <p><strong>{t('num_pallets')}:</strong> {Math.ceil(Math.ceil(currentItem.quantity / parseInt(packagingData.items_per_carton)) / parseInt(packagingData.cartons_per_pallet))} {t('pallets')}</p>
+                              <p><strong>{t('num_pallets')}:</strong> {Math.ceil(Math.ceil(parseInt(String(currentItem.quantity).replace(/,/g, '')) / parseInt(packagingData.items_per_carton)) / parseInt(packagingData.cartons_per_pallet))} {t('pallets')}</p>
                             </div>
                           )}
                         </div>

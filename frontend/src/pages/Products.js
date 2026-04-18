@@ -855,7 +855,7 @@ function Products() {
   };
 
   const saveVariantQty = async (variantId, parentId) => {
-    const qty = editingQty[variantId];
+    const qty = editingQty[variantId] !== undefined ? parseInt(String(editingQty[variantId]).replace(/,/g, '')) : undefined;
     const price = editingPrice[variantId];
     const unit = editingUnit[variantId];
     const currency = editingCurrency[variantId];
@@ -863,7 +863,7 @@ function Products() {
     if (qty === undefined && price === undefined && unit === undefined && currency === undefined && minQty === undefined) return;
     try {
       await axios.patch(`/api/products/${variantId}/quantity`, {
-        ...(qty !== undefined ? { quantity: parseInt(qty) } : {}),
+        ...(qty !== undefined && !isNaN(qty) ? { quantity: qty } : {}),
         ...(price !== undefined ? { price: parseFloat(String(price).replace(/,/g, '')) } : {}),
         ...(unit !== undefined ? { unit } : {}),
         ...(currency !== undefined ? { currency } : {}),
@@ -873,7 +873,7 @@ function Products() {
         ...c,
         [parentId]: c[parentId].map(v => v.id === variantId ? {
           ...v,
-          ...(qty !== undefined ? { quantity: parseInt(qty) } : {}),
+          ...(qty !== undefined && !isNaN(qty) ? { quantity: qty } : {}),
           ...(price !== undefined ? { price: parseFloat(String(price).replace(/,/g, '')) } : {}),
           ...(unit !== undefined ? { unit } : {}),
           ...(currency !== undefined ? { currency } : {}),
@@ -1217,10 +1217,11 @@ function Products() {
                     <div style={{ fontFamily: 'monospace', fontSize: '0.82rem', color: '#555', marginBottom: '0.5rem' }}>└ {variant.sku}</div>
                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                        <input type="number" min="0"
-                          style={{ width: '65px', padding: '0.2rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.85rem' }}
-                          value={editingQty[variant.id] !== undefined ? editingQty[variant.id] : (variant.quantity ?? 0)}
-                          onChange={(e) => setEditingQty(q => ({ ...q, [variant.id]: e.target.value }))}
+                        <input type="text" inputMode="numeric"
+                          style={{ width: '75px', padding: '0.2rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.85rem', textAlign: 'right' }}
+                          value={editingQty[variant.id] !== undefined ? editingQty[variant.id] : parseInt(variant.quantity ?? 0).toLocaleString('en-US')}
+                          onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (raw === '' || /^\d*$/.test(raw)) { setEditingQty(q => ({ ...q, [variant.id]: raw.replace(/\B(?=(\d{3})+(?!\d))/g, ',') })); } }}
+                          onBlur={(e) => { const num = parseInt(String(e.target.value).replace(/,/g, '')); if (!isNaN(num)) { setEditingQty(q => ({ ...q, [variant.id]: num.toLocaleString('en-US') })); } }}
                         />
                         <span style={{ fontSize: '0.72rem', color: '#888' }}>{t('quantity') || 'כמות'}</span>
                       </div>
@@ -1384,9 +1385,10 @@ function Products() {
                                     <td style={{ padding: '0.4rem 0.6rem', color: '#444' }}>{getProductName(variant, language) || variant.sku}</td>
                                     <td style={{ padding: '0.4rem 0.6rem' }}>
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-                                        <input type="number" min="0" style={{ width: '65px', padding: '0.2rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.85rem' }}
-                                          value={editingQty[variant.id] !== undefined ? editingQty[variant.id] : (variant.quantity ?? 0)}
-                                          onChange={(e) => setEditingQty(q => ({ ...q, [variant.id]: e.target.value }))} />
+                                        <input type="text" inputMode="numeric" style={{ width: '75px', padding: '0.2rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.85rem', textAlign: 'right' }}
+                                          value={editingQty[variant.id] !== undefined ? editingQty[variant.id] : parseInt(variant.quantity ?? 0).toLocaleString('en-US')}
+                                          onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (raw === '' || /^\d*$/.test(raw)) { setEditingQty(q => ({ ...q, [variant.id]: raw.replace(/\B(?=(\d{3})+(?!\d))/g, ',') })); } }}
+                                          onBlur={(e) => { const num = parseInt(String(e.target.value).replace(/,/g, '')); if (!isNaN(num)) { setEditingQty(q => ({ ...q, [variant.id]: num.toLocaleString('en-US') })); } }} />
                                         <span style={{ fontSize: '0.7rem', color: '#aaa' }}>{t('quantity')}</span>
                                       </div>
                                     </td>

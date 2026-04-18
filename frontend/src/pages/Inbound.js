@@ -98,7 +98,7 @@ function Inbound() {
   };
 
   const handleAddItem = () => {
-    if (!currentItem.product_id || currentItem.quantity <= 0) {
+    if (!currentItem.product_id || parseInt(String(currentItem.quantity).replace(/,/g, '')) <= 0) {
       alert(t('error') + ': ' + t('select_at_least_one'));
       return;
     }
@@ -124,6 +124,7 @@ function Inbound() {
         ...formData,
         items: [...formData.items, {
           ...currentItem,
+          quantity: parseInt(String(currentItem.quantity).replace(/,/g, '')),
           product_name: getProductName(product),
           product_sku: product.sku
         }]
@@ -480,11 +481,13 @@ function Inbound() {
                   <div className="form-group" style={{ flex: 1 }}>
                     <label className="form-label">{t('quantity')}</label>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       className="form-input"
                       value={currentItem.quantity}
-                      onChange={(e) => setCurrentItem({...currentItem, quantity: e.target.value})}
-                      min="1"
+                      onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (raw === '' || /^\d*$/.test(raw)) { const fmt = raw.replace(/\B(?=(\d{3})+(?!\d))/g, ','); setCurrentItem({...currentItem, quantity: fmt}); } }}
+                      onBlur={(e) => { const num = parseInt(String(e.target.value).replace(/,/g, '')); if (!isNaN(num)) { setCurrentItem({...currentItem, quantity: num.toLocaleString('en-US')}); } }}
+                      style={{ textAlign: 'right', fontFamily: 'monospace' }}
                     />
                   </div>
                 </div>
