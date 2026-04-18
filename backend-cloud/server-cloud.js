@@ -1538,21 +1538,6 @@ app.get('/api/outbound/:id/delivery-note', authenticateToken, async (req, res) =
   }
   </script>
 
-  <table style="width:100%;border:none;margin-bottom:20px;">
-    <tr>
-      <td style="vertical-align:middle;border:none;padding:0;">
-        ${logoHtml ? logoHtml.replace('<div style="text-align:left;margin-bottom:20px;position:relative;z-index:1;">', '<div>') : ''}
-        <div>
-          <h1 style="margin:4px 0;font-size:28px;font-weight:bold;">${t.title}</h1>
-          <p style="margin:0;font-size:16px;color:#555;">${t.documentNumber}: ${id} | ${t.date}: ${formatDate(transaction.transaction_date)}</p>
-        </div>
-      </td>
-      <td style="vertical-align:top;text-align:${t.dir==='rtl'?'left':'right'};border:none;padding:0;width:70px;">
-        ${qrImgHtml}
-      </td>
-    </tr>
-  </table>
-
   <!-- ═══ HEADER: לוגו + שם חברה + כותרת + QR ═══ -->
   <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:2px solid #1a6fa8; margin-bottom:12px;">
     <div style="display:flex; align-items:center; gap:10px;">
@@ -1854,21 +1839,6 @@ app.get('/api/inbound/:id/receipt-note', authenticateToken, async (req, res) => 
     } catch(e) { status.style.color='red'; status.textContent='❌ ${lang==="he"?"שגיאה בשליחה":"Send error"}'; }
   }
   </script>
-
-  <table style="width:100%;border:none;margin-bottom:20px;">
-    <tr>
-      <td style="vertical-align:middle;border:none;padding:0;">
-        ${logoHtml}
-        <div>
-          <h1 style="margin:4px 0;">${t.title}</h1>
-          <p style="margin:0;">${t.documentNumber}: ${id} | ${t.date}: ${formatDate(transaction.transaction_date)}</p>
-        </div>
-      </td>
-      <td style="vertical-align:top;text-align:${t.dir==='rtl'?'left':'right'};border:none;padding:0;width:70px;">
-        ${qrImgHtml}
-      </td>
-    </tr>
-  </table>
 
   <!-- ═══ HEADER: לוגו + שם חברה + כותרת + QR ═══ -->
   <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:2px solid #1a6fa8; margin-bottom:12px;">
