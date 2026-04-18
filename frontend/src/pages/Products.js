@@ -1043,49 +1043,36 @@ function Products() {
                         { icon: '📁', label: t('edit_subcategories') || 'Subcategories', action: () => { setSelectedCategoryFilter(categories[0]?.id?.toString() || ''); setEditingSubcategory(null); setSubcategoryForm({ code: '', name: '' }); setShowSubcategoryModal(true); setShowManageMenu(false); } },
                         { icon: '🏷️', label: t('edit_variant_attr_types') || 'Attributes', action: () => { openAddAttrType(); setShowManageMenu(false); } },
                         { icon: '📦', label: t('product_types') || 'Product Types', action: () => { openAddProductType(); setShowManageMenu(false); } },
+                        { icon: null, label: null, action: null },
+                        { icon: translating ? '⏳' : '🌐', label: translating ? '...' : (t('translate_missing') || 'Translate Missing'), action: () => { handleTranslateMissing(); setShowManageMenu(false); } },
+                        { icon: translating ? '⏳' : '🔄', label: translating ? '...' : (t('translate_all') || 'Translate All'), action: () => { handleTranslateAll(); setShowManageMenu(false); } },
                       ].map((item, i, arr) => (
-                        <button key={i} onClick={item.action} style={{
-                          display: 'flex', alignItems: 'center', gap: '0.6rem',
-                          width: '100%', padding: '0.7rem 1rem',
-                          background: 'none', border: 'none',
-                          borderBottom: i < arr.length - 1 ? '0.5px solid var(--color-border-tertiary, #f0f0f0)' : 'none',
-                          cursor: 'pointer', fontSize: '0.9rem', textAlign: 'left',
-                          color: 'var(--color-text-primary)'
-                        }}>
-                          <span>{item.icon}</span> {item.label}
-                        </button>
+                        item.action === null
+                          ? <div key={i} style={{ height: '0.5px', background: 'var(--color-border-secondary, #dee2e6)', margin: '4px 0' }} />
+                          : <button key={i} onClick={item.action} disabled={item.icon?.includes('⏳')} style={{
+                              display: 'flex', alignItems: 'center', gap: '0.6rem',
+                              width: '100%', padding: '0.7rem 1rem',
+                              background: 'none', border: 'none',
+                              borderBottom: 'none',
+                              cursor: item.icon?.includes('⏳') ? 'default' : 'pointer',
+                              fontSize: '0.9rem', textAlign: 'left',
+                              color: 'var(--color-text-primary)',
+                              opacity: item.icon?.includes('⏳') ? 0.6 : 1
+                            }}>
+                              <span>{item.icon}</span>
+                              {item.label}
+                              {i === 5 && translateResult && !translating && (
+                                <span style={{ marginLeft: 'auto', fontSize: '0.8rem' }}>
+                                  {translateResult.error ? '❌' : `✅ ${translateResult.count}`}
+                                </span>
+                              )}
+                            </button>
                       ))}
                     </div>
                   )}
                 </div>
                 )}
-                {isAdmin && (
-                <>
-                <button
-                  className="btn btn-secondary"
-                  onClick={handleTranslateMissing}
-                  disabled={translating}
-                  title="Translate missing translations only"
-                  style={{ background: translating ? '#6c757d' : '#17a2b8', color: 'white', border: 'none', marginRight: '4px' }}
-                >
-                  {translating ? '⏳ ...' : t('translate_missing') || 'Translate Missing'}
-                  {translateResult && !translating && (
-                    <span style={{ marginLeft: '0.3rem', fontSize: '0.8rem' }}>
-                      {translateResult.error ? '❌' : `✅ ${translateResult.count}`}
-                    </span>
-                  )}
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  onClick={handleTranslateAll}
-                  disabled={translating}
-                  title="Re-translate ALL items (overwrite existing)"
-                  style={{ background: translating ? '#6c757d' : '#e67e22', color: 'white', border: 'none' }}
-                >
-                  {translating ? '⏳' : t('translate_all') || 'Translate All'}
-                </button>
-                </>
-                )}
+
                 {isAdmin && (
                 <button className="btn btn-primary" onClick={() => { resetForm(); setShowModal(true); }}>
                   {t('add_product')}
