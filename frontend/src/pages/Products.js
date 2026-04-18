@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useLanguage } from '../utils/LanguageContext';
 import { useAuth } from '../utils/AuthContext';
@@ -145,6 +145,7 @@ function Products() {
   const [sortDirection, setSortDirection] = useState('asc');
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+  const productsCardRef = useRef(null);
   const [priceHistory, setPriceHistory] = useState([]);
   const [showAddPrice, setShowAddPrice] = useState(false);
   const [expandedParents, setExpandedParents] = useState({});
@@ -940,14 +941,14 @@ function Products() {
       </div>
       {pageSize !== 'all' && totalPages > 1 && (
         <div style={{ display:'flex', gap:'0.3rem', alignItems:'center' }}>
-          <button onClick={() => setCurrentPage(1)} disabled={currentPage===1}
+          <button onClick={() => { setCurrentPage(1); productsCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} disabled={currentPage===1}
             style={{ padding:'0.2rem 0.5rem', borderRadius:'6px', border:'1px solid #d1d5db', background: currentPage===1 ? '#f3f4f6':'#fff', cursor: currentPage===1 ? 'default':'pointer' }}>«</button>
-          <button onClick={() => setCurrentPage(p => Math.max(1,p-1))} disabled={currentPage===1}
+          <button onClick={() => { setCurrentPage(p => Math.max(1,p-1)); productsCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} disabled={currentPage===1}
             style={{ padding:'0.2rem 0.5rem', borderRadius:'6px', border:'1px solid #d1d5db', background: currentPage===1 ? '#f3f4f6':'#fff', cursor: currentPage===1 ? 'default':'pointer' }}>‹</button>
           <span style={{ fontSize:'0.85rem', padding:'0 0.3rem' }}>{currentPage} / {totalPages}</span>
-          <button onClick={() => setCurrentPage(p => Math.min(totalPages,p+1))} disabled={currentPage===totalPages}
+          <button onClick={() => { setCurrentPage(p => Math.min(totalPages,p+1)); productsCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} disabled={currentPage===totalPages}
             style={{ padding:'0.2rem 0.5rem', borderRadius:'6px', border:'1px solid #d1d5db', background: currentPage===totalPages ? '#f3f4f6':'#fff', cursor: currentPage===totalPages ? 'default':'pointer' }}>›</button>
-          <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage===totalPages}
+          <button onClick={() => { setCurrentPage(totalPages); productsCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} disabled={currentPage===totalPages}
             style={{ padding:'0.2rem 0.5rem', borderRadius:'6px', border:'1px solid #d1d5db', background: currentPage===totalPages ? '#f3f4f6':'#fff', cursor: currentPage===totalPages ? 'default':'pointer' }}>»</button>
         </div>
       )}
@@ -969,7 +970,7 @@ function Products() {
         <h2>{t('products')}</h2>
       </div>
 
-      <div className="card">
+      <div className="card" ref={productsCardRef}>
         <div className="card-header">
           <h3 className="card-title">{t('products')}</h3>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'flex-end' }}>
