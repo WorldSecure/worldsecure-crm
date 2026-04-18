@@ -1623,11 +1623,11 @@ function Products() {
                   </span>
                 </label>
                 {formData.is_parent && (
-                  <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                    {/* Product Type dropdown */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: '180px' }}>
-                      <label style={{ fontSize: '0.82rem', fontWeight: 500, whiteSpace: 'nowrap' }}>📦 {t('product_type') || 'סוג מוצר'}:</label>
-                      <div style={{ flex: 1 }}>
+                  <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%', minWidth: 0 }}>
+                    {/* שורה 1: Product Type dropdown */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', minWidth: 0 }}>
+                      <label style={{ fontSize: '0.82rem', fontWeight: 500, whiteSpace: 'nowrap', minWidth: '100px' }}>📦 {t('product_type') || 'סוג מוצר'}:</label>
+                      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
                         <MobilePicker
                           options={[{ value: '', label: `— ${t('none') || 'ללא'} —` }, ...productTypeCodes.map(pt => {
                             const lang = localStorage.getItem('language') || 'he';
@@ -1640,15 +1640,18 @@ function Products() {
                         />
                       </div>
                     </div>
-                    {formData.variant_attrs && (
-                      <span style={{ fontFamily: 'monospace', fontSize: '0.82rem', background: '#f0fff4', border: '1px solid #28a745', borderRadius: '4px', padding: '0.2rem 0.5rem' }}>
-                        {formData.variant_attrs}
-                      </span>
-                    )}
-                    <button type="button" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.7rem' }}
-                      onClick={() => setShowVariantsModal(true)}>
-                      ✏️ {t('define_variants') || 'הגדר דגמים'}
-                    </button>
+                    {/* שורה 2: variant_attrs + Define Variants */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      {formData.variant_attrs && (
+                        <span style={{ fontFamily: 'monospace', fontSize: '0.82rem', background: '#f0fff4', border: '1px solid #28a745', borderRadius: '4px', padding: '0.2rem 0.5rem', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {formData.variant_attrs}
+                        </span>
+                      )}
+                      <button type="button" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.7rem', flexShrink: 0 }}
+                        onClick={() => setShowVariantsModal(true)}>
+                        ✏️ {t('define_variants') || 'הגדר דגמים'}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
