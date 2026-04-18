@@ -354,12 +354,16 @@ function SupportManagement() {
               <div className="form-group">
                 <label className="form-label">👤 {t('owner')}</label>
                 {isAdmin ? (
-                  <select className="form-select" value={form.owner_id} onChange={e => {
-                    const u = users.find(u => u.id === parseInt(e.target.value));
-                    setForm({...form, owner_id: e.target.value, owner_name: u?.username||''});
-                  }}>
-                    {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
-                  </select>
+                  <MobilePicker
+                    options={users.map(u => ({ value: String(u.id), label: u.username }))}
+                    value={String(form.owner_id)}
+                    onChange={val => {
+                      const u = users.find(u => u.id === parseInt(val));
+                      setForm({...form, owner_id: val, owner_name: u?.username||''});
+                    }}
+                    placeholder={t('owner')}
+                    label={t('owner')}
+                  />
                 ) : (
                   <input className="form-input" value={user?.username||''} readOnly style={{ background:'#f5f5f5', color:'#666' }} />
                 )}
