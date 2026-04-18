@@ -735,6 +735,7 @@ app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
           for (const v of existingVariants) {
             if (!expectedSkus.includes(v.sku)) {
               await query('DELETE FROM products WHERE id=$1', [v.id]);
+              await query(`INSERT INTO pending_deletions (entity_type, entity_id, deleted_at) VALUES ('product', $1, NOW()) ON CONFLICT DO NOTHING`, [v.id]).catch(() => {});
             }
           }
 
