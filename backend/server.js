@@ -2490,7 +2490,7 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
     let logoHtml = '';
     if (company.logo_base64) {
       logoHtml = `<div style="text-align: left; margin-bottom: 20px; position: relative; z-index: 1;">
-        <img src="${company.logo_base64}" alt="Company Logo" style="max-height: 120px; max-width: 300px; object-fit: contain;">
+        <img src="${company.logo_base64}" alt="Company Logo" style="max-height: 65px; max-width: 300px; object-fit: contain;">
       </div>`;
     } else if (company.logo_path) {
       try {
@@ -2501,7 +2501,7 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
           const mime = ext === 'png' ? 'image/png' : ext === 'svg' ? 'image/svg+xml' : 'image/jpeg';
           const b64 = logoData.toString('base64');
           logoHtml = `<div style="text-align: left; margin-bottom: 20px; position: relative; z-index: 1;">
-            <img src="data:${mime};base64,${b64}" alt="Company Logo" style="max-height: 120px; max-width: 300px; object-fit: contain;">
+            <img src="data:${mime};base64,${b64}" alt="Company Logo" style="max-height: 65px; max-width: 300px; object-fit: contain;">
           </div>`;
         }
       } catch(e) { logoHtml = ''; }
@@ -2509,7 +2509,7 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
     
     // Build QR HTML - positioned top-right (RTL-safe)
     const qrImgHtml = transaction.qr_image_url
-      ? `<img src="${transaction.qr_image_url}" alt="QR Code" style="width: 55px; height: 55px; display: block; ${t.dir === 'rtl' ? 'margin-right: auto;' : 'margin-left: auto;'}">`
+      ? `<img src="${transaction.qr_image_url}" alt="QR Code" style="width: 52px; height: 52px; display: block; ${t.dir === 'rtl' ? 'margin-right: auto;' : 'margin-left: auto;'}">`
       : '';
 
     // Get active outbound signature by language
@@ -2812,7 +2812,7 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
   <!-- ═══ HEADER: לוגו + שם חברה + כותרת + QR ═══ -->
   <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:2px solid #1a6fa8; margin-bottom:12px;">
     <div style="display:flex; align-items:center; gap:10px;">
-      ${logoHtml ? `<div style="flex-shrink:0;">${logoHtml.replace(/<div[^>]*>/, '<div style="margin:0;padding:0;">').replace(/max-height: 120px/, 'max-height:50px').replace(/max-height:120px/, 'max-height:50px')}</div>` : ''}
+      ${logoHtml ? `<div style="flex-shrink:0;">${logoHtml.replace(/<div[^>]*>/, '<div style="margin:0;padding:0;">').replace(/max-height: 65px/, 'max-height:65px').replace(/max-height:65px/, 'max-height:65px')}</div>` : ''}
       <div>
         <div style="font-size:14px; font-weight:bold; color:#1a6fa8;">${company.company_name || ''}</div>
         <div style="font-size:10px; color:#888; direction:ltr; text-align:left; line-height:1.6;">
@@ -2901,8 +2901,11 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
     ${(() => {
       // Calculate total weight
       const totalWeight = items.reduce((sum, item) => {
-        if (item.use_packaging && item.num_cartons && item.carton_weight) {
-          return sum + (item.num_cartons * item.carton_weight);
+        if (item.use_packaging && item.carton_weight && item.items_per_carton && item.quantity) {
+          // חישוב נכון: משקל ליחידה × כמות
+          // (לא num_cartons × carton_weight כי הקרטון האחרון עלול להיות חלקי)
+          const weightPerItem = item.carton_weight / item.items_per_carton;
+          return sum + (weightPerItem * item.quantity);
         }
         return sum;
       }, 0);
@@ -3228,11 +3231,11 @@ app.get('/api/inbound/:id/receipt-note', async (req, res) => {
     });
     
     const logoHtml = company.logo_path ?
-      `<img src="http://localhost:3001${company.logo_path}" alt="Logo" style="max-height: 120px; max-width: 300px; margin-right: 20px;">` :
+      `<img src="http://localhost:3001${company.logo_path}" alt="Logo" style="max-height: 65px; max-width: 300px; margin-right: 20px;">` :
       '';
 
     const qrImgHtml = transaction.qr_image_url
-      ? `<img src="${transaction.qr_image_url}" alt="QR Code" style="width: 55px; height: 55px; display: block; ${t.dir === 'rtl' ? 'margin-right: auto;' : 'margin-left: auto;'}">`
+      ? `<img src="${transaction.qr_image_url}" alt="QR Code" style="width: 52px; height: 52px; display: block; ${t.dir === 'rtl' ? 'margin-right: auto;' : 'margin-left: auto;'}">`
       : '';
     
     const html = `
@@ -3321,7 +3324,7 @@ app.get('/api/inbound/:id/receipt-note', async (req, res) => {
   <!-- ═══ HEADER: לוגו + שם חברה + כותרת + QR ═══ -->
   <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:2px solid #1a6fa8; margin-bottom:12px;">
     <div style="display:flex; align-items:center; gap:10px;">
-      ${logoHtml ? '<div style="flex-shrink:0;"><img src="http://localhost:3001' + company.logo_path + '" alt="Logo" style="max-height:50px; max-width:120px; display:block;"></div>' : ''}
+      ${logoHtml ? '<div style="flex-shrink:0;"><img src="http://localhost:3001' + company.logo_path + '" alt="Logo" style="max-height:65px; max-width:120px; display:block;"></div>' : ''}
       <div>
         <div style="font-size:14px; font-weight:bold; color:#1a6fa8;">${company.company_name || ''}</div>
         <div style="font-size:10px; color:#888; direction:ltr; text-align:left; line-height:1.6;">

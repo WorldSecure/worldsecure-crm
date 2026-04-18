@@ -1411,13 +1411,13 @@ app.get('/api/outbound/:id/delivery-note', authenticateToken, async (req, res) =
 
     const baseUrl = 'https://worldsecure-backend.onrender.com';
     const logoHtml = company.logo_base64
-      ? `<div style="text-align:left;margin-bottom:20px;position:relative;z-index:1;"><img src="${company.logo_base64}" alt="Company Logo" style="max-height:120px;max-width:300px;object-fit:contain;"></div>`
+      ? `<div style="text-align:left;margin-bottom:20px;position:relative;z-index:1;"><img src="${company.logo_base64}" alt="Company Logo" style="max-height:65px;max-width:300px;object-fit:contain;"></div>`
       : company.logo_path
-      ? `<div style="text-align:left;margin-bottom:20px;position:relative;z-index:1;"><img src="${baseUrl}${company.logo_path}" alt="Company Logo" style="max-height:120px;max-width:300px;object-fit:contain;"></div>`
+      ? `<div style="text-align:left;margin-bottom:20px;position:relative;z-index:1;"><img src="${baseUrl}${company.logo_path}" alt="Company Logo" style="max-height:65px;max-width:300px;object-fit:contain;"></div>`
       : '';
 
     const qrImgHtml = transaction.qr_image_url
-      ? `<img src="${transaction.qr_image_url}" alt="QR Code" style="width:55px;height:55px;display:block;${t.dir==='rtl'?'margin-right:auto;':'margin-left:auto;'}">`
+      ? `<img src="${transaction.qr_image_url}" alt="QR Code" style="width:52px;height:52px;display:block;${t.dir==='rtl'?'margin-right:auto;':'margin-left:auto;'}">`
       : '';
 
 
@@ -1541,7 +1541,7 @@ app.get('/api/outbound/:id/delivery-note', authenticateToken, async (req, res) =
   <!-- ═══ HEADER: לוגו + שם חברה + כותרת + QR ═══ -->
   <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:2px solid #1a6fa8; margin-bottom:12px;">
     <div style="display:flex; align-items:center; gap:10px;">
-      ${logoHtml ? `<div style="flex-shrink:0;">${logoHtml.replace(/<div[^>]*>/, '<div style="margin:0;padding:0;">').replace(/max-height: 120px/, 'max-height:50px').replace(/max-height:120px/, 'max-height:50px')}</div>` : ''}
+      ${logoHtml ? `<div style="flex-shrink:0;">${logoHtml.replace(/<div[^>]*>/, '<div style="margin:0;padding:0;">').replace(/max-height: 65px/, 'max-height:65px').replace(/max-height:65px/, 'max-height:65px')}</div>` : ''}
       <div>
         <div style="font-size:14px; font-weight:bold; color:#1a6fa8;">${company.company_name || ''}</div>
         <div style="font-size:10px; color:#888; direction:ltr; text-align:left; line-height:1.6;">
@@ -1723,13 +1723,13 @@ app.get('/api/inbound/:id/receipt-note', authenticateToken, async (req, res) => 
 
     const baseUrl = 'https://worldsecure-backend.onrender.com';
     const logoHtml = company.logo_base64
-      ? `<img src="${company.logo_base64}" alt="Logo" style="max-height:120px;max-width:300px;object-fit:contain;">`
+      ? `<img src="${company.logo_base64}" alt="Logo" style="max-height:65px;max-width:300px;object-fit:contain;">`
       : company.logo_path
-      ? `<img src="${baseUrl}${company.logo_path}" alt="Logo" style="max-height:120px;max-width:300px;object-fit:contain;">`
+      ? `<img src="${baseUrl}${company.logo_path}" alt="Logo" style="max-height:65px;max-width:300px;object-fit:contain;">`
       : '';
 
     const qrImgHtml = transaction.qr_image_url
-      ? `<img src="${transaction.qr_image_url}" alt="QR Code" style="width:55px;height:55px;display:block;${t.dir==='rtl'?'margin-right:auto;':'margin-left:auto;'}">`
+      ? `<img src="${transaction.qr_image_url}" alt="QR Code" style="width:52px;height:52px;display:block;${t.dir==='rtl'?'margin-right:auto;':'margin-left:auto;'}">`
       : '';
 
     const authToken = req.headers['authorization']?.split(' ')[1] || token;
