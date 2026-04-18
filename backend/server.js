@@ -2536,14 +2536,17 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
     if (!contactJson) return [];
     try {
       const parsed = JSON.parse(contactJson);
-      if (Array.isArray(parsed)) {
-        return parsed.map(c => {
-          const phone = Array.isArray(c.phones) ? c.phones[0] : (c.phone || '');
-          return [c.name, phone, c.email].filter(Boolean).join(', ');
-        }).filter(Boolean);
-      }
+      if (Array.isArray(parsed)) return parsed;
     } catch(e) {}
-    return [contactJson.split(';')[0].trim()];
+    return [];
+  };
+  const renderContact = (found, tObj) => {
+    const phone = Array.isArray(found.phones) ? found.phones.filter(Boolean).join(', ') : (found.phone || '');
+    let html = `<div style="font-size:11px; color:#555;">${tObj.contactPerson}:</div>`;
+    if (found.name) html += `<div style="font-size:11px; color:#555;">${found.name}</div>`;
+    if (phone) html += `<div style="font-size:11px; color:#555;">${phone}</div>`;
+    if (found.email) html += `<div style="font-size:11px; color:#555;">${found.email}</div>`;
+    return html;
   };
 
     // Generate HTML for delivery note
@@ -2846,12 +2849,13 @@ app.get('/api/outbound/:id/delivery-note', async (req, res) => {
       <div style="font-weight:bold; font-size:12px;">${transaction.customer_type === 'casual' ? transaction.casual_customer_name : transaction.customer_name || 'N/A'}</div>
       ${transaction.customer_address ? `<div style="font-size:11px; color:#555;">${transaction.customer_address}</div>` : ''}
       ${(() => {
-        // טלפון — מהשדה הישיר או מה-contact_person JSON
-        if (contact) return `<div style="font-size:11px; color:#555;">${t.contactPerson}: ${contact.split(' | ').join(', ')}</div>`;
-        let lines = [];
-        const contacts = extractContacts(transaction.customer_contact);
-        contacts.forEach(c => lines.push(`${t.contactPerson}: ${c}`));
-        return lines.map(l => `<div style="font-size:11px; color:#555;">${l}</div>`).join('');
+        const allParsed = extractContacts(transaction.customer_contact);
+        if (contact) {
+          const selectedName = contact.split(' | ')[0].trim();
+          const found = allParsed.find(c => c.name === selectedName);
+          return found ? renderContact(found, t) : `<div style="font-size:11px; color:#555;">${t.contactPerson}: ${contact.split(' | ').join(', ')}</div>`;
+        }
+        return allParsed.map(c => renderContact(c, t)).join('');
       })()}
       <div style="font-size:11px; color:#555;">${t.status}: <strong style="color:#1a7a3c;">${transaction.status}</strong></div>
   </div>
@@ -3357,9 +3361,29 @@ app.get('/api/inbound/:id/receipt-note', async (req, res) => {
     <div style="font-size:9px; font-weight:bold; color:#1a6fa8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">${t.supplierDetails}</div>
     <div style="font-weight:bold; font-size:12px;">${transaction.supplier_name || transaction.casual_supplier_name || '-'}</div>
     ${(() => {
-      if (contact) return '<div style="font-size:11px; color:#555;">' + t.contactPerson + ': ' + contact.split(' | ').join(', ') + '</div>';
-      const contacts = extractContacts(transaction.supplier_contact);
-      return contacts.map(c => '<div style="font-size:11px; color:#555;">' + t.contactPerson + ': ' + c + '</div>').join('');
+      let allParsedS = [];
+      try { allParsedS = JSON.parse(transaction.supplier_contact || '[]'); } catch(e) {}
+      if (contact) {
+        const selectedName = contact.split(' | ')[0].trim();
+        const found = allParsedS.find(c => c.name === selectedName);
+        if (found) {
+          const phone = Array.isArray(found.phones) ? found.phones.filter(Boolean).join(', ') : (found.phone || '');
+          let html = '<div style="font-size:11px; color:#555;">' + t.contactPerson + ':</div>';
+          if (found.name) html += '<div style="font-size:11px; color:#555;">' + found.name + '</div>';
+          if (phone) html += '<div style="font-size:11px; color:#555;">' + phone + '</div>';
+          if (found.email) html += '<div style="font-size:11px; color:#555;">' + found.email + '</div>';
+          return html;
+        }
+        return '<div style="font-size:11px; color:#555;">' + t.contactPerson + ': ' + contact.split(' | ').join(', ') + '</div>';
+      }
+      return allParsedS.map(c => {
+        const phone = Array.isArray(c.phones) ? c.phones.filter(Boolean).join(', ') : (c.phone || '');
+        let html = '<div style="font-size:11px; color:#555;">' + t.contactPerson + ':</div>';
+        if (c.name) html += '<div style="font-size:11px; color:#555;">' + c.name + '</div>';
+        if (phone) html += '<div style="font-size:11px; color:#555;">' + phone + '</div>';
+        if (c.email) html += '<div style="font-size:11px; color:#555;">' + c.email + '</div>';
+        return html;
+      }).join('');
     })()}
   </div>
 
@@ -3922,6 +3946,18 @@ app.post('/api/quotes', authenticateToken, async (req, res) => {
     }
 
     logActivity(user_id, 'CREATE_QUOTE', 'quote', quoteId, { customer_id, currency, total });
+
+    // שמור PDF של הproforma מיד עם יצירת ה-quote
+    // internal request כדי לייצר את ה-HTML ולשמור PDF ב-quote_ID
+    try {
+      const token = req.headers.authorization?.replace('Bearer ', '') || '';
+      const lang = req.body.lang || 'pt';
+      const http = require('http');
+      const proformaUrl = `http://localhost:${PORT}/api/quotes/${quoteId}/proforma?lang=${lang}&token=${encodeURIComponent(token)}`;
+      http.get(proformaUrl, { headers: { 'Authorization': `Bearer ${token}` } }, (proformaRes) => {
+        proformaRes.resume(); // consume response — saveDocument יטפל בשמירה
+      }).on('error', () => {}); // שגיאה לא עוצרת את היצירה
+    } catch(e) {}
 
     res.json({ 
       message: 'Quote created successfully', 
