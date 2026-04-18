@@ -39,6 +39,7 @@ function Products() {
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [showManageMenu, setShowManageMenu] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [translateResult, setTranslateResult] = useState(null);
 
@@ -200,6 +201,16 @@ function Products() {
     }, 10);
     return () => { clearTimeout(timer); window.removeEventListener('click', handleClickOutside); };
   }, [showActionsMenu]);
+
+  // סגירת תפריט Manage בלחיצה מחוץ
+  useEffect(() => {
+    if (!showManageMenu) return;
+    const handleClickOutside = () => setShowManageMenu(false);
+    const timer = setTimeout(() => {
+      window.addEventListener('click', handleClickOutside);
+    }, 10);
+    return () => { clearTimeout(timer); window.removeEventListener('click', handleClickOutside); };
+  }, [showManageMenu]);
 
 
   const fetchData = async () => {
@@ -984,12 +995,13 @@ function Products() {
                         { icon: '📁', label: t('edit_subcategories') || 'Subcategories', action: () => { setSelectedCategoryFilter(categories[0]?.id?.toString() || ''); setEditingSubcategory(null); setSubcategoryForm({ code: '', name: '' }); setShowSubcategoryModal(true); setShowActionsMenu(false); } },
                         { icon: '🏷️', label: t('edit_variant_attr_types') || 'Attributes', action: () => { openAddAttrType(); setShowActionsMenu(false); } },
                         { icon: '📦', label: t('product_types') || 'Product Types', action: () => { openAddProductType(); setShowActionsMenu(false); } },
-                        { icon: translating ? '⏳' : '🌐', label: translating ? '...' : `🌐 Translate Missing`, action: () => { handleTranslateMissing(); setShowActionsMenu(false); } },
-                      ].map((item, i) => (
+                        { icon: translating ? '⏳' : '🌐', label: translating ? '...' : (t('translate_missing') || 'Translate Missing'), action: () => { handleTranslateMissing(); setShowActionsMenu(false); } },
+                        { icon: translating ? '⏳' : '🔄', label: translating ? '...' : (t('translate_all') || 'Translate All'), action: () => { handleTranslateAll(); setShowActionsMenu(false); } },
+                      ].map((item, i, arr) => (
                         <button key={i} onClick={item.action} style={{
                           display: 'flex', alignItems: 'center', gap: '0.6rem',
                           width: '100%', padding: '0.75rem 1rem', background: 'none',
-                          border: 'none', borderBottom: i < 2 ? '1px solid #f0f0f0' : 'none',
+                          border: 'none', borderBottom: i < arr.length - 1 ? '0.5px solid var(--color-border-tertiary, #f0f0f0)' : 'none',
                           cursor: 'pointer', fontSize: '0.9rem', textAlign: 'right'
                         }}>
                           <span>{item.icon}</span> {item.label}
@@ -1006,27 +1018,46 @@ function Products() {
                 </button>
               </>
             ) : (
-              // דסקטופ — כפתורים רגילים
+              // דסקטופ — Manage dropdown + תרגום + הוספה
               <>
                 {isAdmin && (
-                <button className="btn btn-secondary" onClick={() => openNewCategory()}>
-                  📂 {t('edit_categories') || 'Categories'}
-                </button>
-                )}
-                {isAdmin && (
-                <button className="btn btn-secondary" onClick={() => openAddAttrType()}>
-                  🏷️ {t('edit_variant_attr_types') || 'Attributes'}
-                </button>
-                )}
-                {isAdmin && (
-                <button className="btn btn-secondary" onClick={() => openAddProductType()}>
-                  📦 {t('product_types') || 'Product Types'}
-                </button>
-                )}
-                {isAdmin && (
-                <button className="btn btn-secondary" onClick={() => { setSelectedCategoryFilter(categories[0]?.id?.toString() || ''); setEditingSubcategory(null); setSubcategoryForm({ code: '', name: '' }); setShowSubcategoryModal(true); }}>
-                  📁 {t('edit_subcategories') || 'Subcategories'}
-                </button>
+                <div style={{ position: 'relative' }}>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={(e) => { e.stopPropagation(); setShowManageMenu(m => !m); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                  >
+                    ⚙️ {t('manage') || 'Manage'} <span style={{ fontSize: '0.7rem' }}>{showManageMenu ? '▲' : '▼'}</span>
+                  </button>
+                  {showManageMenu && (
+                    <div style={{
+                      position: 'absolute', top: '110%', left: 0, zIndex: 999,
+                      background: 'var(--color-background-primary, white)',
+                      border: '0.5px solid var(--color-border-secondary, #dee2e6)',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
+                      minWidth: '190px', overflow: 'hidden'
+                    }}>
+                      {[
+                        { icon: '📂', label: t('edit_categories') || 'Categories', action: () => { openNewCategory(); setShowManageMenu(false); } },
+                        { icon: '📁', label: t('edit_subcategories') || 'Subcategories', action: () => { setSelectedCategoryFilter(categories[0]?.id?.toString() || ''); setEditingSubcategory(null); setSubcategoryForm({ code: '', name: '' }); setShowSubcategoryModal(true); setShowManageMenu(false); } },
+                        { icon: '🏷️', label: t('edit_variant_attr_types') || 'Attributes', action: () => { openAddAttrType(); setShowManageMenu(false); } },
+                        { icon: '📦', label: t('product_types') || 'Product Types', action: () => { openAddProductType(); setShowManageMenu(false); } },
+                      ].map((item, i, arr) => (
+                        <button key={i} onClick={item.action} style={{
+                          display: 'flex', alignItems: 'center', gap: '0.6rem',
+                          width: '100%', padding: '0.7rem 1rem',
+                          background: 'none', border: 'none',
+                          borderBottom: i < arr.length - 1 ? '0.5px solid var(--color-border-tertiary, #f0f0f0)' : 'none',
+                          cursor: 'pointer', fontSize: '0.9rem', textAlign: 'left',
+                          color: 'var(--color-text-primary)'
+                        }}>
+                          <span>{item.icon}</span> {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 )}
                 {isAdmin && (
                 <>

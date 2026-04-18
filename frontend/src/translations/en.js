@@ -402,6 +402,7 @@ export const en = {
   translate_products: 'Translate Products',
   translate_missing: 'Translate Missing',
   translate_all: 'Translate All',
+  manage: 'Manage',
   status_pending: 'Pending',
   status_approved: 'Approved',
   approve: 'Approve',

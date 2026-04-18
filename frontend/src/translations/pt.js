@@ -399,6 +399,7 @@ export const pt = {
   translate_products: 'Traduzir Produtos',
   translate_missing: 'Traduzir Ausentes',
   translate_all: 'Traduzir Tudo',
+  manage: 'Gerir',
   status_approved: 'Aprovada',
   approve: 'Aprovar',
   reset: 'Redefinir',

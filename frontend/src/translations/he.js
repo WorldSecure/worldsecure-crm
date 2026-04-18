@@ -384,6 +384,7 @@ export const he = {
   translate_products: 'תרגם מוצרים',
   translate_missing: 'תרגם חסרים',
   translate_all: 'תרגם הכל',
+  manage: 'ניהול',
   status_approved: 'מאושרת',
   approve: 'אשר',
   reset: 'אפס',
