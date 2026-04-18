@@ -2243,6 +2243,16 @@ app.delete('/api/inbound/:id', authenticateToken, (req, res) => {
                 db.run('INSERT OR IGNORE INTO deleted_inbound (id) VALUES (?)', [id], () => {});
               });
 
+              // מחק קבצי תעודה מהתיקייה
+              try {
+                const docsDir = path.join(__dirname, 'documents', 'receipt');
+                if (fs.existsSync(docsDir)) {
+                  const files = fs.readdirSync(docsDir).filter(f => f.includes(`_ID${id}_`) || f.includes(`_${id}_`));
+                  files.forEach(f => { try { fs.unlinkSync(path.join(docsDir, f)); } catch(e) {} });
+                }
+              } catch(e) {}
+              // מחק מטבלת documents
+              db.run('DELETE FROM documents WHERE type=? AND reference_id=?', ['receipt', id], () => {});
               logActivity(req.user.id, 'DELETE_INBOUND', 'inbound', id, {});
               res.json({ message: 'Inbound transaction deleted' });
             });
@@ -2294,6 +2304,16 @@ app.delete('/api/outbound/:id', authenticateToken, (req, res) => {
                 db.run('INSERT OR IGNORE INTO deleted_outbound (id) VALUES (?)', [id], () => {});
               });
 
+              // מחק קבצי תעודה מהתיקייה
+              try {
+                const docsDir = path.join(__dirname, 'documents', 'delivery');
+                if (fs.existsSync(docsDir)) {
+                  const files = fs.readdirSync(docsDir).filter(f => f.includes(`_ID${id}_`) || f.includes(`_${id}_`));
+                  files.forEach(f => { try { fs.unlinkSync(path.join(docsDir, f)); } catch(e) {} });
+                }
+              } catch(e) {}
+              // מחק מטבלת documents
+              db.run('DELETE FROM documents WHERE type=? AND reference_id=?', ['delivery', id], () => {});
               logActivity(req.user.id, 'DELETE_OUTBOUND', 'outbound', id, {});
               res.json({ message: 'Outbound transaction deleted' });
             });
