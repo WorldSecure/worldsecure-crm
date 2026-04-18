@@ -660,12 +660,20 @@ async function syncCategoriesFromCloud() {
         [r.id, r.name, r.name_he||null, r.name_pt||null, r.description||null, r.code||null, r.updated_at||null]
       ).catch(() => {});
       count++;
-    } else if (cloudTs && cloudTs > localTs) {
-      await sqliteRun(
-        'UPDATE categories SET name=?, name_he=?, name_pt=?, description=?, code=?, updated_at=? WHERE id=?',
-        [r.name, r.name_he||null, r.name_pt||null, r.description||null, r.code||null, r.updated_at||null, r.id]
-      ).catch(() => {});
-      count++;
+    } else {
+      if (r.name_he || r.name_pt) {
+        await sqliteRun(
+          'UPDATE categories SET name_he=COALESCE(?,name_he), name_pt=COALESCE(?,name_pt) WHERE id=? AND (name_he IS NULL OR name_he=\'\'  OR name_pt IS NULL OR name_pt=\'\')',
+          [r.name_he||null, r.name_pt||null, r.id]
+        ).catch(() => {});
+      }
+      if (cloudTs && cloudTs > localTs) {
+        await sqliteRun(
+          'UPDATE categories SET name=?, name_he=?, name_pt=?, description=?, code=?, updated_at=? WHERE id=?',
+          [r.name, r.name_he||null, r.name_pt||null, r.description||null, r.code||null, r.updated_at||null, r.id]
+        ).catch(() => {});
+        count++;
+      }
     }
   }
 
@@ -720,12 +728,20 @@ async function syncSubcategoriesFromCloud() {
         [r.id, r.category_id, r.name, r.name_he||null, r.name_pt||null, r.code||null, r.updated_at||null]
       ).catch(() => {});
       count++;
-    } else if (cloudTs && cloudTs > localTs) {
-      await sqliteRun(
-        'UPDATE subcategories SET category_id=?, name=?, name_he=?, name_pt=?, code=?, updated_at=? WHERE id=?',
-        [r.category_id, r.name, r.name_he||null, r.name_pt||null, r.code||null, r.updated_at||null, r.id]
-      ).catch(() => {});
-      count++;
+    } else {
+      if (r.name_he || r.name_pt) {
+        await sqliteRun(
+          'UPDATE subcategories SET name_he=COALESCE(?,name_he), name_pt=COALESCE(?,name_pt) WHERE id=? AND (name_he IS NULL OR name_he=\'\'  OR name_pt IS NULL OR name_pt=\'\')',
+          [r.name_he||null, r.name_pt||null, r.id]
+        ).catch(() => {});
+      }
+      if (cloudTs && cloudTs > localTs) {
+        await sqliteRun(
+          'UPDATE subcategories SET category_id=?, name=?, name_he=?, name_pt=?, code=?, updated_at=? WHERE id=?',
+          [r.category_id, r.name, r.name_he||null, r.name_pt||null, r.code||null, r.updated_at||null, r.id]
+        ).catch(() => {});
+        count++;
+      }
     }
   }
 

@@ -2900,8 +2900,8 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
           VALUES ($1,$2,$3,$4,$5,$6,$7)
           ON CONFLICT (id) DO UPDATE SET
             name        = CASE WHEN categories.is_deleted=1 THEN categories.name WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $2 ELSE categories.name END,
-            name_he     = CASE WHEN categories.is_deleted=1 THEN categories.name_he WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $3 ELSE categories.name_he END,
-            name_pt     = CASE WHEN categories.is_deleted=1 THEN categories.name_pt WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $4 ELSE categories.name_pt END,
+            name_he     = CASE WHEN categories.is_deleted=1 THEN categories.name_he WHEN $3 IS NOT NULL AND $3 != '' THEN $3 ELSE categories.name_he END,
+            name_pt     = CASE WHEN categories.is_deleted=1 THEN categories.name_pt WHEN $4 IS NOT NULL AND $4 != '' THEN $4 ELSE categories.name_pt END,
             description = CASE WHEN categories.is_deleted=1 THEN categories.description WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $5 ELSE categories.description END,
             code        = CASE WHEN categories.is_deleted=1 THEN categories.code WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $6 ELSE categories.code END,
             updated_at  = CASE WHEN categories.is_deleted=1 THEN categories.updated_at WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $7::timestamptz ELSE categories.updated_at END`,
@@ -2945,8 +2945,8 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
           ON CONFLICT (id) DO UPDATE SET
             category_id = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $2 ELSE subcategories.category_id END,
             name        = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $3 ELSE subcategories.name END,
-            name_he     = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $4 ELSE subcategories.name_he END,
-            name_pt     = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $5 ELSE subcategories.name_pt END,
+            name_he     = CASE WHEN $4 IS NOT NULL AND $4 != '' THEN $4 ELSE subcategories.name_he END,
+            name_pt     = CASE WHEN $5 IS NOT NULL AND $5 != '' THEN $5 ELSE subcategories.name_pt END,
             code        = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $6 ELSE subcategories.code END,
             updated_at  = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(subcategories.updated_at,'1970-01-01')) THEN $7::timestamptz ELSE subcategories.updated_at END`,
           [r.id, r.category_id, r.name, r.name_he||null, r.name_pt||null, subCode, r.updated_at || new Date().toISOString()]);
@@ -2973,8 +2973,8 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
           VALUES ($1,$2,$3,$4)
           ON CONFLICT (id) DO UPDATE SET
             name    = EXCLUDED.name,
-            name_he = EXCLUDED.name_he,
-            name_pt = EXCLUDED.name_pt`,
+            name_he = CASE WHEN EXCLUDED.name_he IS NOT NULL AND EXCLUDED.name_he != '' THEN EXCLUDED.name_he ELSE variant_attribute_types.name_he END,
+            name_pt = CASE WHEN EXCLUDED.name_pt IS NOT NULL AND EXCLUDED.name_pt != '' THEN EXCLUDED.name_pt ELSE variant_attribute_types.name_pt END`,
           [r.id, r.name, r.name_he||null, r.name_pt||null]);
       }
       await client.query(`SELECT setval('variant_attribute_types_id_seq', COALESCE((SELECT MAX(id) FROM variant_attribute_types), 0) + 1, false)`).catch(() => {});
@@ -2999,8 +2999,8 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
           ON CONFLICT (id) DO UPDATE SET
             code    = EXCLUDED.code,
             name    = EXCLUDED.name,
-            name_he = EXCLUDED.name_he,
-            name_pt = EXCLUDED.name_pt`,
+            name_he = CASE WHEN EXCLUDED.name_he IS NOT NULL AND EXCLUDED.name_he != '' THEN EXCLUDED.name_he ELSE product_type_codes.name_he END,
+            name_pt = CASE WHEN EXCLUDED.name_pt IS NOT NULL AND EXCLUDED.name_pt != '' THEN EXCLUDED.name_pt ELSE product_type_codes.name_pt END`,
           [r.id, r.code, r.name, r.name_he||null, r.name_pt||null]);
       }
       await client.query(`SELECT setval('product_type_codes_id_seq', COALESCE((SELECT MAX(id) FROM product_type_codes), 0) + 1, false)`).catch(() => {});
@@ -3684,7 +3684,7 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
   const details = { products: 0, categories: 0, subcategories: 0, attributes: 0, productTypes: 0 };
 
   // פילטר translation_done — אם force=true, תרגם הכל; אחרת, רק שלא תורגמו
-  const doneFilter = force ? '1=1' : '(translation_done IS NULL OR translation_done=0)';
+  const doneFilter = force ? '1=1' : '(translation_done IS NULL OR translation_done=0 OR name_he = name OR name_pt = name)';
 
   try {
     // Migration — הוסף עמודת translation_done לכל 4 הטבלאות

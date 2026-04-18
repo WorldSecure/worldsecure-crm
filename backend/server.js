@@ -1144,7 +1144,7 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
   const details = { products: 0, categories: 0, subcategories: 0, attributes: 0, productTypes: 0 };
 
   // פילטר translation_done — אם force=true, תרגם הכל; אחרת, רק שלא תורגמו
-  const doneFilter = force ? '' : 'AND (translation_done IS NULL OR translation_done=0)';
+  const doneFilter = force ? '1=1' : '(translation_done IS NULL OR translation_done=0)';
 
   try {
     // Migration — הוסף עמודת translation_done לכל 4 הטבלאות
@@ -1193,13 +1193,13 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
     // ── 2. CATEGORIES ────────────────────────────────────────────────────────
     await dbRun('ALTER TABLE categories ADD COLUMN name_he TEXT').catch(() => {});
     await dbRun('ALTER TABLE categories ADD COLUMN name_pt TEXT').catch(() => {});
-    const catRows = await dbAll(`SELECT id, name FROM categories WHERE ${doneFilter} ((name_he IS NULL OR name_he = '' OR name_he = name) OR (name_pt IS NULL OR name_pt = '' OR name_pt = name))`);
+    const catRows = await dbAll(`SELECT id, name FROM categories WHERE ${doneFilter} AND ((name_he IS NULL OR name_he = '' OR name_he = name) OR (name_pt IS NULL OR name_pt = '' OR name_pt = name))`);
     for (const row of catRows) {
       try {
         const t = await callAnthropicAPI(
           'Translate this product category name. Return ONLY a JSON object: {"he":"...","pt":"..."}\n\nCategory: ' + row.name
         );
-        await dbRun('UPDATE categories SET name_he=?, name_pt=?, translation_done=1 WHERE id=?', [t.he, t.pt, row.id]);
+        await dbRun("UPDATE categories SET name_he=?, name_pt=?, translation_done=1, updated_at=datetime('now') WHERE id=?", [t.he, t.pt, row.id]);
         details.categories++; count++;
         await delay(600);
       } catch (e) { console.error('category translate failed:', row.id, e.message); }
@@ -1208,13 +1208,13 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
     // ── 3. SUBCATEGORIES ─────────────────────────────────────────────────────
     await dbRun('ALTER TABLE subcategories ADD COLUMN name_he TEXT').catch(() => {});
     await dbRun('ALTER TABLE subcategories ADD COLUMN name_pt TEXT').catch(() => {});
-    const subRows = await dbAll(`SELECT id, name FROM subcategories WHERE ${doneFilter} ((name_he IS NULL OR name_he = '' OR name_he = name) OR (name_pt IS NULL OR name_pt = '' OR name_pt = name))`);
+    const subRows = await dbAll(`SELECT id, name FROM subcategories WHERE ${doneFilter} AND ((name_he IS NULL OR name_he = '' OR name_he = name) OR (name_pt IS NULL OR name_pt = '' OR name_pt = name))`);
     for (const row of subRows) {
       try {
         const t = await callAnthropicAPI(
           'Translate this product subcategory name. Return ONLY a JSON object: {"he":"...","pt":"..."}\n\nSubcategory: ' + row.name
         );
-        await dbRun('UPDATE subcategories SET name_he=?, name_pt=?, translation_done=1 WHERE id=?', [t.he, t.pt, row.id]);
+        await dbRun("UPDATE subcategories SET name_he=?, name_pt=?, translation_done=1, updated_at=datetime('now') WHERE id=?", [t.he, t.pt, row.id]);
         details.subcategories++; count++;
         await delay(600);
       } catch (e) { console.error('subcategory translate failed:', row.id, e.message); }
@@ -1224,13 +1224,13 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
     await dbRun('CREATE TABLE IF NOT EXISTS variant_attribute_types (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, name_he TEXT, name_pt TEXT)').catch(() => {});
     await dbRun('ALTER TABLE variant_attribute_types ADD COLUMN name_he TEXT').catch(() => {});
     await dbRun('ALTER TABLE variant_attribute_types ADD COLUMN name_pt TEXT').catch(() => {});
-    const attrRows = await dbAll(`SELECT id, name FROM variant_attribute_types WHERE ${doneFilter} ((name_he IS NULL OR name_he = '' OR name_he = name) OR (name_pt IS NULL OR name_pt = '' OR name_pt = name))`);
+    const attrRows = await dbAll(`SELECT id, name FROM variant_attribute_types WHERE ${doneFilter} AND ((name_he IS NULL OR name_he = '' OR name_he = name) OR (name_pt IS NULL OR name_pt = '' OR name_pt = name))`);
     for (const row of attrRows) {
       try {
         const t = await callAnthropicAPI(
           'Translate this product attribute type name. Return ONLY a JSON object: {"he":"...","pt":"..."}\n\nAttribute: ' + row.name
         );
-        await dbRun('UPDATE variant_attribute_types SET name_he=?, name_pt=?, translation_done=1 WHERE id=?', [t.he, t.pt, row.id]);
+        await dbRun("UPDATE variant_attribute_types SET name_he=?, name_pt=?, translation_done=1, updated_at=datetime('now') WHERE id=?", [t.he, t.pt, row.id]);
         details.attributes++; count++;
         await delay(600);
       } catch (e) { console.error('attr type translate failed:', row.id, e.message); }
@@ -1240,13 +1240,13 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
     await dbRun('CREATE TABLE IF NOT EXISTS product_type_codes (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, name_he TEXT, name_pt TEXT)').catch(() => {});
     await dbRun('ALTER TABLE product_type_codes ADD COLUMN name_he TEXT').catch(() => {});
     await dbRun('ALTER TABLE product_type_codes ADD COLUMN name_pt TEXT').catch(() => {});
-    const ptRows = await dbAll(`SELECT id, name FROM product_type_codes WHERE ${doneFilter} ((name_he IS NULL OR name_he = '' OR name_he = name) OR (name_pt IS NULL OR name_pt = '' OR name_pt = name))`);
+    const ptRows = await dbAll(`SELECT id, name FROM product_type_codes WHERE ${doneFilter} AND ((name_he IS NULL OR name_he = '' OR name_he = name) OR (name_pt IS NULL OR name_pt = '' OR name_pt = name))`);
     for (const row of ptRows) {
       try {
         const t = await callAnthropicAPI(
           'Translate this product type name. Return ONLY a JSON object: {"he":"...","pt":"..."}\n\nProduct type: ' + row.name
         );
-        await dbRun('UPDATE product_type_codes SET name_he=?, name_pt=?, translation_done=1 WHERE id=?', [t.he, t.pt, row.id]);
+        await dbRun("UPDATE product_type_codes SET name_he=?, name_pt=?, translation_done=1, updated_at=datetime('now') WHERE id=?", [t.he, t.pt, row.id]);
         details.productTypes++; count++;
         await delay(600);
       } catch (e) { console.error('product type translate failed:', row.id, e.message); }
