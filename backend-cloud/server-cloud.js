@@ -3050,8 +3050,8 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
         const useLocalQty  = !cloudQtyTs  || (localQtyTs  && localQtyTs  > cloudQtyTs.toISOString().slice(0,19));
         const useLocalMeta = !cloudMetaTs || (localMetaTs && localMetaTs > cloudMetaTs.toISOString().slice(0,19));
         await client.query(`
-          INSERT INTO products (id, sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at, supplier_id, manufacturer_id, is_parent, variant_attrs, parent_id, created_at)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+          INSERT INTO products (id, sku, name, name_he, name_pt, description, category_id, subcategory_id, price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at, supplier_id, manufacturer_id, is_parent, variant_attrs, parent_id, created_at, product_type_code)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
           ON CONFLICT (id) DO UPDATE SET
             sku            = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $2  ELSE products.sku END,
             name           = CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $3  ELSE products.name END,
@@ -3071,11 +3071,13 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
             parent_id      = COALESCE($20, products.parent_id),
             meta_updated_at= CASE WHEN $15::text IS NOT NULL AND ($15::timestamptz >= COALESCE(products.meta_updated_at,'1970-01-01')) THEN $15::timestamptz ELSE products.meta_updated_at END,
             quantity       = CASE WHEN $14::text IS NOT NULL AND ($14::timestamptz > COALESCE(products.quantity_updated_at,'1970-01-01')) THEN $12 ELSE products.quantity END,
-            quantity_updated_at = CASE WHEN $14::text IS NOT NULL AND ($14::timestamptz > COALESCE(products.quantity_updated_at,'1970-01-01')) THEN $14::timestamptz ELSE products.quantity_updated_at END`,
+            quantity_updated_at = CASE WHEN $14::text IS NOT NULL AND ($14::timestamptz > COALESCE(products.quantity_updated_at,'1970-01-01')) THEN $14::timestamptz ELSE products.quantity_updated_at END,
+            product_type_code = CASE WHEN $22 IS NOT NULL THEN $22 ELSE products.product_type_code END`,
           [r.id, r.sku, r.name, r.name_he||null, r.name_pt||null, r.description||null,
            r.category_id||null, r.subcategory_id||null, r.price||null, r.currency||'ILS', r.unit||'unit',
            qty, minQty, localQtyTs||null, localMetaTs||null, r.supplier_id||null, r.manufacturer_id||null,
-           r.is_parent ? true : false, r.variant_attrs||null, r.parent_id||null, r.created_at]);
+           r.is_parent ? true : false, r.variant_attrs||null, r.parent_id||null, r.created_at,
+           r.product_type_code||null]);
       }
       // ❌ הוסר DELETE WHERE id NOT IN — מחיקות מוצרים מנוהלות דרך pending_deletions בלבד
       //    כדי לשמור על דו-כיווניות: מוצרים שנוצרו בענן לא יימחקו בסינק
