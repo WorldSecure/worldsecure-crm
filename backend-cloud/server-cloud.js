@@ -253,9 +253,10 @@ app.get('/api/product-type-codes', authenticateToken, async (req, res) => {
       SELECT id, code, name, name_he, name_pt,
              COALESCE(created_at, NOW()) as created_at
       FROM product_type_codes
-      WHERE id NOT IN (
-        SELECT entity_id FROM pending_deletions WHERE entity_type='product_type_code'
-      )
+      WHERE (is_deleted IS NULL OR is_deleted=0)
+        AND id NOT IN (
+          SELECT entity_id FROM pending_deletions WHERE entity_type='product_type_code'
+        )
       ORDER BY code
     `);
     res.json(result.rows);
@@ -288,7 +289,7 @@ app.put('/api/product-type-codes/:id', authenticateToken, async (req, res) => {
 app.delete('/api/product-type-codes/:id', authenticateToken, async (req, res) => {
   try {
     await pool.query(`INSERT INTO pending_deletions (entity_type, entity_id, deleted_at) VALUES ('product_type_code', $1, NOW()) ON CONFLICT DO NOTHING`, [req.params.id]).catch(() => {});
-    await pool.query('DELETE FROM product_type_codes WHERE id=$1', [req.params.id]);
+    await pool.query(`UPDATE product_type_codes SET is_deleted=1, updated_at=NOW() WHERE id=$1`, [req.params.id]);
     res.json({ message: 'deleted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -300,9 +301,10 @@ app.get('/api/variant-attribute-types', authenticateToken, async (req, res) => {
       SELECT id, name, name_he, name_pt,
              COALESCE(created_at, NOW()) as created_at
       FROM variant_attribute_types
-      WHERE id NOT IN (
-        SELECT entity_id FROM pending_deletions WHERE entity_type='variant_attribute_type'
-      )
+      WHERE (is_deleted IS NULL OR is_deleted=0)
+        AND id NOT IN (
+          SELECT entity_id FROM pending_deletions WHERE entity_type='variant_attribute_type'
+        )
       ORDER BY name
     `);
     res.json(result.rows);
@@ -335,7 +337,7 @@ app.put('/api/variant-attribute-types/:id', authenticateToken, async (req, res) 
 app.delete('/api/variant-attribute-types/:id', authenticateToken, async (req, res) => {
   try {
     await pool.query(`INSERT INTO pending_deletions (entity_type, entity_id, deleted_at) VALUES ('variant_attribute_type', $1, NOW()) ON CONFLICT DO NOTHING`, [req.params.id]).catch(() => {});
-    await pool.query('DELETE FROM variant_attribute_types WHERE id=$1', [req.params.id]);
+    await pool.query(`UPDATE variant_attribute_types SET is_deleted=1, updated_at=NOW() WHERE id=$1`, [req.params.id]);
     res.json({ message: 'deleted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -445,7 +447,8 @@ app.delete('/api/categories/:id', authenticateToken, async (req, res) => {
     const used = await query('SELECT COUNT(*) as count FROM products WHERE category_id=$1', [req.params.id]);
     if (parseInt(used.rows[0].count) > 0) return res.status(400).json({ error: 'Cannot delete category with products' });
     await query(`INSERT INTO pending_deletions (entity_type, entity_id, deleted_at) VALUES ('category', $1, NOW()) ON CONFLICT DO NOTHING`, [req.params.id]).catch(() => {});
-    await query('DELETE FROM categories WHERE id=$1', [req.params.id]);
+    await query(`UPDATE subcategories SET is_deleted=1, updated_at=NOW() WHERE category_id=$1`, [req.params.id]).catch(() => {});
+    await query(`UPDATE categories SET is_deleted=1, updated_at=NOW() WHERE id=$1`, [req.params.id]);
     res.json({ message: 'deleted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -505,7 +508,7 @@ app.delete('/api/subcategories/:id', authenticateToken, async (req, res) => {
     const used = await query('SELECT COUNT(*) as count FROM products WHERE subcategory_id=$1', [req.params.id]);
     if (parseInt(used.rows[0].count) > 0) return res.status(400).json({ error: 'Cannot delete subcategory with products' });
     await query(`INSERT INTO pending_deletions (entity_type, entity_id, deleted_at) VALUES ('subcategory', $1, NOW()) ON CONFLICT DO NOTHING`, [req.params.id]).catch(() => {});
-    await query('DELETE FROM subcategories WHERE id=$1', [req.params.id]);
+    await query(`UPDATE subcategories SET is_deleted=1, updated_at=NOW() WHERE id=$1`, [req.params.id]);
     res.json({ message: 'deleted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -2891,12 +2894,12 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
           INSERT INTO categories (id, name, name_he, name_pt, description, code, updated_at)
           VALUES ($1,$2,$3,$4,$5,$6,$7)
           ON CONFLICT (id) DO UPDATE SET
-            name        = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $2 ELSE categories.name END,
-            name_he     = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $3 ELSE categories.name_he END,
-            name_pt     = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $4 ELSE categories.name_pt END,
-            description = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $5 ELSE categories.description END,
-            code        = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $6 ELSE categories.code END,
-            updated_at  = CASE WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $7::timestamptz ELSE categories.updated_at END`,
+            name        = CASE WHEN categories.is_deleted=1 THEN categories.name WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $2 ELSE categories.name END,
+            name_he     = CASE WHEN categories.is_deleted=1 THEN categories.name_he WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $3 ELSE categories.name_he END,
+            name_pt     = CASE WHEN categories.is_deleted=1 THEN categories.name_pt WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $4 ELSE categories.name_pt END,
+            description = CASE WHEN categories.is_deleted=1 THEN categories.description WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $5 ELSE categories.description END,
+            code        = CASE WHEN categories.is_deleted=1 THEN categories.code WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $6 ELSE categories.code END,
+            updated_at  = CASE WHEN categories.is_deleted=1 THEN categories.updated_at WHEN $7::text IS NOT NULL AND ($7::timestamptz >= COALESCE(categories.updated_at,'1970-01-01')) THEN $7::timestamptz ELSE categories.updated_at END`,
           [r.id, r.name, r.name_he||null, r.name_pt||null, r.description||null, catCode, r.updated_at || new Date().toISOString()]);
       }
       // אפס את ה-sequence
@@ -3263,7 +3266,7 @@ app.get('/api/sync/pull/warehouse-alerts', authenticateToken, async (req, res) =
 });
 
 // ── Sync: Pull categories + subcategories from cloud → local ─────────────────
-// Migration: מלא updated_at=NULL בכל הישויות — פעם אחת בהפעלה
+// Migration — updated_at + is_deleted לכל 4 הישויות
 (async () => {
   try {
     await query(`UPDATE categories SET updated_at=NOW() WHERE updated_at IS NULL`).catch(()=>{});
@@ -3272,7 +3275,12 @@ app.get('/api/sync/pull/warehouse-alerts', authenticateToken, async (req, res) =
     await query(`UPDATE variant_attribute_types SET updated_at=NOW() WHERE updated_at IS NULL`).catch(()=>{});
     await query(`ALTER TABLE product_type_codes ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ`).catch(()=>{});
     await query(`UPDATE product_type_codes SET updated_at=NOW() WHERE updated_at IS NULL`).catch(()=>{});
-    console.log('✅ updated_at migration complete');
+    // is_deleted — soft delete
+    await query(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS is_deleted INTEGER DEFAULT 0`).catch(()=>{});
+    await query(`ALTER TABLE subcategories ADD COLUMN IF NOT EXISTS is_deleted INTEGER DEFAULT 0`).catch(()=>{});
+    await query(`ALTER TABLE variant_attribute_types ADD COLUMN IF NOT EXISTS is_deleted INTEGER DEFAULT 0`).catch(()=>{});
+    await query(`ALTER TABLE product_type_codes ADD COLUMN IF NOT EXISTS is_deleted INTEGER DEFAULT 0`).catch(()=>{});
+    console.log('✅ migration complete');
   } catch(e) { console.error('migration error:', e.message); }
 })();
 
@@ -3283,9 +3291,10 @@ app.get('/api/sync/pull/categories', authenticateToken, async (req, res) => {
       SELECT id, name, name_he, name_pt, description, code,
              COALESCE(updated_at, NOW()) as updated_at
       FROM categories
-      WHERE id NOT IN (
-        SELECT entity_id FROM pending_deletions WHERE entity_type='category'
-      )
+      WHERE (is_deleted IS NULL OR is_deleted=0)
+        AND id NOT IN (
+          SELECT entity_id FROM pending_deletions WHERE entity_type='category'
+        )
       ORDER BY id
     `);
     res.json(r.rows);
@@ -3303,9 +3312,10 @@ app.get('/api/sync/pull/subcategories', authenticateToken, async (req, res) => {
       SELECT id, category_id, name, name_he, name_pt, code,
              COALESCE(updated_at, NOW()) as updated_at
       FROM subcategories
-      WHERE id NOT IN (
-        SELECT entity_id FROM pending_deletions WHERE entity_type='subcategory'
-      )
+      WHERE (is_deleted IS NULL OR is_deleted=0)
+        AND id NOT IN (
+          SELECT entity_id FROM pending_deletions WHERE entity_type='subcategory'
+        )
       ORDER BY id
     `);
     res.json(r.rows);

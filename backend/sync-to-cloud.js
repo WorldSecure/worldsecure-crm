@@ -124,14 +124,14 @@ async function syncLocalToCloud() {
   try {
     await syncUsersToCloud();
     await syncQrToCloud();
-    await syncEntityToCloud('categories',    'SELECT id, name, name_he, name_pt, description, code, updated_at FROM categories');
+    await syncEntityToCloud('categories',    'SELECT id, name, name_he, name_pt, description, code, updated_at FROM categories WHERE is_deleted IS NULL OR is_deleted=0');
     await syncDeletedCategoriesToCloud();
-    await syncEntityToCloud('subcategories', 'SELECT id, category_id, name, name_he, name_pt, code, updated_at FROM subcategories');
+    await syncEntityToCloud('subcategories', 'SELECT id, category_id, name, name_he, name_pt, code, updated_at FROM subcategories WHERE is_deleted IS NULL OR is_deleted=0');
     await syncDeletedSubcategoriesToCloud();
     await syncEntityToCloud('customers',  'SELECT id, name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes, created_at, updated_at FROM customers');
-    await syncEntityToCloud('variant_attribute_types', 'SELECT id, name, name_he, name_pt, created_at FROM variant_attribute_types');
+    await syncEntityToCloud('variant_attribute_types', 'SELECT id, name, name_he, name_pt, created_at FROM variant_attribute_types WHERE is_deleted IS NULL OR is_deleted=0');
     await syncDeletedVariantAttrTypesToCloud();
-    await syncEntityToCloud('product_type_codes', 'SELECT id, code, name, name_he, name_pt, created_at FROM product_type_codes');
+    await syncEntityToCloud('product_type_codes', 'SELECT id, code, name, name_he, name_pt, created_at FROM product_type_codes WHERE is_deleted IS NULL OR is_deleted=0');
     await syncDeletedProductTypeCodesToCloud();
     await syncEmailSignaturesToCloud();
     await syncOutboundSignaturesToCloud();
@@ -183,19 +183,13 @@ async function syncDeletedProductsToCloud() {
 }
 
 async function syncDeletedCategoriesToCloud() {
-  await sqliteRun('CREATE TABLE IF NOT EXISTS deleted_categories (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
-  // permanent_deleted_categories — זיכרון קבוע של מחיקות, לא מתנקה לעולם
-  await sqliteRun('CREATE TABLE IF NOT EXISTS permanent_deleted_categories (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
-  const deleted = await sqliteAll('SELECT id FROM deleted_categories').catch(() => []);
+  // is_deleted — קרא קטגוריות שסומנו כמחוקות ושלח לענן
+  const deleted = await sqliteAll('SELECT id FROM categories WHERE is_deleted=1').catch(() => []);
   if (deleted.length === 0) return;
   let successCount = 0;
   for (const d of deleted) {
     const result = await apiRequest('DELETE', `/api/categories/${d.id}`).catch(() => ({ status: 500 }));
     if (result.status === 200 || result.status === 404) {
-      // רשום ב-permanent_deleted_categories — לא ימחק לעולם
-      await sqliteRun('INSERT OR IGNORE INTO permanent_deleted_categories (id, deleted_at) VALUES (?,?)',
-        [d.id, new Date().toISOString()]).catch(() => {});
-      await sqliteRun('DELETE FROM deleted_categories WHERE id=?', [d.id]).catch(() => {});
       successCount++;
     }
   }
@@ -203,17 +197,12 @@ async function syncDeletedCategoriesToCloud() {
 }
 
 async function syncDeletedSubcategoriesToCloud() {
-  await sqliteRun('CREATE TABLE IF NOT EXISTS deleted_subcategories (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
-  await sqliteRun('CREATE TABLE IF NOT EXISTS permanent_deleted_subcategories (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
-  const deleted = await sqliteAll('SELECT id FROM deleted_subcategories').catch(() => []);
+  const deleted = await sqliteAll('SELECT id FROM subcategories WHERE is_deleted=1').catch(() => []);
   if (deleted.length === 0) return;
   let successCount = 0;
   for (const d of deleted) {
     const result = await apiRequest('DELETE', `/api/subcategories/${d.id}`).catch(() => ({ status: 500 }));
     if (result.status === 200 || result.status === 404) {
-      await sqliteRun('INSERT OR IGNORE INTO permanent_deleted_subcategories (id, deleted_at) VALUES (?,?)',
-        [d.id, new Date().toISOString()]).catch(() => {});
-      await sqliteRun('DELETE FROM deleted_subcategories WHERE id=?', [d.id]).catch(() => {});
       successCount++;
     }
   }
@@ -221,17 +210,12 @@ async function syncDeletedSubcategoriesToCloud() {
 }
 
 async function syncDeletedVariantAttrTypesToCloud() {
-  await sqliteRun('CREATE TABLE IF NOT EXISTS deleted_variant_attribute_types (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
-  await sqliteRun('CREATE TABLE IF NOT EXISTS permanent_deleted_variant_attribute_types (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
-  const deleted = await sqliteAll('SELECT id FROM deleted_variant_attribute_types').catch(() => []);
+  const deleted = await sqliteAll('SELECT id FROM variant_attribute_types WHERE is_deleted=1').catch(() => []);
   if (deleted.length === 0) return;
   let successCount = 0;
   for (const d of deleted) {
     const result = await apiRequest('DELETE', `/api/variant-attribute-types/${d.id}`).catch(() => ({ status: 500 }));
     if (result.status === 200 || result.status === 404) {
-      await sqliteRun('INSERT OR IGNORE INTO permanent_deleted_variant_attribute_types (id, deleted_at) VALUES (?,?)',
-        [d.id, new Date().toISOString()]).catch(() => {});
-      await sqliteRun('DELETE FROM deleted_variant_attribute_types WHERE id=?', [d.id]).catch(() => {});
       successCount++;
     }
   }
@@ -239,17 +223,12 @@ async function syncDeletedVariantAttrTypesToCloud() {
 }
 
 async function syncDeletedProductTypeCodesToCloud() {
-  await sqliteRun('CREATE TABLE IF NOT EXISTS deleted_product_type_codes (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
-  await sqliteRun('CREATE TABLE IF NOT EXISTS permanent_deleted_product_type_codes (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
-  const deleted = await sqliteAll('SELECT id FROM deleted_product_type_codes').catch(() => []);
+  const deleted = await sqliteAll('SELECT id FROM product_type_codes WHERE is_deleted=1').catch(() => []);
   if (deleted.length === 0) return;
   let successCount = 0;
   for (const d of deleted) {
     const result = await apiRequest('DELETE', `/api/product-type-codes/${d.id}`).catch(() => ({ status: 500 }));
     if (result.status === 200 || result.status === 404) {
-      await sqliteRun('INSERT OR IGNORE INTO permanent_deleted_product_type_codes (id, deleted_at) VALUES (?,?)',
-        [d.id, new Date().toISOString()]).catch(() => {});
-      await sqliteRun('DELETE FROM deleted_product_type_codes WHERE id=?', [d.id]).catch(() => {});
       successCount++;
     }
   }
@@ -547,17 +526,11 @@ async function syncVariantAttrTypesFromCloud() {
     id INTEGER PRIMARY KEY, name TEXT NOT NULL, name_he TEXT, name_pt TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`).catch(() => {});
-  await sqliteRun('CREATE TABLE IF NOT EXISTS deleted_variant_attribute_types (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
-  await sqliteRun('CREATE TABLE IF NOT EXISTS permanent_deleted_variant_attribute_types (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
-  // טען IDs שנמחקו לצמיתות — לעולם לא להחזיר אותם
-  const permDelAttr = await sqliteAll('SELECT id FROM permanent_deleted_variant_attribute_types').catch(() => []);
-  const permDelAttrIds = new Set(permDelAttr.map(r => r.id));
-  // גם IDs שנמחקו מקומית ועדיין לא הגיעו לענן
-  const locallyDeleted = await sqliteAll('SELECT id FROM deleted_variant_attribute_types').catch(() => []);
-  const deletedIds = new Set([...locallyDeleted.map(r => r.id), ...permDelAttr.map(r => r.id)]);
+  const deletedLocalVat = await sqliteAll('SELECT id FROM variant_attribute_types WHERE is_deleted=1').catch(() => []);
+  const deletedVatIds = new Set(deletedLocalVat.map(r => r.id));
   let count = 0;
   for (const r of rows) {
-    if (deletedIds.has(r.id)) continue; // נמחק מקומית — דלג
+    if (deletedVatIds.has(r.id)) continue;
     const existing = await sqliteGet('SELECT id FROM variant_attribute_types WHERE id=?', [r.id]).catch(() => null);
     if (!existing) {
       await sqliteRun(
@@ -575,11 +548,11 @@ async function syncVariantAttrTypesFromCloud() {
   }
   // מחק מקומית רשומות שנמחקו בענן (ולא נמחקו מקומית כבר)
   const cloudIds = rows.map(r => r.id);
-  const localRows = await sqliteAll('SELECT id FROM variant_attribute_types').catch(() => []);
-  for (const local of localRows) {
-    if (!cloudIds.includes(local.id) && !deletedIds.has(local.id) && !permDelAttrIds.has(local.id)) {
-      await sqliteRun('DELETE FROM variant_attribute_types WHERE id=?', [local.id]).catch(() => {});
-      log(`  ↳ deleted local variant_attribute_type #${local.id} (removed from cloud)`);
+  const localVatRows = await sqliteAll('SELECT id FROM variant_attribute_types WHERE is_deleted IS NULL OR is_deleted=0').catch(() => []);
+  for (const local of localVatRows) {
+    if (!cloudIds.includes(local.id)) {
+      await sqliteRun(`UPDATE variant_attribute_types SET is_deleted=1, updated_at=datetime('now') WHERE id=?`, [local.id]).catch(() => {});
+      log(`  ↳ variant_attribute_type #${local.id} marked deleted (removed from cloud)`);
     }
   }
   if (count > 0) log(`  ↳ variant_attribute_types from cloud: ${count} synced`);
@@ -593,16 +566,11 @@ async function syncProductTypeCodesFromCloud() {
     id INTEGER PRIMARY KEY, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
     name_he TEXT, name_pt TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`).catch(() => {});
-  await sqliteRun('CREATE TABLE IF NOT EXISTS deleted_product_type_codes (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
-  await sqliteRun('CREATE TABLE IF NOT EXISTS permanent_deleted_product_type_codes (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
-  // טען IDs שנמחקו לצמיתות — לעולם לא להחזיר אותם
-  const permDelPt = await sqliteAll('SELECT id FROM permanent_deleted_product_type_codes').catch(() => []);
-  const permDelPtIds = new Set(permDelPt.map(r => r.id));
-  const locallyDeleted = await sqliteAll('SELECT id FROM deleted_product_type_codes').catch(() => []);
-  const deletedIds = new Set([...locallyDeleted.map(r => r.id), ...permDelPt.map(r => r.id)]);
+  const deletedLocalPtc = await sqliteAll('SELECT id FROM product_type_codes WHERE is_deleted=1').catch(() => []);
+  const deletedPtcIds = new Set(deletedLocalPtc.map(r => r.id));
   let count = 0;
   for (const r of rows) {
-    if (deletedIds.has(r.id)) continue; // נמחק מקומית — דלג
+    if (deletedPtcIds.has(r.id)) continue;
     const existing = await sqliteGet('SELECT id FROM product_type_codes WHERE id=?', [r.id]).catch(() => null);
     if (!existing) {
       await sqliteRun(
@@ -620,11 +588,11 @@ async function syncProductTypeCodesFromCloud() {
   }
   // מחק מקומית רשומות שנמחקו בענן (ולא נמחקו מקומית כבר)
   const cloudIds = rows.map(r => r.id);
-  const localRows = await sqliteAll('SELECT id FROM product_type_codes').catch(() => []);
-  for (const local of localRows) {
-    if (!cloudIds.includes(local.id) && !deletedIds.has(local.id) && !permDelPtIds.has(local.id)) {
-      await sqliteRun('DELETE FROM product_type_codes WHERE id=?', [local.id]).catch(() => {});
-      log(`  ↳ deleted local product_type_code #${local.id} (removed from cloud)`);
+  const localPtcRows = await sqliteAll('SELECT id FROM product_type_codes WHERE is_deleted IS NULL OR is_deleted=0').catch(() => []);
+  for (const local of localPtcRows) {
+    if (!cloudIds.includes(local.id)) {
+      await sqliteRun(`UPDATE product_type_codes SET is_deleted=1, updated_at=datetime('now') WHERE id=?`, [local.id]).catch(() => {});
+      log(`  ↳ product_type_code #${local.id} marked deleted (removed from cloud)`);
     }
   }
   if (count > 0) log(`  ↳ product_type_codes from cloud: ${count} synced`);
@@ -672,14 +640,13 @@ async function syncCategoriesFromCloud() {
   // בנה Set של IDs בענן
   const cloudIds = new Set(rows.map(r => r.id));
 
-  // טען רשימת קטגוריות שנמחקו לצמיתות — לעולם לא להחזיר אותן
-  await sqliteRun('CREATE TABLE IF NOT EXISTS permanent_deleted_categories (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
-  const permDeleted = await sqliteAll('SELECT id FROM permanent_deleted_categories').catch(() => []);
-  const permDeletedIds = new Set(permDeleted.map(r => r.id));
+  // טען קטגוריות שסומנו כמחוקות (is_deleted=1) — לעולם לא להחזיר אותן
+  const deletedLocally = await sqliteAll('SELECT id FROM categories WHERE is_deleted=1').catch(() => []);
+  const deletedLocalIds = new Set(deletedLocally.map(r => r.id));
 
   for (const r of rows) {
-    // דלג על קטגוריות שנמחקו לצמיתות מקומית
-    if (permDeletedIds.has(r.id)) continue;
+    // דלג על קטגוריות שנמחקו מקומית
+    if (deletedLocalIds.has(r.id)) continue;
     const existing = await sqliteGet('SELECT id, updated_at FROM categories WHERE id=?', [r.id]).catch(() => null);
     const cloudTs = normalizeTs(r.updated_at);
     const localTs = normalizeTs(existing?.updated_at);
@@ -699,15 +666,13 @@ async function syncCategoriesFromCloud() {
   }
 
   // מחק מקומית קטגוריות שכבר לא קיימות בענן
-  await sqliteRun('CREATE TABLE IF NOT EXISTS deleted_categories (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
-  const localRows = await sqliteAll('SELECT id FROM categories').catch(() => []);
+  const localRows = await sqliteAll('SELECT id FROM categories WHERE is_deleted IS NULL OR is_deleted=0').catch(() => []);
   for (const local of localRows) {
-    if (!cloudIds.has(local.id) && !permDeletedIds.has(local.id)) {
-      // קטגוריה קיימת מקומית אבל לא בענן ולא נמחקה מקומית — נמחקה בענן
-      await sqliteRun('DELETE FROM subcategories WHERE category_id=?', [local.id]).catch(() => {});
-      await sqliteRun('DELETE FROM categories WHERE id=?', [local.id]).catch(() => {});
-      await sqliteRun('DELETE FROM deleted_categories WHERE id=?', [local.id]).catch(() => {});
-      log(`  ↳ category #${local.id} deleted locally (removed from cloud)`);
+    if (!cloudIds.has(local.id) && !deletedLocalIds.has(local.id)) {
+      // קטגוריה קיימת מקומית אבל לא בענן — נמחקה בענן, סמן כ-is_deleted
+      await sqliteRun(`UPDATE subcategories SET is_deleted=1, updated_at=datetime('now') WHERE category_id=?`, [local.id]).catch(() => {});
+      await sqliteRun(`UPDATE categories SET is_deleted=1, updated_at=datetime('now') WHERE id=?`, [local.id]).catch(() => {});
+      log(`  ↳ category #${local.id} marked deleted (removed from cloud)`);
     }
   }
 
@@ -737,13 +702,11 @@ async function syncSubcategoriesFromCloud() {
   const cloudIds = new Set(rows.map(r => r.id));
 
   // טען רשימת סאב-קטגוריות שנמחקו לצמיתות — לעולם לא להחזיר אותן
-  await sqliteRun('CREATE TABLE IF NOT EXISTS permanent_deleted_subcategories (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
-  const permDeletedSub = await sqliteAll('SELECT id FROM permanent_deleted_subcategories').catch(() => []);
-  const permDeletedSubIds = new Set(permDeletedSub.map(r => r.id));
+  const deletedLocalSubs = await sqliteAll('SELECT id FROM subcategories WHERE is_deleted=1').catch(() => []);
+  const deletedLocalSubIds = new Set(deletedLocalSubs.map(r => r.id));
 
   for (const r of rows) {
-    // דלג על סאב-קטגוריות שנמחקו לצמיתות מקומית
-    if (permDeletedSubIds.has(r.id)) continue;
+    if (deletedLocalSubIds.has(r.id)) continue;
     const existing = await sqliteGet('SELECT id, updated_at FROM subcategories WHERE id=?', [r.id]).catch(() => null);
     const cloudTs = normalizeTs(r.updated_at);
     const localTs = normalizeTs(existing?.updated_at);
@@ -763,13 +726,11 @@ async function syncSubcategoriesFromCloud() {
   }
 
   // מחק מקומית סאב-קטגוריות שכבר לא קיימות בענן
-  await sqliteRun('CREATE TABLE IF NOT EXISTS deleted_subcategories (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
-  const localRows = await sqliteAll('SELECT id FROM subcategories').catch(() => []);
-  for (const local of localRows) {
-    if (!cloudIds.has(local.id) && !permDeletedSubIds.has(local.id)) {
-      await sqliteRun('DELETE FROM subcategories WHERE id=?', [local.id]).catch(() => {});
-      await sqliteRun('DELETE FROM deleted_subcategories WHERE id=?', [local.id]).catch(() => {});
-      log(`  ↳ subcategory #${local.id} deleted locally (removed from cloud)`);
+  const localSubRows = await sqliteAll('SELECT id FROM subcategories WHERE is_deleted IS NULL OR is_deleted=0').catch(() => []);
+  for (const local of localSubRows) {
+    if (!cloudIds.has(local.id) && !deletedLocalSubIds.has(local.id)) {
+      await sqliteRun(`UPDATE subcategories SET is_deleted=1, updated_at=datetime('now') WHERE id=?`, [local.id]).catch(() => {});
+      log(`  ↳ subcategory #${local.id} marked deleted (removed from cloud)`);
     }
   }
 
@@ -1072,38 +1033,20 @@ async function pullDeletionsFromCloud() {
         handled.push(d);
         log(`  ↳ pulled deletion: manufacturer #${d.entity_id}`);
       } else if (d.entity_type === 'category') {
-        await sqliteRun('DELETE FROM subcategories WHERE category_id = ?', [d.entity_id]).catch(() => {});
-        await sqliteRun('DELETE FROM categories WHERE id = ?', [d.entity_id]).catch(() => {});
-        await sqliteRun('DELETE FROM deleted_categories WHERE id = ?', [d.entity_id]).catch(() => {});
-        // רשום ב-permanent — קטגוריה זו נמחקה בענן, לא להחזירה לעולם
-        await sqliteRun('CREATE TABLE IF NOT EXISTS permanent_deleted_categories (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
-        await sqliteRun('INSERT OR IGNORE INTO permanent_deleted_categories (id, deleted_at) VALUES (?,?)',
-          [d.entity_id, new Date().toISOString()]).catch(() => {});
+        await sqliteRun(`UPDATE subcategories SET is_deleted=1, updated_at=datetime('now') WHERE category_id=?`, [d.entity_id]).catch(() => {});
+        await sqliteRun(`UPDATE categories SET is_deleted=1, updated_at=datetime('now') WHERE id=?`, [d.entity_id]).catch(() => {});
         handled.push(d);
         log(`  ↳ pulled deletion: category #${d.entity_id}`);
       } else if (d.entity_type === 'subcategory') {
-        await sqliteRun('DELETE FROM subcategories WHERE id = ?', [d.entity_id]).catch(() => {});
-        await sqliteRun('DELETE FROM deleted_subcategories WHERE id = ?', [d.entity_id]).catch(() => {});
-        // רשום ב-permanent
-        await sqliteRun('CREATE TABLE IF NOT EXISTS permanent_deleted_subcategories (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
-        await sqliteRun('INSERT OR IGNORE INTO permanent_deleted_subcategories (id, deleted_at) VALUES (?,?)',
-          [d.entity_id, new Date().toISOString()]).catch(() => {});
+        await sqliteRun(`UPDATE subcategories SET is_deleted=1, updated_at=datetime('now') WHERE id=?`, [d.entity_id]).catch(() => {});
         handled.push(d);
         log(`  ↳ pulled deletion: subcategory #${d.entity_id}`);
       } else if (d.entity_type === 'variant_attribute_type') {
-        await sqliteRun('DELETE FROM variant_attribute_types WHERE id = ?', [d.entity_id]).catch(() => {});
-        await sqliteRun('DELETE FROM deleted_variant_attribute_types WHERE id = ?', [d.entity_id]).catch(() => {});
-        await sqliteRun('CREATE TABLE IF NOT EXISTS permanent_deleted_variant_attribute_types (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
-        await sqliteRun('INSERT OR IGNORE INTO permanent_deleted_variant_attribute_types (id, deleted_at) VALUES (?,?)',
-          [d.entity_id, new Date().toISOString()]).catch(() => {});
+        await sqliteRun(`UPDATE variant_attribute_types SET is_deleted=1, updated_at=datetime('now') WHERE id=?`, [d.entity_id]).catch(() => {});
         handled.push(d);
         log(`  ↳ pulled deletion: variant_attribute_type #${d.entity_id}`);
       } else if (d.entity_type === 'product_type_code') {
-        await sqliteRun('DELETE FROM product_type_codes WHERE id = ?', [d.entity_id]).catch(() => {});
-        await sqliteRun('DELETE FROM deleted_product_type_codes WHERE id = ?', [d.entity_id]).catch(() => {});
-        await sqliteRun('CREATE TABLE IF NOT EXISTS permanent_deleted_product_type_codes (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
-        await sqliteRun('INSERT OR IGNORE INTO permanent_deleted_product_type_codes (id, deleted_at) VALUES (?,?)',
-          [d.entity_id, new Date().toISOString()]).catch(() => {});
+        await sqliteRun(`UPDATE product_type_codes SET is_deleted=1, updated_at=datetime('now') WHERE id=?`, [d.entity_id]).catch(() => {});
         handled.push(d);
         log(`  ↳ pulled deletion: product_type_code #${d.entity_id}`);
       }
@@ -1574,6 +1517,25 @@ async function main() {
     log('❌ CLOUD_SYNC_TOKEN is missing in .env!');
     process.exit(1);
   }
+
+  // migration: סמן רשומות ב-deleted_* הישנות כ-is_deleted=1
+  const oldDelCats = await sqliteAll('SELECT id FROM deleted_categories').catch(() => []);
+  for (const d of oldDelCats) {
+    await sqliteRun(`UPDATE categories SET is_deleted=1, updated_at=datetime('now') WHERE id=?`, [d.id]).catch(() => {});
+  }
+  const oldDelSubs = await sqliteAll('SELECT id FROM deleted_subcategories').catch(() => []);
+  for (const d of oldDelSubs) {
+    await sqliteRun(`UPDATE subcategories SET is_deleted=1, updated_at=datetime('now') WHERE id=?`, [d.id]).catch(() => {});
+  }
+  const oldDelVat = await sqliteAll('SELECT id FROM deleted_variant_attribute_types').catch(() => []);
+  for (const d of oldDelVat) {
+    await sqliteRun(`UPDATE variant_attribute_types SET is_deleted=1, updated_at=datetime('now') WHERE id=?`, [d.id]).catch(() => {});
+  }
+  const oldDelPtc = await sqliteAll('SELECT id FROM deleted_product_type_codes').catch(() => []);
+  for (const d of oldDelPtc) {
+    await sqliteRun(`UPDATE product_type_codes SET is_deleted=1, updated_at=datetime('now') WHERE id=?`, [d.id]).catch(() => {});
+  }
+  log('✅ is_deleted migration complete');
 
   await syncAll();
   setInterval(syncAll, SYNC_INTERVAL_MS);

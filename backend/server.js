@@ -781,7 +781,7 @@ db.run(`CREATE TABLE IF NOT EXISTS product_type_codes (
 )`, () => {});
 
 app.get('/api/categories', authenticateToken, (req, res) => {
-  db.all('SELECT * FROM categories ORDER BY id', [], (err, rows) => {
+  db.all('SELECT * FROM categories WHERE is_deleted IS NULL OR is_deleted=0 ORDER BY id', [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
@@ -822,27 +822,16 @@ app.put('/api/categories/:id', authenticateToken, (req, res) => {
 });
 
 app.delete('/api/categories/:id', authenticateToken, (req, res) => {
-  // בדוק אם יש מוצרים מקושרים
-  db.get('SELECT COUNT(*) as count FROM products WHERE category_id=?', [req.params.id], (err, row) => {
+  db.get('SELECT COUNT(*) as count FROM products WHERE category_id=? AND (is_active=1 OR is_active IS NULL)', [req.params.id], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     if (row.count > 0) return res.status(400).json({ error: 'Cannot delete category with products' });
     const id = req.params.id;
-    db.run(`CREATE TABLE IF NOT EXISTS deleted_categories (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)`, () => {});
-    db.run(`CREATE TABLE IF NOT EXISTS deleted_subcategories (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)`, () => {});
-    // רשום את כל הסאב-קטגוריות של הקטגוריה הזו ב-deleted_subcategories לפני המחיקה
-    db.all('SELECT id FROM subcategories WHERE category_id=?', [id], (err2, subRows) => {
-      if (!err2 && subRows) {
-        subRows.forEach(sub => {
-          db.run(`INSERT OR IGNORE INTO deleted_subcategories (id) VALUES (?)`, [sub.id], () => {});
-        });
-      }
-      db.run(`INSERT OR IGNORE INTO deleted_categories (id) VALUES (?)`, [id], () => {});
-      db.run('DELETE FROM subcategories WHERE category_id=?', [id], () => {});
-      db.run('DELETE FROM categories WHERE id=?', [id], function(err3) {
-        if (err3) return res.status(500).json({ error: err3.message });
-        logActivity(req.user.id, 'DELETE_CATEGORY', 'category', id, {});
-        res.json({ message: 'deleted' });
-      });
+    // soft delete — is_deleted=1, לא מוחק מה-DB
+    db.run(`UPDATE subcategories SET is_deleted=1, updated_at=datetime('now') WHERE category_id=? AND (is_deleted IS NULL OR is_deleted=0)`, [id], () => {});
+    db.run(`UPDATE categories SET is_deleted=1, updated_at=datetime('now') WHERE id=?`, [id], function(err3) {
+      if (err3) return res.status(500).json({ error: err3.message });
+      logActivity(req.user.id, 'DELETE_CATEGORY', 'category', id, {});
+      res.json({ message: 'deleted' });
     });
   });
 });
@@ -869,12 +858,17 @@ db.run(`ALTER TABLE variant_attribute_types ADD COLUMN updated_at TEXT`, () => {
 db.run(`ALTER TABLE product_type_codes ADD COLUMN updated_at TEXT`, () => {
   db.run(`UPDATE product_type_codes SET updated_at=datetime('now') WHERE updated_at IS NULL`, () => {});
 });
+// is_deleted — soft delete לכל 4 הישויות
+db.run(`ALTER TABLE categories ADD COLUMN is_deleted INTEGER DEFAULT 0`, () => {});
+db.run(`ALTER TABLE subcategories ADD COLUMN is_deleted INTEGER DEFAULT 0`, () => {});
+db.run(`ALTER TABLE variant_attribute_types ADD COLUMN is_deleted INTEGER DEFAULT 0`, () => {});
+db.run(`ALTER TABLE product_type_codes ADD COLUMN is_deleted INTEGER DEFAULT 0`, () => {});
 
 app.get('/api/subcategories', authenticateToken, (req, res) => {
   const { category_id } = req.query;
   const sql = category_id
-    ? 'SELECT * FROM subcategories WHERE category_id=? ORDER BY name'
-    : 'SELECT * FROM subcategories ORDER BY category_id, name';
+    ? 'SELECT * FROM subcategories WHERE category_id=? AND (is_deleted IS NULL OR is_deleted=0) ORDER BY name'
+    : 'SELECT * FROM subcategories WHERE (is_deleted IS NULL OR is_deleted=0) ORDER BY category_id, name';
   const params = category_id ? [category_id] : [];
   db.all(sql, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -915,13 +909,11 @@ app.put('/api/subcategories/:id', authenticateToken, (req, res) => {
 });
 
 app.delete('/api/subcategories/:id', authenticateToken, (req, res) => {
-  db.get('SELECT COUNT(*) as count FROM products WHERE subcategory_id=?', [req.params.id], (err, row) => {
+  db.get('SELECT COUNT(*) as count FROM products WHERE subcategory_id=? AND (is_active=1 OR is_active IS NULL)', [req.params.id], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     if (row?.count > 0) return res.status(400).json({ error: 'Cannot delete subcategory with products' });
     const id = req.params.id;
-    db.run(`CREATE TABLE IF NOT EXISTS deleted_subcategories (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)`, () => {});
-    db.run(`INSERT OR IGNORE INTO deleted_subcategories (id) VALUES (?)`, [id], () => {});
-    db.run('DELETE FROM subcategories WHERE id=?', [id], function(err) {
+    db.run(`UPDATE subcategories SET is_deleted=1, updated_at=datetime('now') WHERE id=?`, [id], function(err) {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ message: 'deleted' });
     });
@@ -999,7 +991,7 @@ app.patch('/api/products/:id/quantity', authenticateToken, (req, res) => {
 
 // ── Product Type Codes CRUD ───────────────────────────────────────────────────
 app.get('/api/product-type-codes', authenticateToken, (req, res) => {
-  db.all('SELECT * FROM product_type_codes ORDER BY code', [], (err, rows) => {
+  db.all('SELECT * FROM product_type_codes WHERE is_deleted IS NULL OR is_deleted=0 ORDER BY code', [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
@@ -1028,9 +1020,7 @@ app.put('/api/product-type-codes/:id', authenticateToken, (req, res) => {
 
 app.delete('/api/product-type-codes/:id', authenticateToken, (req, res) => {
   const id = req.params.id;
-  db.run(`CREATE TABLE IF NOT EXISTS deleted_product_type_codes (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)`, () => {});
-  db.run(`INSERT OR IGNORE INTO deleted_product_type_codes (id) VALUES (?)`, [id], () => {});
-  db.run('DELETE FROM product_type_codes WHERE id=?', [id], (err) => {
+  db.run(`UPDATE product_type_codes SET is_deleted=1, updated_at=datetime('now') WHERE id=?`, [id], (err) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ message: 'deleted' });
   });
@@ -1038,7 +1028,7 @@ app.delete('/api/product-type-codes/:id', authenticateToken, (req, res) => {
 
 // ── Variant Attribute Types CRUD ──────────────────────────────────────────────
 app.get('/api/variant-attribute-types', authenticateToken, (req, res) => {
-  db.all('SELECT * FROM variant_attribute_types ORDER BY name', [], (err, rows) => {
+  db.all('SELECT * FROM variant_attribute_types WHERE is_deleted IS NULL OR is_deleted=0 ORDER BY name', [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
@@ -1067,9 +1057,7 @@ app.put('/api/variant-attribute-types/:id', authenticateToken, (req, res) => {
 
 app.delete('/api/variant-attribute-types/:id', authenticateToken, (req, res) => {
   const id = req.params.id;
-  db.run(`CREATE TABLE IF NOT EXISTS deleted_variant_attribute_types (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)`, () => {});
-  db.run(`INSERT OR IGNORE INTO deleted_variant_attribute_types (id) VALUES (?)`, [id], () => {});
-  db.run('DELETE FROM variant_attribute_types WHERE id=?', [id], (err) => {
+  db.run(`UPDATE variant_attribute_types SET is_deleted=1, updated_at=datetime('now') WHERE id=?`, [id], (err) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ message: 'deleted' });
   });

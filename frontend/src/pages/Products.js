@@ -57,10 +57,10 @@ function Products() {
           axios.get('/api/variant-attribute-types'),
           axios.get('/api/product-type-codes'),
         ]);
-        setCategories(catsRes.data || []);
-        setSubcategories(subsRes.data || []);
-        setAttrTypes(attrsRes.data || []);
-        setProductTypeCodes(ptRes.data || []);
+        setCategories((catsRes.data || []).filter(c => !c.is_deleted));
+        setSubcategories((subsRes.data || []).filter(s => !s.is_deleted));
+        setAttrTypes((attrsRes.data || []).filter(a => !a.is_deleted));
+        setProductTypeCodes((ptRes.data || []).filter(p => !p.is_deleted));
       }
     } catch (e) {
       setTranslateResult({ error: e.message });
@@ -190,8 +190,8 @@ function Products() {
       ]);
       
       setProducts(productsRes.data);
-      setCategories(categoriesRes.data);
-      setSubcategories(subcategoriesRes.data);
+      setCategories((categoriesRes.data || []).filter(c => !c.is_deleted));
+      setSubcategories((subcategoriesRes.data || []).filter(s => !s.is_deleted));
       setSuppliers(suppliersRes.data);
       setManufacturers(manufacturersRes.data);
       setAttrTypes(attrTypesRes.data || []);
