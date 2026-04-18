@@ -245,7 +245,7 @@ function Sales() {
   };
 
   const handleAddItem = () => {
-    if (!currentItem.product_id || currentItem.quantity <= 0 || currentItem.unit_price <= 0) {
+    if (!currentItem.product_id || currentItem.quantity <= 0 || parseFloat(String(currentItem.unit_price).replace(/,/g, '')) <= 0) {
       alert(t('error') + ': ' + t('fill_all_fields'));
       return;
     }
@@ -259,7 +259,7 @@ function Sales() {
         ...currentItem,
         product_name: product.name,
         product_sku: product.sku,
-        total: currentItem.quantity * currentItem.unit_price
+        total: currentItem.quantity * parseFloat(String(currentItem.unit_price).replace(/,/g, ''))
       };
       setFormData({
         ...formData,
@@ -274,7 +274,7 @@ function Sales() {
           ...currentItem,
           product_name: product.name,
           product_sku: product.sku,
-          total: currentItem.quantity * currentItem.unit_price
+          total: currentItem.quantity * parseFloat(String(currentItem.unit_price).replace(/,/g, ''))
         }]
       });
     }
@@ -1021,15 +1021,25 @@ function Sales() {
                   <div className="form-group" style={{ flex: 1 }}>
                     <label className="form-label">{t('unit_price')} ({selectedCurrency})</label>
                     <input
-                      type="number"
-                      step="0.01"
-                      min="0"
+                      type="text"
+                      inputMode="decimal"
                       className="form-input"
                       value={currentItem.unit_price}
-                      onChange={(e) => setCurrentItem({...currentItem, unit_price: e.target.value})}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/,/g, '');
+                        if (raw === '' || /^\d*\.?\d*$/.test(raw)) {
+                          // פורמט live: הוסף פסיקים לחלק השלם תוך כדי הקלדה
+                          const parts = raw.split('.');
+                          const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                          const formatted = parts.length > 1 ? intPart + '.' + parts[1] : intPart;
+                          setCurrentItem({...currentItem, unit_price: formatted});
+                        }
+                      }}
                       onBlur={(e) => {
-                        if (e.target.value) {
-                          setCurrentItem({...currentItem, unit_price: parseFloat(e.target.value).toFixed(2)});
+                        const raw = String(e.target.value).replace(/,/g, '');
+                        const num = parseFloat(raw);
+                        if (!isNaN(num)) {
+                          setCurrentItem({...currentItem, unit_price: num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })});
                         }
                       }}
                       placeholder="0.00"

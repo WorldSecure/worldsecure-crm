@@ -864,7 +864,7 @@ function Products() {
     try {
       await axios.patch(`/api/products/${variantId}/quantity`, {
         ...(qty !== undefined ? { quantity: parseInt(qty) } : {}),
-        ...(price !== undefined ? { price: parseFloat(price) } : {}),
+        ...(price !== undefined ? { price: parseFloat(String(price).replace(/,/g, '')) } : {}),
         ...(unit !== undefined ? { unit } : {}),
         ...(currency !== undefined ? { currency } : {}),
         ...(minQty !== undefined ? { min_quantity: parseInt(minQty) } : {})
@@ -874,7 +874,7 @@ function Products() {
         [parentId]: c[parentId].map(v => v.id === variantId ? {
           ...v,
           ...(qty !== undefined ? { quantity: parseInt(qty) } : {}),
-          ...(price !== undefined ? { price: parseFloat(price) } : {}),
+          ...(price !== undefined ? { price: parseFloat(String(price).replace(/,/g, '')) } : {}),
           ...(unit !== undefined ? { unit } : {}),
           ...(currency !== undefined ? { currency } : {}),
           ...(minQty !== undefined ? { min_quantity: parseInt(minQty) } : {})
@@ -1241,10 +1241,11 @@ function Products() {
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                         <div style={{ display: 'flex', gap: '0.2rem' }}>
-                          <input type="number" min="0" step="0.01"
-                            style={{ width: '70px', padding: '0.2rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.85rem' }}
-                            value={editingPrice[variant.id] !== undefined ? editingPrice[variant.id] : (variant.price ?? 0)}
-                            onChange={(e) => setEditingPrice(p => ({ ...p, [variant.id]: e.target.value }))}
+                          <input type="text" inputMode="decimal"
+                            style={{ width: '100px', padding: '0.2rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.85rem', textAlign: 'right' }}
+                            value={editingPrice[variant.id] !== undefined ? editingPrice[variant.id] : parseFloat(variant.price ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (raw === '' || /^\d*\.?\d*$/.test(raw)) { const parts = raw.split('.'); const fmt = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (parts.length > 1 ? '.' + parts[1] : ''); setEditingPrice(p => ({ ...p, [variant.id]: fmt })); } }}
+                            onBlur={(e) => { const num = parseFloat(String(e.target.value).replace(/,/g, '')); if (!isNaN(num)) { setEditingPrice(p => ({ ...p, [variant.id]: num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) })); } }}
                           />
                           <select style={{ padding: '0.2rem 0.3rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.82rem' }}
                             value={editingCurrency[variant.id] !== undefined ? editingCurrency[variant.id] : (variant.currency ?? 'ILS')}
@@ -1400,9 +1401,10 @@ function Products() {
                                     <td style={{ padding: '0.4rem 0.6rem' }}>
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
                                         <div style={{ display: 'flex', gap: '0.3rem' }}>
-                                          <input type="number" min="0" step="0.01" style={{ width: '72px', padding: '0.2rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.85rem' }}
-                                            value={editingPrice[variant.id] !== undefined ? editingPrice[variant.id] : (variant.price ?? 0)}
-                                            onChange={(e) => setEditingPrice(p => ({ ...p, [variant.id]: e.target.value }))} />
+                                          <input type="text" inputMode="decimal" style={{ width: '100px', padding: '0.2rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.85rem', textAlign: 'right' }}
+                                            value={editingPrice[variant.id] !== undefined ? editingPrice[variant.id] : parseFloat(variant.price ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (raw === '' || /^\d*\.?\d*$/.test(raw)) { const parts = raw.split('.'); const fmt = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (parts.length > 1 ? '.' + parts[1] : ''); setEditingPrice(p => ({ ...p, [variant.id]: fmt })); } }}
+                                            onBlur={(e) => { const num = parseFloat(String(e.target.value).replace(/,/g, '')); if (!isNaN(num)) { setEditingPrice(p => ({ ...p, [variant.id]: num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) })); } }} />
                                           <select style={{ padding: '0.2rem 0.3rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.82rem' }}
                                             value={editingCurrency[variant.id] !== undefined ? editingCurrency[variant.id] : (variant.currency ?? 'ILS')}
                                             onChange={(e) => setEditingCurrency(c => ({ ...c, [variant.id]: e.target.value }))}>
@@ -1763,8 +1765,9 @@ function Products() {
                       <input
                         type="number" step="0.01" className="form-input"
                         value={formData.price}
-                        onChange={(e) => setFormData({...formData, price: e.target.value})}
-                        onBlur={(e) => { if (e.target.value) { const formatted = parseFloat(e.target.value).toFixed(2); setFormData({...formData, price: formatted}); } }}
+                        onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (raw === '' || /^\d*\.?\d*$/.test(raw)) { const parts = raw.split('.'); const fmt = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (parts.length > 1 ? '.' + parts[1] : ''); setFormData({...formData, price: fmt}); } }}
+                        onBlur={(e) => { const num = parseFloat(String(e.target.value).replace(/,/g, '')); if (!isNaN(num)) { setFormData({...formData, price: num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}); } }}
+                        onFocus={(e) => { setFormData({...formData, price: String(e.target.value).replace(/,/g, '')}); }}
                         placeholder="0.00" disabled={formData.is_parent}
                         style={{ textAlign: 'right', fontFamily: 'monospace', flex: 2, background: formData.is_parent ? '#f0f0f0' : '', color: formData.is_parent ? '#999' : '' }}
                       />
