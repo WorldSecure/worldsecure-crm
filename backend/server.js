@@ -1500,8 +1500,8 @@ app.put('/api/products/:id', authenticateToken, (req, res) => {
                 // צור דגמים חדשים שלא קיימים עדיין
                 const toCreate = combos.filter(combo => !existingSkus.includes(`${skuBase}-${combo.join('-')}`));
 
-                const insertNext = (index) => {
-                  if (index >= toCreate.length) return;
+                const insertNext = (index, done) => {
+                  if (index >= toCreate.length) { if (done) done(); return; }
                   const combo = toCreate[index];
                   const baseVariantSku = `${skuBase}-${combo.join('-')}`;
                   const variantLabel = [product_type_code, ...combo].filter(Boolean).join(' ');
@@ -1516,22 +1516,27 @@ app.put('/api/products/:id', authenticateToken, (req, res) => {
                          name_pt ? `${name_pt} (${variantLabel})` : null,
                          description, category_id, subcategory_id||null, price, currency||'ILS', unit,
                          min_quantity||0, supplier_id||null, manufacturer_id||null, id],
-                        () => insertNext(index + 1)
+                        () => insertNext(index + 1, done)
                       );
                     } else {
-                      insertNext(index + 1);
+                      insertNext(index + 1, done);
                     }
                   });
                 };
-                if (toCreate.length > 0) insertNext(0);
+                if (toCreate.length > 0) {
+                insertNext(0, () => res.json({ message: 'Product updated', sku: finalSku }));
+              } else {
+                res.json({ message: 'Product updated', sku: finalSku });
+              }
               });
             }
           } catch (e) {
             console.error('Error syncing variants on update:', e.message);
+            res.json({ message: 'Product updated', sku: finalSku });
           }
+        } else {
+          res.json({ message: 'Product updated', sku: finalSku });
         }
-
-        res.json({ message: 'Product updated', sku: finalSku });
       }
     );
   };

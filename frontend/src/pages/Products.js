@@ -17,6 +17,7 @@ const getCategoryName = (product, lang) => {
   return product.category_name || '-';
 };
 
+// eslint-disable-next-line no-unused-vars
 const formatNumber = (num) => {
   if (!num || num === '') return '';
   return parseFloat(num).toLocaleString('en-US', {
@@ -601,6 +602,7 @@ function Products() {
     } catch(e) { alert(e.response?.data?.error || e.message); }
   };
 
+  // eslint-disable-next-line no-unused-vars
   const getCatDisplayName = (cat) => {
     const name = language === 'he' ? (cat.name_he || cat.name) : language === 'pt' ? (cat.name_pt || cat.name) : cat.name;
     return cat.code ? `${cat.code} — ${name}` : name;
@@ -612,6 +614,7 @@ function Products() {
   };
 
   // ── Subcategory management ─────────────────────────────────────────────────
+  // eslint-disable-next-line no-unused-vars
   const openNewSubcategory = () => {
     setEditingSubcategory(null);
     setSubcategoryForm({ code: '', name: '' });
@@ -768,6 +771,8 @@ function Products() {
         setVariantsCache(c => { const n = { ...c }; delete n[editingProduct.id]; return n; });
         setExpandedParents(p => ({ ...p, [editingProduct.id]: false }));
       }
+      // המתן 800ms כדי לאפשר לשרת לסיים DELETE/INSERT של דגמים לפני טעינה מחדש
+      await new Promise(r => setTimeout(r, 800));
       fetchData();
     } catch (error) {
       alert(t('error') + ': ' + (error.response?.data?.error || error.message));
