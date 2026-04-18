@@ -396,7 +396,12 @@ app.get('/api/suppliers', authenticateToken, async (req, res) => {
 
 app.get('/api/categories', authenticateToken, async (req, res) => {
   try {
-    const r = await query('SELECT * FROM categories ORDER BY id');
+    const r = await query(`
+      SELECT * FROM categories
+      WHERE (is_deleted IS NULL OR is_deleted=0)
+        AND id NOT IN (SELECT entity_id FROM pending_deletions WHERE entity_type='category')
+      ORDER BY id
+    `);
     res.json(r.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -464,8 +469,8 @@ app.get('/api/subcategories', authenticateToken, async (req, res) => {
     )`).catch(() => {});
     const { category_id } = req.query;
     const r = category_id
-      ? await query('SELECT * FROM subcategories WHERE category_id=$1 ORDER BY name', [category_id])
-      : await query('SELECT * FROM subcategories ORDER BY category_id, name');
+      ? await query(`SELECT * FROM subcategories WHERE category_id=$1 AND (is_deleted IS NULL OR is_deleted=0) AND id NOT IN (SELECT entity_id FROM pending_deletions WHERE entity_type='subcategory') ORDER BY name`, [category_id])
+      : await query(`SELECT * FROM subcategories WHERE (is_deleted IS NULL OR is_deleted=0) AND id NOT IN (SELECT entity_id FROM pending_deletions WHERE entity_type='subcategory') ORDER BY category_id, name`);
     res.json(r.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
