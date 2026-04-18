@@ -382,6 +382,8 @@ export const he = {
   update_item: 'עדכן פריט',
   contact_person: 'איש קשר',
   translate_products: 'תרגם מוצרים',
+  translate_missing: 'תרגם חסרים',
+  translate_all: 'תרגם הכל',
   status_approved: 'מאושרת',
   approve: 'אשר',
   reset: 'אפס',

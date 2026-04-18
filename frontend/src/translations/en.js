@@ -400,6 +400,8 @@ export const en = {
   update_item: 'Update Item',
   contact_person: 'Contact Person',
   translate_products: 'Translate Products',
+  translate_missing: 'Translate Missing',
+  translate_all: 'Translate All',
   status_pending: 'Pending',
   status_approved: 'Approved',
   approve: 'Approve',

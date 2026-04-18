@@ -1037,7 +1037,7 @@ function Products() {
                   title="Translate missing translations only"
                   style={{ background: translating ? '#6c757d' : '#17a2b8', color: 'white', border: 'none', marginRight: '4px' }}
                 >
-                  {translating ? '⏳ ...' : '🌐'}
+                  {translating ? '⏳ ...' : t('translate_missing') || 'Translate Missing'}
                   {translateResult && !translating && (
                     <span style={{ marginLeft: '0.3rem', fontSize: '0.8rem' }}>
                       {translateResult.error ? '❌' : `✅ ${translateResult.count}`}
@@ -1051,7 +1051,7 @@ function Products() {
                   title="Re-translate ALL items (overwrite existing)"
                   style={{ background: translating ? '#6c757d' : '#e67e22', color: 'white', border: 'none' }}
                 >
-                  {translating ? '⏳' : '🔄'}
+                  {translating ? '⏳' : t('translate_all') || 'Translate All'}
                 </button>
                 </>
                 )}

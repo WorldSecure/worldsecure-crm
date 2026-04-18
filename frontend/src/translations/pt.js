@@ -397,6 +397,8 @@ export const pt = {
   select_language_for_delivery: 'Selecione o idioma para a nota de entrega:',
   select_language_for_receipt: 'Selecione o idioma para a nota de recebimento:',
   translate_products: 'Traduzir Produtos',
+  translate_missing: 'Traduzir Ausentes',
+  translate_all: 'Traduzir Tudo',
   status_approved: 'Aprovada',
   approve: 'Aprovar',
   reset: 'Redefinir',
