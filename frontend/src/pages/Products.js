@@ -1231,19 +1231,12 @@ function Products() {
                         <span style={{ fontSize: '0.72rem', color: '#888' }}>{t('quantity') || 'כמות'}</span>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                        <select style={{ padding: '0.2rem 0.3rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.82rem' }}
-                          value={editingUnit[variant.id] !== undefined ? editingUnit[variant.id] : (variant.unit ?? 'unit')}
-                          onChange={(e) => setEditingUnit(u => ({ ...u, [variant.id]: e.target.value }))}>
-                          <option value="unit">{t('unit_piece')}</option>
-                          <option value="box">{t('unit_box')}</option>
-                          <option value="carton">{t('unit_carton')}</option>
-                          <option value="kg">{t('unit_kg')}</option>
-                          <option value="liter">{t('unit_liter')}</option>
-                          <option value="meter">{t('unit_meter')}</option>
-                          <option value="kit">{t('unit_kit')}</option>
-                          <option value="pair">{t('unit_pair')}</option>
-                        </select>
-                        <span style={{ fontSize: '0.72rem', color: '#888' }}>{t('unit') || 'יחידה'}</span>
+                        <input type="number" min="0"
+                          style={{ width: '65px', padding: '0.2rem 0.4rem', border: '1px solid #ccc', borderRadius: '4px', fontSize: '0.85rem', textAlign: 'right' }}
+                          value={editingMinQty[variant.id] !== undefined ? editingMinQty[variant.id] : (variant.min_quantity ?? 0)}
+                          onChange={(e) => setEditingMinQty(q => ({ ...q, [variant.id]: e.target.value }))}
+                        />
+                        <span style={{ fontSize: '0.72rem', color: '#888' }}>{t('min_quantity') || 'מינ׳'}</span>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                         <div style={{ display: 'flex', gap: '0.2rem' }}>
