@@ -213,14 +213,14 @@ function Products() {
   const fetchAttrTypes = async () => {
     try {
       const res = await axios.get('/api/variant-attribute-types');
-      setAttrTypes(res.data || []);
+      setAttrTypes((res.data || []).filter(a => !a.is_deleted));
     } catch (e) { console.error(e); }
   };
 
   const fetchProductTypeCodes = async () => {
     try {
       const res = await axios.get('/api/product-type-codes');
-      setProductTypeCodes(res.data || []);
+      setProductTypeCodes((res.data || []).filter(p => !p.is_deleted));
     } catch (e) { console.error(e); }
   };
 
@@ -420,7 +420,7 @@ function Products() {
         }
       }
       const res = await axios.get('/api/categories');
-      setCategories(res.data);
+      setCategories((res.data || []).filter(c => !c.is_deleted));
       setImportCsvResultCat({ success, skipped, errors });
     } catch(e) { setImportCsvResultCat({ error: e.message }); }
     setImportingCsvCat(false);
@@ -463,7 +463,7 @@ function Products() {
         }
       }
       const res = await axios.get('/api/subcategories');
-      setSubcategories(res.data);
+      setSubcategories((res.data || []).filter(s => !s.is_deleted));
       setImportCsvResultSub({ success, skipped, errors });
     } catch(e) { setImportCsvResultSub({ error: e.message }); }
     setImportingCsvSub(false);
@@ -501,7 +501,7 @@ function Products() {
         }
       }
       const res = await axios.get('/api/variant-attribute-types');
-      setAttrTypes(res.data);
+      setAttrTypes((res.data || []).filter(a => !a.is_deleted));
       setImportCsvResultAttr({ success, skipped, errors });
     } catch(e) { setImportCsvResultAttr({ error: e.message }); }
     setImportingCsvAttr(false);
@@ -544,7 +544,7 @@ function Products() {
         await axios.post('/api/categories', payload);
       }
       const res = await axios.get('/api/categories');
-      setCategories(res.data);
+      setCategories((res.data || []).filter(c => !c.is_deleted));
       setEditingCategory(null);
       setCategoryForm({ code: '', name: '' });
     } catch(e) { alert(e.response?.data?.error || e.message); }
@@ -556,7 +556,7 @@ function Products() {
     try {
       await axios.delete(`/api/categories/${id}`);
       const res = await axios.get('/api/categories');
-      setCategories(res.data);
+      setCategories((res.data || []).filter(c => !c.is_deleted));
       if (editingCategory?.id === id) {
         setEditingCategory(null);
         setCategoryForm({ code: '', name: '' });
@@ -611,7 +611,7 @@ function Products() {
         await axios.post('/api/subcategories', payload);
       }
       const res = await axios.get('/api/subcategories');
-      setSubcategories(res.data);
+      setSubcategories((res.data || []).filter(s => !s.is_deleted));
       setEditingSubcategory(null);
       setSubcategoryForm({ code: '', name: '' });
     } catch(e) { alert(e.response?.data?.error || e.message); }
@@ -623,7 +623,7 @@ function Products() {
     try {
       await axios.delete(`/api/subcategories/${id}`);
       const res = await axios.get('/api/subcategories');
-      setSubcategories(res.data);
+      setSubcategories((res.data || []).filter(s => !s.is_deleted));
       if (editingSubcategory?.id === id) {
         setEditingSubcategory(null);
         setSubcategoryForm({ code: '', name: '' });
