@@ -426,16 +426,15 @@ function WarehouseReports() {
     const dir = language === 'he' ? 'rtl' : 'ltr';
     const ta = language === 'he' ? 'right' : 'left';
     const locale = language === 'he' ? 'he-IL' : language === 'pt' ? 'pt-PT' : 'en-US';
-    return `<html dir="${dir}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>${title}</title>
+    return `<html dir="${dir}"><head><meta charset="utf-8"><title>${title}</title>
       <style>
-        *{box-sizing:border-box}
         body{font-family:Arial,sans-serif;padding:20px;direction:${dir};margin:0}
-        .hdr{display:flex;justify-content:space-between;align-items:center;padding:20px 0;border-bottom:3px solid ${color};margin-bottom:30px;flex-wrap:wrap;gap:8px}
+        .hdr{display:flex;justify-content:space-between;align-items:center;padding:20px 0;border-bottom:3px solid ${color};margin-bottom:30px}
         .logo{width:150px;height:auto}
         .ci strong{display:block;color:${color};font-size:1.8rem;font-weight:700}
         h1{text-align:center;color:${color};margin:20px 0;font-size:1.8rem}
-        table{width:100%;border-collapse:collapse;margin-top:20px;table-layout:fixed}
-        th,td{border:1px solid #dee2e6;padding:10px;text-align:${ta};font-size:0.85rem;word-break:break-word;overflow-wrap:break-word}
+        table{width:100%;border-collapse:collapse;margin-top:20px}
+        th,td{border:1px solid #dee2e6;padding:10px;text-align:${ta};font-size:0.85rem}
         th{background:#f8f9fa;font-weight:600}
         tfoot tr{background:#f0f0f0;font-weight:700}
         .footer{margin-top:30px;padding-top:20px;border-top:1px solid #dee2e6;text-align:center;color:#999;font-size:0.8rem}
@@ -443,15 +442,6 @@ function WarehouseReports() {
         .bp,.bc{padding:12px 24px;margin:0 8px;font-size:16px;cursor:pointer;border:none;border-radius:5px;font-weight:600}
         .bp{background:#3498db;color:white}.bc{background:#95a5a6;color:white}
         @media print{.btn-c{display:none!important}}
-        @media(max-width:600px){
-          body{padding:10px}
-          h1{font-size:1.1rem;margin:12px 0}
-          .ci strong{font-size:1.2rem}
-          .logo{width:90px}
-          .hdr{padding:10px 0;margin-bottom:16px}
-          th,td{font-size:0.72rem;padding:5px 4px}
-          .bp,.bc{display:block;width:100%;margin:5px 0;padding:12px;font-size:15px}
-        }
       </style></head><body>
       <div class="btn-c">
         <button class="bp" onclick="window.print()">&#128424; Print / Save as PDF</button>
