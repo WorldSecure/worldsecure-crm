@@ -83,7 +83,7 @@ function Layout() {
 
                 <Link to="/warehouse-guide" className={isActive('/warehouse-guide')}>
                   <span className="sidebar-icon">📖</span>
-                  User Guide
+                  {t('user_guide') || 'User Guide'}
                 </Link>
 
               </>

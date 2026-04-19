@@ -50,7 +50,7 @@ function SupportLayout() {
 
             <Link to="/support/guide" className={isActive('/support/guide')}>
               <span className="sidebar-icon">📖</span>
-              User Guide
+              {t('user_guide') || 'User Guide'}
             </Link>
 
           </nav>

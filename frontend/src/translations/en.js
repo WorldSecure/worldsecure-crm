@@ -748,4 +748,5 @@ file: 'File',
   filter_custom: 'Custom range',
   from: 'From',
   to: 'To',
+  user_guide: 'User Guide',
 };

@@ -670,4 +670,5 @@ file: 'Arquivo',
   filter_custom: 'Intervalo personalizado',
   from: 'De',
   to: 'Até',
+  user_guide: 'Guia do Utilizador',
 };
