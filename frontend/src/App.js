@@ -27,6 +27,8 @@ import SupportDashboard from './pages/SupportDashboard';
 import SupportManagement from './pages/SupportManagement';
 import AdminLayout from './components/AdminLayout';
 import MobilePicker from './pages/MobilePicker';
+import WarehouseGuide from './pages/WarehouseGuide';
+import SupportGuide from './pages/SupportGuide';
 import './App.css';
 
 // כפתור בחירת שפה — שומר על עיצוב ה-Header במובייל ובדסקטופ
@@ -343,6 +345,7 @@ function AppRoutes() {
             <Route path="outbound" element={<Outbound />} />
             <Route path="reports" element={<Reports />} />
             <Route path="warehouse-reports" element={<WarehouseReports />} />
+            <Route path="warehouse-guide" element={<WarehouseGuide />} />
             <Route path="settings" element={<AdminRoute><Settings /></AdminRoute>} />
             <Route path="users" element={<Users />} />
             <Route path="activity-log" element={<AdminRoute><ActivityLog /></AdminRoute>} />
@@ -366,6 +369,7 @@ function AppRoutes() {
             <Route index element={<Navigate to="/support/dashboard" />} />
             <Route path="dashboard" element={<SupportDashboard />} />
             <Route path="management" element={<SupportManagement />} />
+            <Route path="guide" element={<SupportGuide />} />
             <Route path="products" element={<Products />} />
             <Route path="suppliers" element={<Suppliers />} />
             <Route path="customers" element={<Customers />} />

@@ -47,8 +47,11 @@ function SupportLayout() {
               <span className="sidebar-icon">📞</span>
               {t('support_management') || 'Support Management'}
             </Link>
-            
 
+            <Link to="/support/guide" className={isActive('/support/guide')}>
+              <span className="sidebar-icon">📖</span>
+              User Guide
+            </Link>
 
           </nav>
         </aside>

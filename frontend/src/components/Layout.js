@@ -80,11 +80,15 @@ function Layout() {
                   <span className="sidebar-icon">📊</span>
                   {t('warehouse_reports') || 'דוחות מחסן'}
                 </Link>
-                
 
+                <Link to="/warehouse-guide" className={isActive('/warehouse-guide')}>
+                  <span className="sidebar-icon">📖</span>
+                  User Guide
+                </Link>
 
               </>
             )}
+            
             
           
        
