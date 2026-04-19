@@ -426,36 +426,31 @@ function WarehouseReports() {
     const dir = language === 'he' ? 'rtl' : 'ltr';
     const ta = language === 'he' ? 'right' : 'left';
     const locale = language === 'he' ? 'he-IL' : language === 'pt' ? 'pt-PT' : 'en-US';
-    return `<html dir="${dir}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>
+    return `<html dir="${dir}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>${title}</title>
       <style>
         *{box-sizing:border-box}
-        body{font-family:Arial,sans-serif;padding:16px;direction:${dir};margin:0;font-size:14px}
-        .hdr{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:3px solid ${color};margin-bottom:20px;flex-wrap:wrap;gap:8px}
-        .logo{width:110px;height:auto}
-        .ci strong{display:block;color:${color};font-size:1.4rem;font-weight:700}
-        h1{text-align:center;color:${color};margin:14px 0;font-size:1.4rem}
-        table{width:100%;border-collapse:collapse;margin-top:16px}
-        th,td{border:1px solid #dee2e6;padding:8px 10px;text-align:${ta};font-size:0.82rem}
+        body{font-family:Arial,sans-serif;padding:20px;direction:${dir};margin:0}
+        .hdr{display:flex;justify-content:space-between;align-items:center;padding:20px 0;border-bottom:3px solid ${color};margin-bottom:30px;flex-wrap:wrap;gap:8px}
+        .logo{width:150px;height:auto}
+        .ci strong{display:block;color:${color};font-size:1.8rem;font-weight:700}
+        h1{text-align:center;color:${color};margin:20px 0;font-size:1.8rem}
+        table{width:100%;border-collapse:collapse;margin-top:20px;table-layout:fixed}
+        th,td{border:1px solid #dee2e6;padding:10px;text-align:${ta};font-size:0.85rem;word-break:break-word;overflow-wrap:break-word}
         th{background:#f8f9fa;font-weight:600}
         tfoot tr{background:#f0f0f0;font-weight:700}
-        .footer{margin-top:24px;padding-top:16px;border-top:1px solid #dee2e6;text-align:center;color:#999;font-size:0.78rem}
-        .btn-c{text-align:center;margin-bottom:16px;padding:12px;background:#f8f9fa;border-bottom:1px solid #dee2e6}
-        .bp,.bc{padding:10px 20px;margin:0 6px;font-size:15px;cursor:pointer;border:none;border-radius:6px;font-weight:600}
+        .footer{margin-top:30px;padding-top:20px;border-top:1px solid #dee2e6;text-align:center;color:#999;font-size:0.8rem}
+        .btn-c{text-align:center;margin-bottom:20px;padding:15px;background:#f8f9fa;border-bottom:1px solid #dee2e6}
+        .bp,.bc{padding:12px 24px;margin:0 8px;font-size:16px;cursor:pointer;border:none;border-radius:5px;font-weight:600}
         .bp{background:#3498db;color:white}.bc{background:#95a5a6;color:white}
         @media print{.btn-c{display:none!important}}
         @media(max-width:600px){
-          body{padding:8px}
-          h1{font-size:1.05rem}
-          .ci strong{font-size:1.1rem}
-          table thead{display:none}
-          table,table tbody,table tr,table td{display:block;width:100%}
-          table tr{border:1px solid #dee2e6;border-radius:8px;margin-bottom:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.07)}
-          table td{border:none;border-bottom:1px solid #f0f0f0;padding:7px 10px;font-size:0.85rem;display:flex;gap:8px;align-items:flex-start}
-          table td:last-child{border-bottom:none}
-          table td::before{content:attr(data-label);font-weight:700;color:#1B3A6B;min-width:38%;flex-shrink:0;font-size:0.78rem;padding-top:1px}
-          table tfoot tr{display:block;border-radius:8px;border:2px solid ${color};margin-bottom:10px}
-          table tfoot td::before{color:${color}}
-          .bp,.bc{display:block;width:100%;margin:6px 0;padding:12px;font-size:16px}
+          body{padding:10px}
+          h1{font-size:1.1rem;margin:12px 0}
+          .ci strong{font-size:1.2rem}
+          .logo{width:90px}
+          .hdr{padding:10px 0;margin-bottom:16px}
+          th,td{font-size:0.72rem;padding:5px 4px}
+          .bp,.bc{display:block;width:100%;margin:5px 0;padding:12px;font-size:15px}
         }
       </style></head><body>
       <div class="btn-c">
@@ -463,7 +458,7 @@ function WarehouseReports() {
         <button class="bc" onclick="window.close()">&#10005; Close</button>
       </div>
       <div class="hdr">
-        ${logoBase64Cache ? `<img src="${logoBase64Cache}" class="logo" alt="Logo">` : `<div style="font-size:1.8rem;color:${color};font-weight:700;">🌐 WorldSecure</div>`}
+        ${logoBase64Cache ? `<img src="${logoBase64Cache}" class="logo" alt="Logo">` : `<div style="font-size:2rem;color:${color};font-weight:700;">🌐 WorldSecure</div>`}
         <div class="ci"><strong>WorldSecure</strong><div>${new Date().toLocaleDateString(locale)}</div></div>
       </div>
       <h1>${title}</h1>`;
@@ -685,7 +680,7 @@ function WarehouseReports() {
                   <PrintBtn onClick={() => {
                     const rows = [...filteredParents.flatMap(p => (variantsByParent[p.id]||[])), ...filteredStandalone].map(p => {
                       const isLow = (p.quantity || 0) < 0 || ((p.min_quantity || 0) > 0 && (p.quantity || 0) < (p.min_quantity || 0));
-                      return `<tr><td data-label="${t('sku')||'SKU'}">${p.sku || '-'}</td><td data-label="${t('product')||'Product'}">${getProductName(p)}</td><td data-label="${t('category')||'Category'}">${p.category_name || '-'}</td><td style="text-align:center;" data-label="${t('quantity')||'Qty'}">${fmt(p.quantity)}</td><td style="text-align:center;" data-label="${t('min_quantity')||'Min'}">${fmt(p.min_quantity || 0)}</td><td style="text-align:center;" data-label="${t('status')||'Status'}">${isLow ? '⚠️ Low' : '✅ OK'}</td></tr>`;
+                      return `<tr><td>${p.sku || '-'}</td><td>${getProductName(p)}</td><td>${p.category_name || '-'}</td><td style="text-align:center;">${fmt(p.quantity)}</td><td style="text-align:center;">${fmt(p.min_quantity || 0)}</td><td style="text-align:center;">${isLow ? '⚠️ Low' : '✅ OK'}</td></tr>`;
                     }).join('');
                     openPrint(printHeader(`📦 ${t('current_inventory') || 'מלאי נוכחי'}`, '#007bff')
                       + `<table><thead><tr><th>SKU</th><th>${t('product') || 'מוצר'}</th><th>${t('category') || 'קטגוריה'}</th><th>${t('quantity') || 'כמות'}</th><th>${t('min_quantity') || 'מינימום'}</th><th>${t('status') || 'סטטוס'}</th></tr></thead><tbody>${rows}</tbody></table>`
@@ -804,7 +799,7 @@ function WarehouseReports() {
                 </div>
                 <div style={{ padding: '1rem', borderTop: '1px solid #dee2e6', display: 'flex', justifyContent: 'flex-end' }}>
                   <PrintBtn onClick={() => {
-                    const rows = sorted.map(r => `<tr><td data-label="${t('date')||'Date'}">${r.date ? new Date(r.date).toLocaleDateString() : '-'}</td><td style="text-align:center;" data-label="${t('type')||'Type'}">${r.type === 'inbound' ? '⬇️ Inbound' : '⬆️ Outbound'}</td><td data-label="${t('party')||'Party'}">${r.party}</td><td data-label="${t('notes')||'Notes'}">${r.notes || '-'}</td></tr>`).join('');
+                    const rows = sorted.map(r => `<tr><td>${r.date ? new Date(r.date).toLocaleDateString() : '-'}</td><td style="text-align:center;">${r.type === 'inbound' ? '⬇️ Inbound' : '⬆️ Outbound'}</td><td>${r.party}</td><td>${r.notes || '-'}</td></tr>`).join('');
                     openPrint(printHeader(`🔄 ${t('warehouse_movements') || 'תנועות מחסן'}`, '#28a745')
                       + `<table><thead><tr><th>${t('date') || 'תאריך'}</th><th>${t('type') || 'סוג'}</th><th>${t('supplier') || 'ספק/לקוח'}</th><th>${t('notes') || 'הערות'}</th></tr></thead><tbody>${rows}</tbody></table>`
                       + `<div class="footer">Generated by WorldSecure CRM • ${new Date().toLocaleString()}</div></body></html>`);
@@ -903,7 +898,7 @@ function WarehouseReports() {
                   )}
                 <div style={{ padding: '1rem', borderTop: '1px solid #dee2e6', display: 'flex', justifyContent: 'flex-end' }}>
                   <PrintBtn onClick={() => {
-                    const rows = sorted.map(p => `<tr><td data-label="${t('sku')||'SKU'}">${p.sku || '-'}</td><td data-label="${t('product')||'Product'}">${p.name_display}</td><td style="text-align:center;" data-label="${t('quantity')||'Qty'}">${fmt(p.quantity)}</td><td style="text-align:center;" data-label="${t('min_quantity')||'Min'}">${fmt(p.min_quantity || 0)}</td><td style="text-align:center;" data-label="${t('shortage')||'Shortage'}">-${fmt(p.shortage)}</td></tr>`).join('');
+                    const rows = sorted.map(p => `<tr><td>${p.sku || '-'}</td><td>${p.name_display}</td><td style="text-align:center;">${fmt(p.quantity)}</td><td style="text-align:center;">${fmt(p.min_quantity || 0)}</td><td style="text-align:center;">-${fmt(p.shortage)}</td></tr>`).join('');
                     openPrint(printHeader(`⚠️ ${t('low_stock_report') || 'מלאי נמוך'}`, '#dc3545')
                       + `<table><thead><tr><th>SKU</th><th>${t('product') || 'מוצר'}</th><th>${t('quantity') || 'כמות'}</th><th>${t('min_quantity') || 'מינימום'}</th><th>${t('shortage') || 'חסר'}</th></tr></thead><tbody>${rows}</tbody></table>`
                       + `<div class="footer">Generated by WorldSecure CRM • ${new Date().toLocaleString()}</div></body></html>`);
@@ -1000,7 +995,7 @@ function WarehouseReports() {
                   )}
                 <div style={{ padding: '1rem', borderTop: '1px solid #dee2e6', display: 'flex', justifyContent: 'flex-end' }}>
                   <PrintBtn onClick={() => {
-                    const rows = sorted.map(r => `<tr><td data-label="${t('supplier')||'Supplier'}">${r.supplier_name}</td><td style="text-align:center;" data-label="${t('total_receipts')||'Receipts'}">${r.total_receipts}</td><td style="text-align:center;" data-label="${t('last_date')||'Last Date'}">${r.last_date ? new Date(r.last_date).toLocaleDateString() : '-'}</td></tr>`).join('');
+                    const rows = sorted.map(r => `<tr><td>${r.supplier_name}</td><td style="text-align:center;">${r.total_receipts}</td><td style="text-align:center;">${r.last_date ? new Date(r.last_date).toLocaleDateString() : '-'}</td></tr>`).join('');
                     openPrint(printHeader(`🏭 ${t('active_suppliers_report') || 'ספקים פעילים'}`, '#6f42c1')
                       + `<table><thead><tr><th>${t('supplier') || 'ספק'}</th><th>${t('total_receipts') || 'קבלות'}</th><th>${t('last_receipt') || 'קבלה אחרונה'}</th></tr></thead><tbody>${rows}</tbody></table>`
                       + `<div class="footer">Generated by WorldSecure CRM • ${new Date().toLocaleString()}</div></body></html>`);
@@ -1173,7 +1168,7 @@ function WarehouseReports() {
                     const dir = language === 'he' ? 'rtl' : 'ltr';
                     const ta = language === 'he' ? 'right' : 'left';
                     const locale = language === 'he' ? 'he-IL' : language === 'pt' ? 'pt-PT' : 'en-US';
-                    const rows = sorted.map(p => `<tr><td data-label="${t('sku')||'SKU'}">${p.sku||'-'}</td><td data-label="${t('product')||'Product'}">${p.name_display}</td><td data-label="${t('category')||'Category'}">${p.category_name||'-'}</td><td style="text-align:center;" data-label="${t('quantity')||'Qty'}">${fmt(p.quantity)}</td><td style="text-align:right;" data-label="${t('price')||'Price'}">${fmt(p.price)}</td><td style="text-align:center;" data-label="${t('currency')||'Currency'}">${p.currency||'USD'}</td><td style="text-align:right;font-weight:700;" data-label="${t('total_value')||'Total'}">${fmt(p.total_value)}</td></tr>`).join('');
+                    const rows = sorted.map(p => `<tr><td>${p.sku||'-'}</td><td>${p.name_display}</td><td>${p.category_name||'-'}</td><td style="text-align:center;">${fmt(p.quantity)}</td><td style="text-align:right;">${fmt(p.price)}</td><td style="text-align:center;">${p.currency||'USD'}</td><td style="text-align:right;font-weight:700;">${fmt(p.total_value)}</td></tr>`).join('');
                     const html = printHeader(`💰 ${t('inventory_value_report')||'Inventory Value Report'}`, '#20c997')
                       + `<table><thead><tr><th>SKU</th><th>${t('product')||'Product'}</th><th>${t('category')||'Category'}</th><th>${t('quantity')||'Qty'}</th><th>${t('cost_price')||'Cost'}</th><th>${t('currency')||'Currency'}</th><th>${t('total_value')||'Total Value'}</th></tr></thead><tbody>${rows}</tbody>
                       <tfoot><tr style="background:#d4edda;font-weight:700;"><td colspan="6">${t('total_inventory_value')||'Total Inventory Value'} (${sorted.length} ${t('products')||'products'})</td><td style="text-align:right;">${Object.entries(byCurrency).map(([c,v])=>`${fmt(v)} ${c}`).join(' | ')}</td></tr></tfoot></table>`
@@ -1338,7 +1333,7 @@ function WarehouseReports() {
                   <PrintBtn onClick={() => {
                     const rows = sorted.map(r => {
                       const sc = statusConfig[r.status] || statusConfig.dead;
-                      return `<tr><td data-label="${t('sku')||'SKU'}">${r.sku}</td><td data-label="${t('product')||'Product'}">${r.name_display}</td><td data-label="${t('category')||'Category'}">${r.category_name}</td><td style="text-align:center;" data-label="${t('stock')||'Stock'}">${fmt(r.current_qty)}</td><td style="text-align:center;" data-label="${t('outbound')||'Outbound'}">${fmt(r.total_outbound_qty)}</td><td style="text-align:center;" data-label="${t('avg_monthly')||'Avg/Mo'}">${r.avg_monthly > 0 ? r.avg_monthly : '—'}</td><td data-label="${t('last_movement')||'Last Move'}">${r.last_movement_date ? new Date(r.last_movement_date).toLocaleDateString() : '—'}</td><td style="text-align:center;" data-label="${t('score')||'Score'}">${sc.label}</td></tr>`;
+                      return `<tr><td>${r.sku}</td><td>${r.name_display}</td><td>${r.category_name}</td><td style="text-align:center;">${fmt(r.current_qty)}</td><td style="text-align:center;">${fmt(r.total_outbound_qty)}</td><td style="text-align:center;">${r.avg_monthly > 0 ? r.avg_monthly : '—'}</td><td>${r.last_movement_date ? new Date(r.last_movement_date).toLocaleDateString() : '—'}</td><td style="text-align:center;">${sc.label}</td></tr>`;
                     }).join('');
                     openPrint(printHeader(`🔁 ${t('inventory_turnover_report') || 'Inventory Turnover Report'}`, '#e67e22')
                       + `<table><thead><tr><th>SKU</th><th>${t('product')||'Product'}</th><th>${t('category')||'Category'}</th><th>${t('in_stock')||'In Stock'}</th><th>${t('total_outbound_qty')||'Total Out'}</th><th>${t('avg_monthly')||'Avg/Month'}</th><th>${t('last_movement')||'Last Movement'}</th><th>${t('status')||'Status'}</th></tr></thead><tbody>${rows}</tbody></table>`
