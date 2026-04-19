@@ -1,4 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+
+function useIsMobile(breakpoint = 600) {
+  const [isMobile, setIsMobile] = useState(() => {
+    try { return window.innerWidth < breakpoint; } catch { return false; }
+  });
+  const handler = useCallback(() => setIsMobile(window.innerWidth < breakpoint), [breakpoint]);
+  useEffect(() => {
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, [handler]);
+  return isMobile;
+}
 
 const content = {
   en: {
@@ -125,10 +137,87 @@ const content = {
   }
 };
 
+// ─── Responsive Table ─────────────────────────────────────────────────────────
+function ResponsiveTable({ headers, rows, isMobile }) {
+  if (isMobile) {
+    return (
+      <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+        {rows.map((row, j) => (
+          <div key={j} style={{
+            border: '1px solid #BBBBBB',
+            borderRadius: '8px',
+            overflow: 'hidden',
+            background: j % 2 === 0 ? '#fff' : '#F7F7F7',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          }}>
+            {headers.map((header, k) => (
+              <div key={k} style={{
+                display: 'flex',
+                borderBottom: k < headers.length - 1 ? '1px solid #e2e8f0' : 'none',
+              }}>
+                <div style={{
+                  background: '#D5E8F0',
+                  color: '#1B3A6B',
+                  fontWeight: 700,
+                  fontSize: '0.78rem',
+                  padding: '0.45rem 0.7rem',
+                  width: '38%',
+                  flexShrink: 0,
+                  borderRight: '1px solid #BBBBBB',
+                  lineHeight: 1.35,
+                  display: 'flex',
+                  alignItems: 'center',
+                }}>
+                  {header}
+                </div>
+                <div style={{
+                  padding: '0.45rem 0.7rem',
+                  fontSize: '0.85rem',
+                  color: '#444',
+                  flex: 1,
+                  lineHeight: 1.4,
+                }}>
+                  {row[k]}
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '0.5rem', fontSize: '0.9rem' }}>
+      <thead>
+        <tr>
+          {headers.map((h, j) => (
+            <th key={j} style={{ background: '#D5E8F0', color: '#1B3A6B', fontWeight: 700, padding: '0.6rem 0.8rem', textAlign: 'left', border: '1px solid #BBBBBB' }}>
+              {h}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, j) => (
+          <tr key={j}>
+            {row.map((cell, k) => (
+              <td key={k} style={{ padding: '0.6rem 0.8rem', border: '1px solid #BBBBBB', background: j % 2 === 1 ? '#F7F7F7' : '#fff', color: '#555', verticalAlign: 'top' }}>
+                {cell}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 export default function WarehouseGuide() {
   const systemLang = localStorage.getItem('language') || 'en';
   const defaultLang = systemLang === 'pt' ? 'pt' : 'en';
   const [lang, setLang] = useState(defaultLang);
+  const isMobile = useIsMobile(600);
 
   useEffect(() => {
     const l = localStorage.getItem('language') || 'en';
@@ -138,26 +227,23 @@ export default function WarehouseGuide() {
   const c = content[lang];
 
   const styles = {
-    container: { maxWidth: '860px', margin: '0 auto', padding: '2rem', fontFamily: 'Arial, sans-serif' },
-    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', borderBottom: '3px solid #2E75B6', paddingBottom: '1rem' },
-    title: { fontSize: '1.8rem', fontWeight: 700, color: '#1B3A6B', margin: 0 },
+    container: { maxWidth: '860px', margin: '0 auto', padding: isMobile ? '0.75rem' : '2rem', fontFamily: 'Arial, sans-serif', boxSizing: 'border-box' },
+    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '3px solid #2E75B6', paddingBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' },
+    title: { fontSize: isMobile ? '1.2rem' : '1.8rem', fontWeight: 700, color: '#1B3A6B', margin: 0 },
     langToggle: { display: 'flex', gap: '0.5rem' },
     langBtn: (active) => ({ padding: '0.4rem 1rem', border: '2px solid #2E75B6', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', background: active ? '#2E75B6' : '#fff', color: active ? '#fff' : '#2E75B6', transition: 'all 0.2s' }),
-    section: { marginBottom: '2rem', background: '#fff', borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' },
-    sectionTitle: { background: '#1B3A6B', color: '#fff', padding: '0.8rem 1.2rem', fontSize: '1.05rem', fontWeight: 700, margin: 0 },
-    sectionBody: { padding: '1.2rem' },
+    section: { marginBottom: '1.2rem', background: '#fff', borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' },
+    sectionTitle: { background: '#1B3A6B', color: '#fff', padding: '0.8rem 1.2rem', fontSize: isMobile ? '0.95rem' : '1.05rem', fontWeight: 700, margin: 0 },
+    sectionBody: { padding: isMobile ? '0.75rem' : '1.2rem' },
     intro: { color: '#444', marginBottom: '1rem', fontSize: '0.95rem' },
     content: { color: '#444', fontSize: '0.95rem', margin: 0 },
     stepRow: { display: 'flex', gap: '0.8rem', marginBottom: '0.6rem', alignItems: 'flex-start' },
-    stepBadge: { background: '#2E75B6', color: '#fff', borderRadius: '6px', padding: '0.2rem 0.6rem', fontSize: '0.8rem', fontWeight: 700, whiteSpace: 'nowrap', marginTop: '2px' },
+    stepBadge: { background: '#2E75B6', color: '#fff', borderRadius: '6px', padding: '0.2rem 0.6rem', fontSize: '0.8rem', fontWeight: 700, whiteSpace: 'nowrap', marginTop: '2px', flexShrink: 0 },
     stepTitle: { fontWeight: 700, color: '#1B3A6B', fontSize: '0.95rem' },
     stepDesc: { color: '#555', fontSize: '0.9rem' },
     tip: { background: '#D4EDDA', borderLeft: '4px solid #1E7E34', borderRadius: '4px', padding: '0.7rem 1rem', marginTop: '1rem', color: '#155724', fontSize: '0.9rem' },
     warning: { background: '#F8D7DA', borderLeft: '4px solid #CC0000', borderRadius: '4px', padding: '0.7rem 1rem', marginTop: '0.5rem', color: '#721C24', fontSize: '0.9rem' },
     note: { background: '#FFF3CD', borderLeft: '4px solid #FFA500', borderRadius: '4px', padding: '0.7rem 1rem', marginTop: '1rem', color: '#856404', fontSize: '0.9rem' },
-    table: { width: '100%', borderCollapse: 'collapse', marginTop: '0.5rem', fontSize: '0.9rem' },
-    th: { background: '#D5E8F0', color: '#1B3A6B', fontWeight: 700, padding: '0.6rem 0.8rem', textAlign: 'left', border: '1px solid #BBBBBB' },
-    td: (shade) => ({ padding: '0.6rem 0.8rem', border: '1px solid #BBBBBB', background: shade ? '#F7F7F7' : '#fff', color: '#555', verticalAlign: 'top' }),
   };
 
   return (
@@ -186,16 +272,11 @@ export default function WarehouseGuide() {
               </div>
             ))}
             {sec.table && (
-              <table style={styles.table}>
-                <thead>
-                  <tr>{sec.table.headers.map((h, j) => <th key={j} style={styles.th}>{h}</th>)}</tr>
-                </thead>
-                <tbody>
-                  {sec.table.rows.map((row, j) => (
-                    <tr key={j}>{row.map((cell, k) => <td key={k} style={styles.td(j % 2 === 1)}>{cell}</td>)}</tr>
-                  ))}
-                </tbody>
-              </table>
+              <ResponsiveTable
+                headers={sec.table.headers}
+                rows={sec.table.rows}
+                isMobile={isMobile}
+              />
             )}
             {sec.tip && <div style={styles.tip}>✅ {sec.tip}</div>}
             {sec.warning && <div style={styles.warning}>⚠️ {sec.warning}</div>}
