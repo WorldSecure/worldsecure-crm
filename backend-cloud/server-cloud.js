@@ -197,6 +197,9 @@ app.get('/api/customers', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Ping (connectivity check) ────────────────────────────────────────────────
+app.get('/api/ping', (req, res) => { res.json({ ok: true }); });
+
 app.get('/api/products', authenticateToken, async (req, res) => {
   try {
     await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory_id INTEGER').catch(() => {});

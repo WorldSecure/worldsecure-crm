@@ -1598,6 +1598,27 @@ async function main() {
 
   log(`⏱  Scheduled: full sync every ${SYNC_INTERVAL_MS/60000} min`);
   log('   (keeping process alive...)');
+
+  // ── זיהוי חזרת אינטרנט → סינק מיידי ─────────────────────────────────────
+  let wasOffline = false;
+  const CHECK_INTERVAL_MS = 15 * 1000; // בדוק כל 15 שניות
+
+  setInterval(async () => {
+    try {
+      await apiRequest('GET', '/api/ping').catch(() => { throw new Error('offline'); });
+      if (wasOffline) {
+        log('🌐 Internet restored — running immediate sync...');
+        wasOffline = false;
+        await syncAll();
+        log('✅ Post-reconnect sync complete');
+      }
+    } catch (e) {
+      if (!wasOffline) {
+        log('📴 Internet lost — sync paused until reconnection');
+        wasOffline = true;
+      }
+    }
+  }, CHECK_INTERVAL_MS);
 }
 
 main().catch(err => {
