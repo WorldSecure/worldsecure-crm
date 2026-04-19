@@ -1630,7 +1630,7 @@ function Products() {
                     {/* שורה 1: Product Type dropdown */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', minWidth: 0 }}>
                       <label style={{ fontSize: '0.82rem', fontWeight: 500, whiteSpace: 'nowrap', minWidth: '100px' }}>📦 {t('product_type') || 'סוג מוצר'}:</label>
-                      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
                         <MobilePicker
                           options={[{ value: '', label: `— ${t('none') || 'ללא'} —` }, ...productTypeCodes.map(pt => {
                             const lang = localStorage.getItem('language') || 'he';
