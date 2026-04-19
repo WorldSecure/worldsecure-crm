@@ -10,12 +10,32 @@ function AdminLayout() {
 
   const isActive = (path) => location.pathname === path ? 'active' : '';
   const isCloud = window.location.hostname === 'app.world-secure.com';
+  const isMobile = window.innerWidth <= 768;
+
+  const groupLabel = isMobile ? null : (label) => (
+    <div style={{
+      fontSize: '0.68rem',
+      fontWeight: 700,
+      letterSpacing: '0.08em',
+      color: 'rgba(255,255,255,0.45)',
+      padding: '1rem 1rem 0.25rem 1rem',
+      textTransform: 'uppercase',
+      userSelect: 'none',
+    }}>
+      {label}
+    </div>
+  );
+
+  const divider = isMobile ? null : (
+    <div style={{ borderTop: '1px solid rgba(255,255,255,0.12)', margin: '0.5rem 0.75rem' }} />
+  );
 
   return (
     <div>
       <div className="main-layout">
         <aside className="sidebar">
           <nav>
+            {groupLabel && groupLabel(t('master_data') || 'Master Data')}
             <Link to="/admin/products" className={isActive('/admin/products')}>
               <span className="sidebar-icon">📦</span>
               {t('products')}
@@ -32,6 +52,8 @@ function AdminLayout() {
               <span className="sidebar-icon">👥</span>
               {t('customers')}
             </Link>
+
+            {groupLabel && groupLabel(t('reports') || 'Reports')}
             <Link to="/admin/warehouse-reports" className={isActive('/admin/warehouse-reports')}>
               <span className="sidebar-icon">📊</span>
               {t('warehouse_reports') || 'Warehouse Reports'}
@@ -46,6 +68,12 @@ function AdminLayout() {
               <span className="sidebar-icon">📞</span>
               {t('support_reports') || 'Support Reports'}
             </Link>
+            <Link to="/admin/activity-log" className={isActive('/admin/activity-log')}>
+              <span className="sidebar-icon">📝</span>
+              {t('activity_log')}
+            </Link>
+
+            {groupLabel && groupLabel(t('system') || 'System')}
             <Link to="/admin/settings" className={isActive('/admin/settings')}>
               <span className="sidebar-icon">⚙️</span>
               {t('settings')}
@@ -54,10 +82,8 @@ function AdminLayout() {
               <span className="sidebar-icon">👤</span>
               {t('users')}
             </Link>
-            <Link to="/admin/activity-log" className={isActive('/admin/activity-log')}>
-              <span className="sidebar-icon">📝</span>
-              {t('activity_log')}
-            </Link>
+
+            {divider}
             <Link to="/admin/guide" className={isActive('/admin/guide')}>
               <span className="sidebar-icon">📖</span>
               {t('system_guide') || 'System Guide'}
