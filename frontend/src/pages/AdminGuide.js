@@ -295,13 +295,170 @@ const sections = [
       }
     ]
   },
+  {
+    title: '10. Maintenance',
+    subsections: [
+      {
+        title: '10.1 Backups',
+        table: {
+          headers: ['What', 'Frequency', 'How'],
+          rows: [
+            ['SQLite (warehouse.db)', 'Weekly', 'Copy file to external drive or Google Drive'],
+            ['PostgreSQL (Supabase)', 'Daily (auto)', 'Supabase Dashboard → Database → Backups'],
+            ['Source Code', 'Every push', 'Stored in GitHub — every version recoverable'],
+          ]
+        }
+      },
+      {
+        title: '10.2 Monitoring',
+        steps: [
+          { step: '→', title: 'Render Logs', desc: 'Check for errors in server-cloud.js — Render Dashboard → Service → Logs' },
+          { step: '→', title: 'Supabase Dashboard', desc: 'Database → Logs — check for SQL errors' },
+          { step: '→', title: 'Activity Log', desc: 'Track all user actions — Admin → Activity Log' },
+          { step: '→', title: 'Sync terminal', desc: 'Verify "synced" messages appear every 5 minutes' },
+        ]
+      },
+      {
+        title: '10.3 Updates',
+        steps: [
+          { step: '→', title: 'Node.js packages', desc: 'Run npm update in both frontend and backend folders' },
+          { step: '→', title: 'react-scripts', desc: 'Upgrade carefully — always check compatibility before updating' },
+          { step: '→', title: 'After any update', desc: 'Test locally before pushing to vercel-fix' },
+        ]
+      },
+      {
+        title: '10.4 Security',
+        steps: [
+          { step: '→', title: 'JWT tokens', desc: 'Expire automatically — users are prompted to re-login' },
+          { step: '→', title: 'API keys', desc: 'Rotate every 6-12 months (Brevo, PDFShift)' },
+          { step: '→', title: 'Supabase', desc: 'Do not enable RLS policies without thorough testing' },
+          { step: '→', title: 'GitHub', desc: 'Confirm .env files are in .gitignore and never pushed to the repository' },
+          { step: '→', title: 'Admin credentials', desc: 'Change default passwords for all users after initial setup' },
+        ]
+      }
+    ]
+  },
+  {
+    title: '11. Installing on a New Machine',
+    content: 'The system includes an automated PowerShell installer script. The full process takes approximately 10-15 minutes.',
+    subsections: [
+      {
+        title: '11.1 Prerequisites',
+        steps: [
+          { step: '✔', title: 'Windows 10 / 11 — 64-bit' },
+          { step: '✔', title: 'Active internet connection', desc: 'Required to download code and packages' },
+          { step: '✔', title: 'Administrator privileges on the machine' },
+          { step: '✔', title: 'Access to the GitHub repository' },
+        ]
+      },
+      {
+        title: '11.2 Files to Prepare from the Old Machine',
+        table: {
+          headers: ['File', 'Source Location', 'Destination on New Machine'],
+          rows: [
+            ['warehouse.db', 'crm-project\\backend\\', 'crm-project\\backend\\'],
+            ['.env (backend)', 'crm-project\\backend\\', 'crm-project\\backend\\'],
+          ]
+        },
+        warning: 'The .env file contains secret API keys. Transfer it securely (USB only) — never by email.'
+      },
+      {
+        title: '11.3 Installation Steps',
+        steps: [
+          { step: 'A', title: 'Run the Installer', desc: 'Right-click WorldSecure_CRM_Installer.ps1 → "Run with PowerShell". If Execution Policy error: run as Admin: Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process' },
+          { step: 'B', title: 'Automated Installation', desc: 'Installer checks internet → installs Node.js + Git → clones code from GitHub (vercel-fix) → runs npm install → waits for DB copy → creates startup script and Desktop shortcut' },
+          { step: 'C', title: 'Copy DB and .env Files', desc: 'When the script pauses at Step 5 — copy warehouse.db and .env to: C:\\Users\\[name]\\crm-project\\backend\\. The script detects the files and continues automatically.' },
+        ],
+        table: {
+          headers: ['#', 'Stage', 'What happens'],
+          rows: [
+            ['0', 'Internet check', 'Verifies active internet connection'],
+            ['1', 'Node.js + Git', 'Downloads and installs if not present — Node.js v20 LTS + Git v2.43'],
+            ['2', 'Install folder', 'Default: C:\\Users\\[name]\\crm-project — can be changed'],
+            ['3', 'Download code', 'git clone from GitHub + checkout vercel-fix branch'],
+            ['4', 'npm install', 'Installs Node.js packages for both backend and frontend'],
+            ['5', 'Transfer DB', 'Script waits — copy warehouse.db and .env to the folders shown'],
+            ['6', 'Startup script', 'Creates start-crm_WITH_SYNC.bat in the project folder'],
+            ['7', 'Desktop shortcut', 'Creates "WorldSecure CRM.lnk" on the Desktop'],
+          ]
+        }
+      },
+      {
+        title: '11.4 First Launch',
+        steps: [
+          { step: 'Step 1', title: 'Double-click "WorldSecure CRM" on the Desktop' },
+          { step: 'Step 2', title: 'Three terminal windows open', desc: 'Backend, Frontend, Cloud Sync' },
+          { step: 'Step 3', title: 'After ~30 seconds', desc: 'Browser opens automatically to http://localhost:3000' },
+          { step: 'Step 4', title: 'Log in with Admin credentials' },
+          { step: 'Step 5', title: 'Verify sync', desc: 'Check the Sync terminal for "synced" messages' },
+        ]
+      },
+      {
+        title: '11.5 Post-Installation Checks',
+        table: {
+          headers: ['Check', 'Expected Result'],
+          rows: [
+            ['http://localhost:3000 loads', 'WorldSecure CRM login screen'],
+            ['Login with Admin account', 'Enter system without errors'],
+            ['Products / Customers visible', 'Data from warehouse.db appears'],
+            ['Cloud Sync terminal', 'Shows "synced" messages after 5 minutes'],
+            ['Login to app.world-secure.com', 'Same data visible in cloud'],
+          ]
+        }
+      },
+      {
+        title: '11.6 Common Installation Errors',
+        table: {
+          headers: ['Error', 'Solution'],
+          rows: [
+            ['Execution Policy error', 'Run: Set-ExecutionPolicy Bypass -Scope Process'],
+            ['git clone failed', 'Check GitHub access permissions and internet connection'],
+            ['npm install failed', 'Run manually: cd frontend && npm install'],
+            ['allowedHosts error on startup', 'Check frontend\\.env — must contain only: REACT_APP_API_URL=http://localhost:3001'],
+            ['Backend fails to start', 'Verify .env exists in backend\\ folder with DATABASE_URL'],
+          ]
+        }
+      }
+    ]
+  },
+  {
+    title: '12. Quick Reference',
+    subsections: [
+      {
+        title: '12.1 Important Links',
+        table: {
+          headers: ['Service', 'URL'],
+          rows: [
+            ['System (Cloud)', 'https://app.world-secure.com'],
+            ['Render Dashboard', 'https://dashboard.render.com'],
+            ['Supabase Dashboard', 'https://app.supabase.com'],
+            ['GitHub Repository', 'https://github.com — branch: vercel-fix'],
+            ['Brevo Dashboard', 'https://app.brevo.com'],
+            ['PDFShift Dashboard', 'https://pdfshift.io/dashboard'],
+            ['cron-job.org', 'https://console.cron-job.org'],
+            ['Local System', 'http://localhost:3000'],
+            ['Local Backend API', 'http://localhost:3001/api'],
+          ]
+        }
+      },
+      {
+        title: '12.2 Common Git Commands',
+        steps: [
+          { step: '1', title: 'cd C:\\Users\\amit\\crm-project' },
+          { step: '2', title: 'git add [files]' },
+          { step: '3', title: 'git commit -m "description"' },
+          { step: '4', title: 'git push origin vercel-fix' },
+        ]
+      }
+    ]
+  },
   // ── PART II: User Manual ────────────────────────────────────────────────────
   {
-    title: '10. Sales Module — Deal Management',
+    title: '13. Sales Module — Deal Management',
     content: 'The Sales module manages the full sales cycle from quote creation to deal closure. Access: click SALES in the top navigation bar.',
     subsections: [
       {
-        title: '10.1 Sales Management Screen',
+        title: '13.1 Sales Management Screen',
         content: 'The main screen shows the Quotes List table with: Quote Number, Customer, Total, Currency, Status, Date, Actions.',
         table: {
           headers: ['Status', 'Color', 'Meaning'],
@@ -313,7 +470,7 @@ const sections = [
         }
       },
       {
-        title: '10.2 Creating a New Quote',
+        title: '13.2 Creating a New Quote',
         steps: [
           { step: 'Step 1', title: 'Click "New Quote"', desc: 'Blue button at the top of the screen' },
           { step: 'Step 2', title: 'Select Currency', desc: 'Choose deal currency (EUR, USD, Shekel, AOA, KES, etc.). This determines the Base Currency in Additional Costs — choose carefully.' },
@@ -326,14 +483,14 @@ const sections = [
         warning: 'Enter prices as numbers only. Typing 1,000 will be saved correctly as 1,000 (not 1).'
       },
       {
-        title: '10.3 Approving a Quote',
+        title: '13.3 Approving a Quote',
         steps: [
           { step: 'Step 1', title: 'Click "Approve"', desc: 'In the Actions column of the quote row' },
           { step: 'Step 2', title: 'Status changes to Approved (green)', desc: 'The Manage Stages button becomes active. Only after Approve can you proceed with the deal workflow.' },
         ]
       },
       {
-        title: '10.4 Managing Deal Stages',
+        title: '13.4 Managing Deal Stages',
         content: 'Clicking Manage Stages opens a window with 9 sequential stages. Each stage unlocks after the previous one is completed:',
         table: {
           headers: ['#', 'Stage', 'Required Action', 'Description'],
@@ -352,7 +509,7 @@ const sections = [
         tip: 'After closing, a "Deal Summary" button appears showing a full summary of all 9 stages with all documents.'
       },
       {
-        title: '10.5 Additional Actions',
+        title: '13.5 Additional Actions',
         table: {
           headers: ['Button', 'Action'],
           rows: [
@@ -368,11 +525,11 @@ const sections = [
     ]
   },
   {
-    title: '11. Support Module — Case Management',
+    title: '14. Support Module — Case Management',
     content: 'The Support module manages all customer support cases from opening to resolution. Every interaction with a customer must be documented in the case timeline.',
     subsections: [
       {
-        title: '11.1 Support Management Screen',
+        title: '14.1 Support Management Screen',
         content: 'Access: click SUPPORT. The main screen shows All Tickets with columns: Ticket #, Customer, Subject, Priority, Status, Date, Actions.',
         table: {
           headers: ['Status', 'Meaning'],
@@ -385,7 +542,7 @@ const sections = [
         }
       },
       {
-        title: '11.2 Opening a New Support Case',
+        title: '14.2 Opening a New Support Case',
         steps: [
           { step: 'Step 1', title: 'Click "Open New Ticket"' },
           { step: 'Step 2', title: 'Select Customer', desc: 'Required' },
@@ -398,7 +555,7 @@ const sections = [
         ]
       },
       {
-        title: '11.3 Documenting Customer Interactions',
+        title: '14.3 Documenting Customer Interactions',
         warning: 'Every interaction with the customer MUST be documented in the case. This includes phone calls, emails, WhatsApp messages, and any other communication. A case without documentation is incomplete.',
         steps: [
           { step: 'Step 1', title: 'Open the case via "Case Management"' },
@@ -409,7 +566,7 @@ const sections = [
         note: 'If the customer sends photos of a defective product, upload them immediately using the "Upload Image" field (up to 5 images). Photos are critical evidence.'
       },
       {
-        title: '11.4 Setting Status to "Awaiting Customer"',
+        title: '14.4 Setting Status to "Awaiting Customer"',
         intro: 'When you contact the customer and are waiting for their response:',
         steps: [
           { step: 'Step 1', title: 'Change Status to "Awaiting Customer"', desc: 'A dialog box opens automatically' },
@@ -421,7 +578,7 @@ const sections = [
         warning: 'When the customer responds, change the status back to "In Progress" immediately.'
       },
       {
-        title: '11.5 Sending a Product from a Case',
+        title: '14.5 Sending a Product from a Case',
         intro: 'When a defective product needs to be replaced:',
         steps: [
           { step: 'Step 1', title: 'Click "Send Product"', desc: 'A dispatch request is sent to the Warehouse' },
@@ -433,7 +590,7 @@ const sections = [
         tip: 'The entire process is logged automatically in the History / Timeline.'
       },
       {
-        title: '11.6 Closing a Case',
+        title: '14.6 Closing a Case',
         steps: [
           { step: 'Step 1', title: 'Verify the issue is fully resolved' },
           { step: 'Step 2', title: 'Add a resolution comment', desc: 'e.g. "Issue resolved — replacement unit shipped and confirmed received."' },
@@ -443,7 +600,7 @@ const sections = [
         warning: 'Do not close a case without a resolution comment. Every closed case must have a clear record of how it was resolved.'
       },
       {
-        title: '11.7 Priority Guidelines',
+        title: '14.7 Priority Guidelines',
         table: {
           headers: ['Priority', 'When to use', 'Expected response'],
           rows: [
@@ -457,11 +614,11 @@ const sections = [
     ]
   },
   {
-    title: '12. Warehouse Module',
+    title: '15. Warehouse Module',
     content: 'The Warehouse module manages all physical inventory movements. Access: click WAREHOUSE in the top navigation bar. The sidebar contains: Dashboard, Inbound, Outbound, and Warehouse Reports.',
     subsections: [
       {
-        title: '12.1 Inbound — Receiving Goods',
+        title: '15.1 Inbound — Receiving Goods',
         intro: 'Record every delivery received from a supplier as a new Inbound transaction.',
         steps: [
           { step: 'Step 1', title: 'Click "New Inbound"', desc: 'Blue button at the top right of the Inbound screen' },
@@ -475,7 +632,7 @@ const sections = [
         tip: 'After saving, click "Receipt Note" in the Actions column to view and print the receipt document.'
       },
       {
-        title: '12.2 Outbound — Shipping Goods',
+        title: '15.2 Outbound — Shipping Goods',
         intro: 'Record every shipment leaving the warehouse.',
         steps: [
           { step: 'Step 1', title: 'Click "New Outbound"', desc: 'Blue button at the top right of the Outbound screen' },
@@ -490,7 +647,7 @@ const sections = [
         warning: 'Always check available stock before creating an outbound. Never ship more than what is in stock.'
       },
       {
-        title: '12.3 Packaging Options',
+        title: '15.3 Packaging Options',
         table: {
           headers: ['Option', 'When to use', 'What to enter'],
           rows: [
@@ -504,11 +661,11 @@ const sections = [
     ]
   },
   {
-    title: '13. Admin Module',
+    title: '16. Admin Module',
     content: 'The Admin module is accessible to Admin users only. It contains all system configuration and master data management. Access: click ADMIN in the top navigation bar.',
     subsections: [
       {
-        title: '13.1 Products',
+        title: '16.1 Products',
         content: 'Shows the full product catalog: SKU, Name, Category, Quantity, Unit, Suppliers, Manufacturers. Each product has Edit, Discontinue, and Delete actions.',
         steps: [
           { step: 'Step 1', title: 'Click "Add Product"' },
@@ -531,15 +688,15 @@ const sections = [
         }
       },
       {
-        title: '13.2 Suppliers & Manufacturers',
+        title: '16.2 Suppliers & Manufacturers',
         content: 'Both screens are identical in structure. Fields: Name (required), Contact Person (multiple supported with phone, email), Address, Tax ID, Country (required), Notes. Click "Add Supplier" or "Add Manufacturer" to create new records.',
       },
       {
-        title: '13.3 Customers',
+        title: '16.3 Customers',
         content: 'Fields: Name (required), Contact Person (multiple supported), Address, Tax ID, Country (required), Sensitive Customer (hides customer from non-admin users), Notes.',
       },
       {
-        title: '13.4 Settings',
+        title: '16.4 Settings',
         table: {
           headers: ['Section', 'Description'],
           rows: [
@@ -554,12 +711,12 @@ const sections = [
         }
       },
       {
-        title: '13.5 Users',
+        title: '16.5 Users',
         content: 'Manage all system user accounts. Fields: Username, Password, Role (Admin / Sales / Support / Worker), Language (EN / HE / PT).',
         warning: 'Only Admins can create or modify user accounts. Keep user credentials secure and do not share passwords between users.'
       },
       {
-        title: '13.6 Activity Log',
+        title: '16.6 Activity Log',
         content: 'Records every action performed in the system by all users: User name, Action type (created/updated/deleted/login), Module, Timestamp, Details.',
         tip: 'Use the Activity Log to investigate unexpected changes to data, verify who made a specific change, or review user activity.'
       }
@@ -625,7 +782,7 @@ export default function AdminGuide() {
       <div style={styles.partBanner('#1B3A6B')}>PART I — System Reference Manual (IT)</div>
 
       {sections.map((sec, i) => {
-        if (i === 10) {
+        if (i === 13) {
           return (
             <React.Fragment key={i}>
               <div style={styles.partBanner('#2E75B6')}>PART II — User Manual (All Users)</div>
