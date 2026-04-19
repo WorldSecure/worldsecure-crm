@@ -51,6 +51,7 @@ export const en = {
   reports: 'Reports',
   settings: 'Settings',
   activity_log: 'Activity Log',
+  system_guide: 'System Guide',
   users: 'Users',
   
   // Dashboard

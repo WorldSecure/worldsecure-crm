@@ -29,6 +29,7 @@ import AdminLayout from './components/AdminLayout';
 import MobilePicker from './pages/MobilePicker';
 import WarehouseGuide from './pages/WarehouseGuide';
 import SupportGuide from './pages/SupportGuide';
+import AdminGuide from './pages/AdminGuide';
 import './App.css';
 
 // כפתור בחירת שפה — שומר על עיצוב ה-Header במובייל ובדסקטופ
@@ -395,6 +396,7 @@ function AppRoutes() {
             <Route path="support-reports" element={<SupportReports />} />
             <Route path="warehouse-reports" element={<WarehouseReports />} />
             <Route path="activity-log" element={<ActivityLog />} />
+            <Route path="guide" element={<AdminGuide />} />
           </Route>
 
           <Route path="/login" element={<Login />} />

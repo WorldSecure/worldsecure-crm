@@ -51,6 +51,7 @@ export const he = {
   reports: 'דוחות',
   settings: 'הגדרות',
   activity_log: 'יומן פעולות',
+  system_guide: 'מדריך מערכת',
   users: 'משתמשים',
   
   // Dashboard

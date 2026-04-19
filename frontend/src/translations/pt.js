@@ -51,6 +51,7 @@ export const pt = {
   reports: 'Relatórios',
   settings: 'Configurações',
   activity_log: 'Registro de Atividades',
+  system_guide: 'Guia do Sistema',
   users: 'Usuários',
   
   // Dashboard
