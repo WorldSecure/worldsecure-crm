@@ -58,6 +58,10 @@ function AdminLayout() {
               <span className="sidebar-icon">📝</span>
               {t('activity_log')}
             </Link>
+            <Link to="/admin/guide" className={isActive('/admin/guide')}>
+              <span className="sidebar-icon">📖</span>
+              {t('system_guide') || 'System Guide'}
+            </Link>
           </nav>
         </aside>
         <main className="content">
