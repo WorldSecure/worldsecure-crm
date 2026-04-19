@@ -245,53 +245,42 @@ function Sales() {
   };
 
   const handleAddItem = () => {
-    if (!currentItem.product_id || currentItem.quantity <= 0 || parseFloat(String(currentItem.unit_price).replace(/,/g, '')) <= 0) {
+    const parsedQty = parseInt(String(currentItem.quantity).replace(/,/g, ''));
+    const parsedPrice = parseFloat(String(currentItem.unit_price).replace(/,/g, ''));
+
+    if (!currentItem.product_id || isNaN(parsedQty) || parsedQty <= 0 || isNaN(parsedPrice) || parsedPrice <= 0) {
       alert(t('error') + ': ' + t('fill_all_fields'));
       return;
     }
 
     const product = products.find(p => p.id === parseInt(currentItem.product_id));
-    
+    const itemToAdd = {
+      ...currentItem,
+      quantity: parsedQty,
+      unit_price: parsedPrice,
+      product_name: product.name,
+      product_sku: product.sku,
+      total: parsedQty * parsedPrice
+    };
+
     if (editingItemIndex !== null) {
-      // Update existing item
       const updatedItems = [...formData.items];
-      updatedItems[editingItemIndex] = {
-        ...currentItem,
-        product_name: product.name,
-        product_sku: product.sku,
-        total: parseInt(String(currentItem.quantity).replace(/,/g, '')) * parseFloat(String(currentItem.unit_price).replace(/,/g, ''))
-      };
-      setFormData({
-        ...formData,
-        items: updatedItems
-      });
+      updatedItems[editingItemIndex] = itemToAdd;
+      setFormData({ ...formData, items: updatedItems });
       setEditingItemIndex(null);
     } else {
-      // Add new item
-      setFormData({
-        ...formData,
-        items: [...formData.items, {
-          ...currentItem,
-          product_name: product.name,
-          product_sku: product.sku,
-          total: parseInt(String(currentItem.quantity).replace(/,/g, '')) * parseFloat(String(currentItem.unit_price).replace(/,/g, ''))
-        }]
-      });
+      setFormData({ ...formData, items: [...formData.items, itemToAdd] });
     }
 
-    setCurrentItem({
-      product_id: '',
-      quantity: 1,
-      unit_price: ''
-    });
+    setCurrentItem({ product_id: '', quantity: 1, unit_price: '' });
   };
 
   const handleEditItem = (index) => {
     const item = formData.items[index];
     setCurrentItem({
       product_id: item.product_id,
-      quantity: item.quantity,
-      unit_price: item.unit_price
+      quantity: Number(item.quantity).toLocaleString('en-US'),
+      unit_price: Number(item.unit_price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     });
     setEditingItemIndex(index);
   };
