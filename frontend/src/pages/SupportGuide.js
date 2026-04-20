@@ -18,35 +18,37 @@ const content = {
     sections: [
       {
         title: '1. Support Management Screen',
-        content: 'The main screen shows all tickets with columns: Ticket #, Customer, Subject, Priority, Status, Date, Actions. Click "Case Management" to open a ticket.'
-      },
-      {
-        title: '2. Case Statuses',
+        nav: '📍 Navigation: Top bar → SUPPORT → Support Management',
+        content: 'The main screen shows all tickets with columns: Ticket #, Customer, Subject, Priority, Status, Date, Actions. Click "Case Management" in the Actions column to open and manage a case.',
         table: {
-          headers: ['Status', 'Meaning'],
+          headers: ['Status', 'When to use', 'What happens'],
           rows: [
-            ['Open', 'New case — just created, not yet being handled'],
-            ['In Progress', 'Case is being actively worked on'],
-            ['Awaiting Customer', 'Waiting for a response from the customer'],
-            ['Closed', 'Case fully resolved and closed'],
+            ['Open', 'Set automatically when a new ticket is created', 'Case appears in the ticket list — not yet assigned or worked on'],
+            ['In Progress', 'When you start actively working on the case', 'Signals to the team that this case is being handled'],
+            ['Awaiting Customer', 'When you have contacted the customer and are waiting for their response', 'A required dialog opens: select Communication Channel (Phone/Email/SMS), enter a Note, and optionally set an Expected Reply date. Everything is logged automatically in the Timeline.'],
+            ['Closed', 'When the issue is fully resolved', 'Requires a resolution comment before closing. Case is archived.'],
+            ['Cancelled', 'When the case is no longer relevant (duplicate, error, customer withdrew)', 'Case is closed without resolution — use sparingly and always add a comment explaining why.'],
           ]
-        }
+        },
+        note: 'IMPORTANT: When the customer responds after "Awaiting Customer" — change the status back to "In Progress" immediately. Leaving a case as "Awaiting Customer" after the customer has replied gives a false picture of the workload to the entire team.'
       },
       {
-        title: '3. Opening a New Case',
+        title: '2. Opening a New Case',
+        nav: '📍 Navigation: SUPPORT → Support Management → "Open New Ticket" button (top of screen)',
         steps: [
-          { step: 'Step 1', title: 'Click "Open New Ticket"' },
-          { step: 'Step 2', title: 'Select Customer', desc: 'Required' },
+          { step: 'Step 1', title: 'Click "Open New Ticket"', desc: 'Blue button at the top of the Support Management screen' },
+          { step: 'Step 2', title: 'Select Customer', desc: 'Required — choose from the dropdown' },
           { step: 'Step 3', title: 'Select Product', desc: 'Required — the product related to the issue' },
           { step: 'Step 4', title: 'Enter Subject', desc: 'Required — brief description (max 80 characters)' },
           { step: 'Step 5', title: 'Add Description', desc: 'Detailed explanation of the problem (recommended)' },
           { step: 'Step 6', title: 'Set Priority', desc: 'Low / Medium / High / Urgent' },
-          { step: 'Step 7', title: 'Set Status', desc: 'Usually "Open" for new cases' },
-          { step: 'Step 8', title: 'Click "Save"', desc: 'Ticket is created with a unique TKT number' },
-        ]
+          { step: 'Step 7', title: 'Click "Save"', desc: 'Ticket is created with a unique TKT number and Status is automatically set to Open' },
+        ],
+        note: 'Status cannot be changed during ticket creation — it is automatically set to Open. To change the status, open the case via "Case Management" after it has been created.'
       },
       {
-        title: '4. Documenting Customer Interactions',
+        title: '3. Documenting Customer Interactions',
+        nav: '📍 Navigation: SUPPORT → Support Management → Actions column → "Case Management" → scroll down to "ADD COMMENT" section',
         warning: 'Every interaction with the customer MUST be documented in the case. This includes phone calls, emails, WhatsApp messages, and any other communication. A case without documentation is incomplete.',
         intro: 'How to add a comment:',
         steps: [
@@ -58,7 +60,8 @@ const content = {
         note: 'If the customer sends photos of a defective product, upload them immediately using the "Upload Image" field in Ticket Details (up to 5 images). Photos are critical evidence.'
       },
       {
-        title: '5. Setting Status to "Awaiting Customer"',
+        title: '4. Setting Status to "Awaiting Customer"',
+        nav: '📍 Navigation: SUPPORT → Support Management → "Case Management" → Ticket Details → Status dropdown → select "Awaiting Customer"',
         intro: 'When you contact the customer and are waiting for their response:',
         steps: [
           { step: 'Step 1', title: 'Change Status to "Awaiting Customer"', desc: 'A dialog box opens automatically' },
@@ -70,19 +73,23 @@ const content = {
         warning: 'When the customer responds, change the status back to "In Progress" immediately.'
       },
       {
-        title: '6. Sending a Product from a Case',
-        intro: 'When a defective product needs to be replaced:',
+        title: '5. Sending a Product from a Case',
+        nav: '📍 Navigation: SUPPORT → Support Management → "Case Management" → "Send Product" button',
+        intro: 'When a defective or missing product needs to be replaced, use the Send Product workflow:',
         steps: [
-          { step: 'Step 1', title: 'Click "Send Product"', desc: 'A dispatch request is sent to the Warehouse' },
-          { step: 'Step 2', title: 'Warehouse receives an alert', desc: 'The warehouse team prepares and ships the product' },
-          { step: 'Step 3', title: 'Warehouse confirms dispatch', desc: 'An automatic alert is sent back to Support' },
-          { step: 'Step 4', title: 'Support receives the alert', desc: 'Shows product name, quantity, delivery note reference, and date' },
-          { step: 'Step 5', title: 'Acknowledge the alert', desc: 'Confirm receipt of the dispatch notification in the case' },
+          { step: 'Step 1', title: 'Click "Send Product"', desc: 'Inside the case (Case Management). Select the product and quantity, then confirm. A dispatch request is immediately sent to the Warehouse module.' },
+          { step: 'Step 2', title: 'Warehouse receives an alert on their Dashboard', desc: 'The warehouse operator sees the dispatch request on the Warehouse Dashboard. They prepare the product and create an Outbound transaction with a Delivery Note.' },
+          { step: 'Step 3', title: 'Warehouse confirms dispatch', desc: 'After the product is shipped, the warehouse operator marks the dispatch as confirmed. An automatic alert is sent back to the Support module.' },
+          { step: 'Step 4', title: 'Support receives an alert on their Dashboard', desc: 'The Support Dashboard shows a new notification with: product name, quantity, delivery note reference number, and dispatch date.' },
+          { step: 'Step 5', title: 'Support acknowledges the alert', desc: 'Open the case and confirm receipt of the dispatch notification. This closes the alert and logs the acknowledgment in the case Timeline.' },
+          { step: 'Step 6', title: 'Document customer confirmation', desc: 'When the customer confirms they received the product — add a comment: e.g. "Customer confirmed receipt of replacement unit on [date]."' },
         ],
-        tip: 'The entire process is logged automatically in the History / Timeline. If the customer later confirms receipt, add a comment documenting it.'
+        tip: 'The entire process is automatically logged in the History / Timeline. No manual documentation is needed for the dispatch itself.',
+        warning: 'Always check that the Warehouse has sufficient stock before clicking Send Product.'
       },
       {
-        title: '7. Closing a Case',
+        title: '6. Closing a Case',
+        nav: '📍 Navigation: SUPPORT → Support Management → "Case Management" → Ticket Details → Status dropdown → "Closed" → Save',
         steps: [
           { step: 'Step 1', title: 'Verify the issue is fully resolved' },
           { step: 'Step 2', title: 'Add a resolution comment', desc: 'e.g. "Issue resolved — replacement unit shipped and confirmed received."' },
@@ -92,7 +99,7 @@ const content = {
         warning: 'Do not close a case without a resolution comment. Every closed case must have a clear record of how it was resolved.'
       },
       {
-        title: '8. Priority Guidelines',
+        title: '7. Priority Guidelines',
         table: {
           headers: ['Priority', 'When to use', 'Expected response'],
           rows: [
@@ -306,6 +313,7 @@ export default function SupportGuide() {
     tip: { background: '#D4EDDA', borderLeft: '4px solid #1E7E34', borderRadius: '4px', padding: '0.7rem 1rem', marginTop: '1rem', color: '#155724', fontSize: '0.9rem' },
     warning: { background: '#F8D7DA', borderLeft: '4px solid #CC0000', borderRadius: '4px', padding: '0.7rem 1rem', marginTop: '0.5rem', marginBottom: '0.5rem', color: '#721C24', fontSize: '0.9rem' },
     note: { background: '#FFF3CD', borderLeft: '4px solid #FFA500', borderRadius: '4px', padding: '0.7rem 1rem', marginTop: '1rem', color: '#856404', fontSize: '0.9rem' },
+    nav: { background: '#EEF4FF', border: '1px solid #BDD0FF', borderRadius: '6px', padding: '0.45rem 0.8rem', marginBottom: '0.8rem', fontSize: '0.82rem', color: '#2E5AB6', fontWeight: 600 },
   };
 
   return (
@@ -322,6 +330,7 @@ export default function SupportGuide() {
         <div key={i} style={styles.section}>
           <h2 style={styles.sectionTitle}>{sec.title}</h2>
           <div style={styles.sectionBody}>
+            {sec.nav && <div style={styles.nav}>{sec.nav}</div>}
             {sec.content && <p style={styles.content}>{sec.content}</p>}
             {sec.warning && !sec.steps && <div style={styles.warning}>⚠️ {sec.warning}</div>}
             {sec.intro && <p style={styles.intro}>{sec.intro}</p>}

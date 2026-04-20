@@ -18,10 +18,12 @@ const content = {
     sections: [
       {
         title: '1. Warehouse Dashboard',
-        content: 'The Dashboard shows a real-time summary: Total Products, Total Inbound transactions, and Total Outbound transactions.'
+        nav: '📍 Navigation: Top bar → WAREHOUSE → Dashboard',
+        content: 'The Dashboard shows a real-time summary: Total Products, Total Inbound transactions, and Total Outbound transactions. The sidebar contains: Dashboard, Inbound, Outbound, and Warehouse Reports.'
       },
       {
         title: '2. Inbound — Receiving Goods',
+        nav: '📍 Navigation: WAREHOUSE → Sidebar → Inbound → "New Inbound" button (top right)',
         intro: 'Record every delivery received from a supplier as a new Inbound transaction.',
         steps: [
           { step: 'Step 1', title: 'Click "New Inbound"', desc: 'Blue button at the top right of the Inbound screen' },
@@ -29,22 +31,26 @@ const content = {
           { step: 'Step 3', title: 'Select Supplier', desc: 'Choose from the dropdown list' },
           { step: 'Step 4', title: 'Add Items', desc: 'Select product → enter quantity → click "Add Item". Repeat for each product received.' },
           { step: 'Step 5', title: 'General Notes', desc: 'Optional notes about the delivery' },
-          { step: 'Step 6', title: 'Generate Receipt Note', desc: 'Check "Generate receipt note after saving" to create a receipt PDF automatically' },
-          { step: 'Step 7', title: 'Click "Save Transaction"', desc: 'Stock levels are updated automatically' },
+          { step: 'Step 6', title: 'Add QR Code', desc: 'Optional — select a QR code to attach to the receipt note' },
+          { step: 'Step 7', title: 'Generate Receipt Note', desc: 'Check "Generate receipt note after saving" — the system will automatically generate a receipt PDF immediately after clicking Save' },
+          { step: 'Step 8', title: 'Click "Save Transaction"', desc: 'Stock levels are updated automatically. If Generate Receipt Note was checked, the PDF is created immediately.' },
         ],
         tip: 'After saving, click "Receipt Note" in the Actions column to view and print the receipt document.'
       },
       {
         title: '3. Outbound — Shipping Goods',
+        nav: '📍 Navigation: WAREHOUSE → Sidebar → Outbound → "New Outbound" button (top right)',
         intro: 'Record every shipment leaving the warehouse.',
         steps: [
           { step: 'Step 1', title: 'Click "New Outbound"', desc: 'Blue button at the top right of the Outbound screen' },
           { step: 'Step 2', title: 'Select Customer Type', desc: 'Registered or Unregistered' },
           { step: 'Step 3', title: 'Select Customer', desc: 'Choose from the dropdown list' },
-          { step: 'Step 4', title: 'Set Status', desc: 'Pending / In Progress / Shipped' },
+          { step: 'Step 4', title: 'Set Status', desc: 'Pending / Ready / Shipped / Delivered' },
           { step: 'Step 5', title: 'Add Items', desc: 'Select product → enter quantity → click "Add Item". Available stock is shown next to each product.' },
           { step: 'Step 6', title: 'Packaging', desc: 'Choose: No packaging / Carton Packaging / Pallet Division (see below)' },
-          { step: 'Step 7', title: 'Click "Save Transaction"', desc: 'Stock levels are reduced automatically' },
+          { step: 'Step 7', title: 'Add QR Code', desc: 'Optional — select a QR code to attach to the delivery note' },
+          { step: 'Step 8', title: 'Generate Delivery Note', desc: 'Check "Generate delivery note after saving" — the system will automatically generate a delivery note PDF immediately after clicking Save' },
+          { step: 'Step 9', title: 'Click "Save Transaction"', desc: 'Stock levels are reduced automatically. If Generate Delivery Note was checked, the PDF is created immediately.' },
         ],
         tip: 'After saving, click "Delivery Note" to view, print or email the delivery note to the customer.',
         warning: 'Always check available stock before creating an outbound. Never ship more than what is in stock.'
@@ -66,9 +72,10 @@ const content = {
         table: {
           headers: ['Status', 'Meaning'],
           rows: [
-            ['Pending', 'Transaction created, goods not yet shipped'],
-            ['In Progress', 'Shipment is being prepared'],
+            ['Pending', 'Transaction created, goods not yet prepared'],
+            ['Ready', 'Goods are packed and ready for shipment'],
             ['Shipped', 'Goods have been shipped to the customer'],
+            ['Delivered', 'Goods have been delivered and confirmed by customer'],
           ]
         }
       }
@@ -244,6 +251,7 @@ export default function WarehouseGuide() {
     tip: { background: '#D4EDDA', borderLeft: '4px solid #1E7E34', borderRadius: '4px', padding: '0.7rem 1rem', marginTop: '1rem', color: '#155724', fontSize: '0.9rem' },
     warning: { background: '#F8D7DA', borderLeft: '4px solid #CC0000', borderRadius: '4px', padding: '0.7rem 1rem', marginTop: '0.5rem', color: '#721C24', fontSize: '0.9rem' },
     note: { background: '#FFF3CD', borderLeft: '4px solid #FFA500', borderRadius: '4px', padding: '0.7rem 1rem', marginTop: '1rem', color: '#856404', fontSize: '0.9rem' },
+    nav: { background: '#EEF4FF', border: '1px solid #BDD0FF', borderRadius: '6px', padding: '0.45rem 0.8rem', marginBottom: '0.8rem', fontSize: '0.82rem', color: '#2E5AB6', fontWeight: 600 },
   };
 
   return (
@@ -260,6 +268,7 @@ export default function WarehouseGuide() {
         <div key={i} style={styles.section}>
           <h2 style={styles.sectionTitle}>{sec.title}</h2>
           <div style={styles.sectionBody}>
+            {sec.nav && <div style={styles.nav}>{sec.nav}</div>}
             {sec.content && <p style={styles.content}>{sec.content}</p>}
             {sec.intro && <p style={styles.intro}>{sec.intro}</p>}
             {sec.steps && sec.steps.map((s, j) => (
