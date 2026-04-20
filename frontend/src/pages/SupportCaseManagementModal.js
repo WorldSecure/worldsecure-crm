@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import MobilePicker from './MobilePicker';
 import axios from 'axios';
 import { useLanguage } from '../utils/LanguageContext';
 import { useAuth } from '../utils/AuthContext';
@@ -217,17 +218,21 @@ function SupportCaseManagementModal({ ticket, customers, products, users, onClos
                 <div className="form-group">
                   <label className="form-label">👤 {t('owner')}</label>
                   {isAdmin ? (
-                    <select className="form-select" value={form.owner_id} onChange={e => {
-                      const u = users.find(u => u.id === parseInt(e.target.value));
-                      const selectedCustomer = customers.find(c => c.id === parseInt(form.customer_id));
-                      if (selectedCustomer?.is_sensitive && u?.role !== 'admin') {
-                        alert('⚠️ לקוח זה מסומן כרגיש — לא ניתן להעביר ownership למשתמש שאינו admin');
-                        return;
-                      }
-                      setForm(f => ({...f, owner_id: e.target.value, owner_name: u?.username||''}));
-                    }}>
-                      {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
-                    </select>
+                    <MobilePicker
+                      options={users.map(u => ({ value: String(u.id), label: u.username }))}
+                      value={String(form.owner_id)}
+                      onChange={val => {
+                        const u = users.find(u => u.id === parseInt(val));
+                        const selectedCustomer = customers.find(c => c.id === parseInt(form.customer_id));
+                        if (selectedCustomer?.is_sensitive && u?.role !== 'admin') {
+                          alert('⚠️ לקוח זה מסומן כרגיש — לא ניתן להעביר ownership למשתמש שאינו admin');
+                          return;
+                        }
+                        setForm(f => ({...f, owner_id: val, owner_name: u?.username||''}));
+                      }}
+                      placeholder={t('select_owner') || 'בחר בעלים'}
+                      label={t('owner') || 'Owner'}
+                    />
                   ) : (
                     <input className="form-input" value={form.owner_name || user?.username || ''} readOnly style={{ background:'#f0f0f0', color:'#666' }} />
                   )}
@@ -238,23 +243,35 @@ function SupportCaseManagementModal({ ticket, customers, products, users, onClos
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">👥 {t('customer')} *</label>
-                  <select className="form-select" value={form.customer_id} onChange={e => {
-                    const c = customers.find(c => c.id === parseInt(e.target.value));
-                    setForm(f => ({...f, customer_id: e.target.value, customer_name: c?.name||''}));
-                  }}>
-                    <option value="">{t('select_customer')}</option>
-                    {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+                  <MobilePicker
+                    options={[
+                      { value: '', label: t('select_customer') || 'בחר לקוח' },
+                      ...customers.map(c => ({ value: String(c.id), label: c.name }))
+                    ]}
+                    value={String(form.customer_id)}
+                    onChange={val => {
+                      const c = customers.find(c => c.id === parseInt(val));
+                      setForm(f => ({...f, customer_id: val, customer_name: c?.name||''}));
+                    }}
+                    placeholder={t('select_customer') || 'בחר לקוח'}
+                    label={t('customer') || 'Customer'}
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">📦 {t('product')} *</label>
-                  <select className="form-select" value={form.product_id} onChange={e => {
-                    const p = products.find(p => p.id === parseInt(e.target.value));
-                    setForm(f => ({...f, product_id: e.target.value, product_name: p?.name||''}));
-                  }}>
-                    <option value="">{t('select_product')}</option>
-                    {products.filter(p => !p.is_parent && (p.is_active === 1 || p.is_active === true || p.is_active == null)).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
+                  <MobilePicker
+                    options={[
+                      { value: '', label: t('select_product') || 'בחר מוצר' },
+                      ...products.filter(p => !p.is_parent && (p.is_active === 1 || p.is_active === true || p.is_active == null)).map(p => ({ value: String(p.id), label: p.name }))
+                    ]}
+                    value={String(form.product_id)}
+                    onChange={val => {
+                      const p = products.find(p => p.id === parseInt(val));
+                      setForm(f => ({...f, product_id: val, product_name: p?.name||''}));
+                    }}
+                    placeholder={t('select_product') || 'בחר מוצר'}
+                    label={t('product') || 'Product'}
+                  />
                 </div>
               </div>
 
@@ -294,13 +311,19 @@ function SupportCaseManagementModal({ ticket, customers, products, users, onClos
               {/* Status */}
               <div className="form-group">
                 <label className="form-label">🔘 {t('status')}</label>
-                <select className="form-select" value={form.status} onChange={e => handleStatusChange(e.target.value)}>
-                  <option value="open">{t('status_open')}</option>
-                  <option value="in_progress">{t('status_in_progress')}</option>
-                  <option value="awaiting_customer">{t('status_awaiting_customer')}</option>
-                  <option value="closed">{t('status_closed')}</option>
-                  <option value="cancelled">{t('status_cancelled')}</option>
-                </select>
+                <MobilePicker
+                  options={[
+                    { value: 'open', label: t('status_open') || 'Open' },
+                    { value: 'in_progress', label: t('status_in_progress') || 'In Progress' },
+                    { value: 'awaiting_customer', label: t('status_awaiting_customer') || 'Awaiting Customer' },
+                    { value: 'closed', label: t('status_closed') || 'Closed' },
+                    { value: 'cancelled', label: t('status_cancelled') || 'Cancelled' },
+                  ]}
+                  value={form.status}
+                  onChange={val => handleStatusChange(val)}
+                  placeholder={t('status') || 'סטטוס'}
+                  label={t('status') || 'Status'}
+                />
                 {form.status === 'awaiting_customer' && form.awaiting_channel && (
                   <div style={{ marginTop:'0.4rem', fontSize:'0.8rem', color:'#4CAF50', fontWeight:500 }}>
                     ✅ {form.awaiting_channel === 'phone' ? '☎️' : form.awaiting_channel === 'email' ? '📧' : '📱'} {form.awaiting_note && `— ${form.awaiting_note}`}
@@ -482,14 +505,19 @@ function SupportCaseManagementModal({ ticket, customers, products, users, onClos
             </div>
             <div className="form-group">
               <label className="form-label">📦 {t('product')} *</label>
-              <select className="form-select" value={sendProductForm.product_id}
-                onChange={e => {
-                  const p = products.find(x => x.id === parseInt(e.target.value));
-                  setSendProductForm(f => ({...f, product_id: e.target.value, product_name: p?.name||''}));
-                }}>
-                <option value="">{t('select_product')||'בחר מוצר'}</option>
-                {products.filter(p => !p.is_parent && (p.is_active === 1 || p.is_active === true || p.is_active == null)).map(p => <option key={p.id} value={p.id}>{p.name} {p.quantity > 0 ? `🟢 ${p.quantity}` : `🔴 ${p.quantity}`}</option>)}
-              </select>
+              <MobilePicker
+                options={[
+                  { value: '', label: t('select_product') || 'בחר מוצר' },
+                  ...products.filter(p => !p.is_parent && (p.is_active === 1 || p.is_active === true || p.is_active == null)).map(p => ({ value: String(p.id), label: `${p.name} ${p.quantity > 0 ? '🟢 ' + p.quantity : '🔴 ' + p.quantity}` }))
+                ]}
+                value={String(sendProductForm.product_id)}
+                onChange={val => {
+                  const p = products.find(x => x.id === parseInt(val));
+                  setSendProductForm(f => ({...f, product_id: val, product_name: p?.name||''}));
+                }}
+                placeholder={t('select_product') || 'בחר מוצר'}
+                label={t('product') || 'Product'}
+              />
             </div>
             <div className="form-group">
               <label className="form-label">🔢 {t('quantity')||'כמות'}</label>
