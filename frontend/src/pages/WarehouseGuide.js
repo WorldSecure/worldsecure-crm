@@ -86,10 +86,12 @@ const content = {
     sections: [
       {
         title: '1. Painel do Armazém',
-        content: 'O painel mostra um resumo em tempo real: Total de Produtos, Total de Entradas e Total de Saídas.'
+        nav: '📍 Navegação: Barra superior → WAREHOUSE → Dashboard',
+        content: 'O painel mostra um resumo em tempo real: Total de Produtos, Total de Entradas e Total de Saídas. A barra lateral contém: Dashboard, Entrada, Saída e Relatórios de Armazém.'
       },
       {
         title: '2. Entrada — Receber Mercadorias',
+        nav: '📍 Navegação: WAREHOUSE → Barra lateral → Inbound → botão "New Inbound" (canto superior direito)',
         intro: 'Registar cada entrega recebida de um fornecedor como uma nova transação de Entrada.',
         steps: [
           { step: 'Passo 1', title: 'Clique em "New Inbound"', desc: 'Botão azul no canto superior direito do ecrã de Entrada' },
@@ -97,22 +99,26 @@ const content = {
           { step: 'Passo 3', title: 'Selecionar Fornecedor', desc: 'Escolher da lista suspensa' },
           { step: 'Passo 4', title: 'Adicionar Itens', desc: 'Selecionar produto → inserir quantidade → clicar em "Add Item". Repetir para cada produto recebido.' },
           { step: 'Passo 5', title: 'Notas Gerais', desc: 'Notas opcionais sobre a entrega' },
-          { step: 'Passo 6', title: 'Gerar Nota de Recepção', desc: 'Marcar "Generate receipt note after saving" para criar um PDF automaticamente' },
-          { step: 'Passo 7', title: 'Clique em "Save Transaction"', desc: 'Os níveis de stock são atualizados automaticamente' },
+          { step: 'Passo 6', title: 'Adicionar Código QR', desc: 'Opcional — selecionar um código QR para anexar à nota de recepção' },
+          { step: 'Passo 7', title: 'Gerar Nota de Recepção', desc: 'Marcar "Generate receipt note after saving" — o sistema irá gerar automaticamente um PDF da nota de recepção imediatamente após clicar em Guardar' },
+          { step: 'Passo 8', title: 'Clique em "Save Transaction"', desc: 'Os níveis de stock são atualizados automaticamente. Se a opção Gerar Nota de Recepção estava marcada, o PDF é criado imediatamente.' },
         ],
         tip: 'Após guardar, clique em "Receipt Note" na coluna Ações para ver e imprimir o documento de recepção.'
       },
       {
         title: '3. Saída — Enviar Mercadorias',
+        nav: '📍 Navegação: WAREHOUSE → Barra lateral → Outbound → botão "New Outbound" (canto superior direito)',
         intro: 'Registar cada envio que sai do armazém.',
         steps: [
           { step: 'Passo 1', title: 'Clique em "New Outbound"', desc: 'Botão azul no canto superior direito do ecrã de Saída' },
           { step: 'Passo 2', title: 'Selecionar Tipo de Cliente', desc: 'Registado ou Não Registado' },
           { step: 'Passo 3', title: 'Selecionar Cliente', desc: 'Escolher da lista suspensa' },
-          { step: 'Passo 4', title: 'Definir Estado', desc: 'Pendente / Em Progresso / Enviado' },
+          { step: 'Passo 4', title: 'Definir Estado', desc: 'Pendente / Pronto / Enviado / Entregue' },
           { step: 'Passo 5', title: 'Adicionar Itens', desc: 'Selecionar produto → inserir quantidade → clicar em "Add Item". O stock disponível é mostrado junto a cada produto.' },
-          { step: 'Passo 6', title: 'Embalagem', desc: 'Escolher: Sem embalagem / Embalagem em Caixas / Divisão em Paletes (ver abaixo)' },
-          { step: 'Passo 7', title: 'Clique em "Save Transaction"', desc: 'Os níveis de stock são reduzidos automaticamente' },
+          { step: 'Passo 6', title: 'Embalagem', desc: 'Escolher: Sem embalagem / Embalagem em Caixas / Divisão em Paletes' },
+          { step: 'Passo 7', title: 'Adicionar Código QR', desc: 'Opcional — selecionar um código QR para anexar à guia de remessa' },
+          { step: 'Passo 8', title: 'Gerar Guia de Remessa', desc: 'Marcar "Generate delivery note after saving" — o sistema irá gerar automaticamente uma guia de remessa PDF imediatamente após clicar em Guardar' },
+          { step: 'Passo 9', title: 'Clique em "Save Transaction"', desc: 'Os níveis de stock são reduzidos automaticamente. Se a opção Gerar Guia de Remessa estava marcada, o PDF é criado imediatamente.' },
         ],
         tip: 'Após guardar, clique em "Delivery Note" para ver, imprimir ou enviar por email a guia de remessa ao cliente.',
         warning: 'Verifique sempre o stock disponível antes de criar uma saída. Nunca envie mais do que o disponível em stock.'
@@ -134,9 +140,10 @@ const content = {
         table: {
           headers: ['Estado', 'Significado'],
           rows: [
-            ['Pending', 'Transação criada, mercadoria ainda não enviada'],
-            ['In Progress', 'Envio em preparação'],
+            ['Pending', 'Transação criada, mercadoria ainda não preparada'],
+            ['Ready', 'Mercadoria embalada e pronta para envio'],
             ['Shipped', 'Mercadoria enviada ao cliente'],
+            ['Delivered', 'Mercadoria entregue e confirmada pelo cliente'],
           ]
         }
       }

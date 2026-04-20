@@ -117,35 +117,37 @@ const content = {
     sections: [
       {
         title: '1. Ecrã de Gestão de Suporte',
-        content: 'O ecrã principal mostra todos os tickets com as colunas: Ticket #, Cliente, Assunto, Prioridade, Estado, Data, Ações. Clique em "Case Management" para abrir um ticket.'
-      },
-      {
-        title: '2. Estados dos Casos',
+        nav: '📍 Navegação: Barra superior → SUPPORT → Gestão de Suporte',
+        content: 'O ecrã principal mostra todos os tickets com as colunas: Ticket #, Cliente, Assunto, Prioridade, Estado, Data, Ações. Clique em "Case Management" na coluna Ações para abrir e gerir um caso.',
         table: {
-          headers: ['Estado', 'Significado'],
+          headers: ['Estado', 'Quando usar', 'O que acontece'],
           rows: [
-            ['Open', 'Novo caso — recém criado, ainda não tratado'],
-            ['In Progress', 'Caso em tratamento ativo'],
-            ['Awaiting Customer', 'À espera de resposta do cliente'],
-            ['Closed', 'Caso totalmente resolvido e fechado'],
+            ['Open', 'Definido automaticamente quando um novo ticket é criado', 'O caso aparece na lista — ainda não atribuído nem trabalhado'],
+            ['In Progress', 'Quando começa a trabalhar ativamente no caso', 'Sinaliza à equipa que este caso está a ser tratado'],
+            ['Awaiting Customer', 'Quando contactou o cliente e está à espera da resposta', 'Abre uma caixa de diálogo obrigatória: selecionar Canal de Comunicação (Telefone/Email/SMS), inserir Nota do que foi solicitado, e opcionalmente definir uma data de Resposta Esperada. Tudo é registado automaticamente na Linha do Tempo.'],
+            ['Closed', 'Quando o problema está totalmente resolvido', 'Requer um comentário de resolução antes de fechar. O caso fica arquivado.'],
+            ['Cancelled', 'Quando o caso já não é relevante (duplicado, erro, cliente desistiu)', 'O caso é fechado sem resolução — usar com moderação e sempre adicionar um comentário explicativo.'],
           ]
-        }
+        },
+        note: 'IMPORTANTE: Quando o cliente responder após "Awaiting Customer" — altere o estado de volta para "In Progress" imediatamente. Deixar um caso como "Awaiting Customer" após o cliente ter respondido dá uma imagem falsa da carga de trabalho a toda a equipa.'
       },
       {
-        title: '3. Abrir um Novo Caso',
+        title: '2. Abrir um Novo Caso de Suporte',
+        nav: '📍 Navegação: SUPPORT → Gestão de Suporte → botão "Open New Ticket" (topo do ecrã)',
         steps: [
-          { step: 'Passo 1', title: 'Clique em "Open New Ticket"' },
-          { step: 'Passo 2', title: 'Selecionar Cliente', desc: 'Obrigatório' },
+          { step: 'Passo 1', title: 'Clique em "Open New Ticket"', desc: 'Botão azul no topo do ecrã de Gestão de Suporte' },
+          { step: 'Passo 2', title: 'Selecionar Cliente', desc: 'Obrigatório — escolher da lista suspensa' },
           { step: 'Passo 3', title: 'Selecionar Produto', desc: 'Obrigatório — o produto relacionado com o problema' },
           { step: 'Passo 4', title: 'Inserir Assunto', desc: 'Obrigatório — descrição breve (máx. 80 caracteres)' },
           { step: 'Passo 5', title: 'Adicionar Descrição', desc: 'Explicação detalhada do problema (recomendado)' },
           { step: 'Passo 6', title: 'Definir Prioridade', desc: 'Baixa / Média / Alta / Urgente' },
-          { step: 'Passo 7', title: 'Definir Estado', desc: 'Normalmente "Open" para novos casos' },
-          { step: 'Passo 8', title: 'Clique em "Save"', desc: 'Ticket criado com número único TKT' },
-        ]
+          { step: 'Passo 7', title: 'Clique em "Save"', desc: 'Ticket criado com número único TKT e Estado definido automaticamente como Open' },
+        ],
+        note: 'O Estado não pode ser alterado durante a criação do ticket — é definido automaticamente como Open. Para alterar o estado, abra o caso via "Case Management" após a criação.'
       },
       {
-        title: '4. Documentar Interações com o Cliente',
+        title: '3. Documentar Interações com o Cliente',
+        nav: '📍 Navegação: SUPPORT → Gestão de Suporte → coluna Ações → "Case Management" → descer até à secção "ADD COMMENT"',
         warning: 'Toda a interação com o cliente DEVE ser documentada no caso. Isto inclui chamadas telefónicas, emails, mensagens WhatsApp e qualquer outra comunicação. Um caso sem documentação está incompleto.',
         intro: 'Como adicionar um comentário:',
         steps: [
@@ -157,7 +159,8 @@ const content = {
         note: 'Se o cliente enviar fotos de um produto com defeito, carregue-as imediatamente usando o campo "Upload Image" nos detalhes do ticket (máx. 5 imagens). As fotos são evidências críticas.'
       },
       {
-        title: '5. Definir Estado para "Awaiting Customer"',
+        title: '4. Definir Estado para "Awaiting Customer"',
+        nav: '📍 Navegação: SUPPORT → Gestão de Suporte → "Case Management" → Detalhes do Ticket → lista suspensa Estado → selecionar "Awaiting Customer"',
         intro: 'Quando contacta o cliente e está à espera da resposta:',
         steps: [
           { step: 'Passo 1', title: 'Alterar Estado para "Awaiting Customer"', desc: 'Uma caixa de diálogo abre automaticamente' },
@@ -169,19 +172,23 @@ const content = {
         warning: 'Quando o cliente responder, altere o estado de volta para "In Progress" imediatamente.'
       },
       {
-        title: '6. Enviar Produto a partir de um Caso',
-        intro: 'Quando um produto com defeito precisa de ser substituído:',
+        title: '5. Enviar Produto a partir de um Caso',
+        nav: '📍 Navegação: SUPPORT → Gestão de Suporte → "Case Management" → botão "Send Product"',
+        intro: 'Quando um produto com defeito ou em falta precisa de ser substituído, utilize o fluxo de trabalho Enviar Produto:',
         steps: [
-          { step: 'Passo 1', title: 'Clique em "Send Product"', desc: 'Um pedido de expedição é enviado ao Armazém' },
-          { step: 'Passo 2', title: 'Armazém recebe alerta', desc: 'A equipa do armazém prepara e expede o produto' },
-          { step: 'Passo 3', title: 'Armazém confirma expedição', desc: 'Um alerta automático é enviado de volta ao Suporte' },
-          { step: 'Passo 4', title: 'Suporte recebe o alerta', desc: 'Mostra nome do produto, quantidade, referência e data' },
-          { step: 'Passo 5', title: 'Confirmar o alerta', desc: 'Confirmar a notificação de expedição no caso' },
+          { step: 'Passo 1', title: 'Clique em "Send Product"', desc: 'Dentro do caso (Case Management). Selecionar o produto e a quantidade, depois confirmar. Um pedido de expedição é enviado imediatamente ao módulo de Armazém.' },
+          { step: 'Passo 2', title: 'O Armazém recebe um alerta no seu Dashboard', desc: 'O operador do armazém vê o pedido de expedição no Dashboard do Armazém. Prepara o produto e cria uma transação de Saída com Guia de Remessa.' },
+          { step: 'Passo 3', title: 'O Armazém confirma a expedição', desc: 'Após o produto ser enviado, o operador confirma a expedição. Um alerta automático é enviado de volta ao módulo de Suporte.' },
+          { step: 'Passo 4', title: 'O Suporte recebe um alerta no seu Dashboard', desc: 'O Dashboard de Suporte mostra uma nova notificação com: nome do produto, quantidade, número de referência da guia de remessa e data de expedição.' },
+          { step: 'Passo 5', title: 'O Suporte confirma o alerta', desc: 'Abrir o caso e confirmar a receção da notificação de expedição. Isto fecha o alerta e regista a confirmação na Linha do Tempo do caso.' },
+          { step: 'Passo 6', title: 'Documentar confirmação do cliente', desc: 'Quando o cliente confirmar a receção do produto — adicionar um comentário: ex: "Cliente confirmou receção da unidade de substituição em [data]."' },
         ],
-        tip: 'Todo o processo é registado automaticamente no Histórico. Se o cliente confirmar a receção, adicione um comentário a documentar.'
+        tip: 'Todo o processo é registado automaticamente na Linha do Tempo. Não é necessária documentação manual para a expedição em si.',
+        warning: 'Verifique sempre que o Armazém tem stock suficiente antes de clicar em Enviar Produto.'
       },
       {
-        title: '7. Fechar um Caso',
+        title: '6. Fechar um Caso',
+        nav: '📍 Navegação: SUPPORT → Gestão de Suporte → "Case Management" → Detalhes do Ticket → Estado → "Closed" → Guardar',
         steps: [
           { step: 'Passo 1', title: 'Verificar que o problema foi totalmente resolvido' },
           { step: 'Passo 2', title: 'Adicionar comentário de resolução', desc: 'ex: "Problema resolvido — unidade de substituição enviada e receção confirmada."' },
@@ -191,7 +198,7 @@ const content = {
         warning: 'Não feche um caso sem comentário de resolução. Cada caso fechado deve ter um registo claro de como foi resolvido.'
       },
       {
-        title: '8. Guia de Prioridades',
+        title: '7. Guia de Prioridades',
         table: {
           headers: ['Prioridade', 'Quando usar', 'Resposta esperada'],
           rows: [
