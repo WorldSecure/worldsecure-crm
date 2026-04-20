@@ -88,22 +88,276 @@ const sections = [
       {
         title: '1.2 Sync Engine',
         content: 'Synchronization runs automatically every 5 minutes via sync-to-cloud.js using Last-Write-Wins (based on updated_at timestamp). Local change → pushed to cloud. Cloud change → pulled to local. The record with the latest timestamp wins.',
+        table: {
+          headers: ['Sync Direction', 'Entities', 'Trigger'],
+          rows: [
+            ['LOCAL → CLOUD', 'users, qr-codes, categories, subcategories, customers, products, suppliers, manufacturers, signatures, transactions, support, notifications', 'updated_at timestamp newer than last sync'],
+            ['CLOUD → LOCAL', 'settings, logo, users, qr-codes, products, transactions, support, signatures', 'updated_at timestamp newer than last sync'],
+            ['Deletions', 'All entities — tracked in deleted_entities table', 'Record added to deleted_entities → propagated in next sync cycle'],
+          ]
+        }
+      },
+      {
+        title: '1.3 System Connectivity Diagram',
+        content: 'How all components connect:',
+        table: {
+          headers: ['From', '→', 'To', 'Protocol / Method'],
+          rows: [
+            ['Browser / PWA (mobile)', '→', 'app.world-secure.com', 'HTTPS'],
+            ['app.world-secure.com (Cloudflare DNS)', '→', 'Render Frontend (Static Site)', 'CNAME → worldsecure-frontend.onrender.com'],
+            ['Render Frontend', '→', 'Render Backend (/api/*)', 'HTTPS REST API'],
+            ['Render Backend', '→', 'Supabase PostgreSQL', 'PostgreSQL over SSL (DATABASE_URL)'],
+            ['Render Backend', '→', 'Brevo', 'HTTPS REST API (BREVO_API_KEY)'],
+            ['Render Backend', '→', 'PDFShift', 'HTTPS REST API (PDFSHIFT_API_KEY)'],
+            ['Local Frontend (port 3000)', '→', 'Local Backend (port 3001)', 'HTTP via setupProxy.js'],
+            ['Local Backend', '→', 'SQLite warehouse.db', 'Direct file access'],
+            ['sync-to-cloud.js (local)', '→', 'Render Backend (/api/sync/*)', 'HTTPS REST — every 5 minutes'],
+            ['GitHub push (vercel-fix)', '→', 'Render auto-deploy', 'GitHub Webhook → Render build'],
+            ['cron-job.org', '→', 'Render Backend (/api/ping)', 'HTTPS GET — every 5 minutes'],
+          ]
+        }
       }
     ]
   },
-  {
-    title: '2. External Services',
-    table: {
-      headers: ['Service', 'URL', 'Purpose'],
-      rows: [
-        ['Render', 'render.com', 'Hosting — Frontend (Static Site) + Backend (Web Service)'],
-        ['Supabase', 'supabase.com', 'Database — PostgreSQL, Frankfurt region'],
-        ['GitHub', 'github.com', 'Source Control — branch: vercel-fix → auto-deploy on Render'],
-        ['Brevo', 'brevo.com', 'Email Service — outbound emails (SMTP / API)'],
-        ['PDFShift', 'pdfshift.io', 'PDF Generation — delivery notes, proforma invoices'],
-        ['cron-job.org', 'console.cron-job.org', 'Keep-Alive Ping — prevents Render from sleeping'],
-      ]
-    }
+    {
+    title: '2. External Services & Configuration',
+    content: 'The system depends on 6 external services. This section is a full step-by-step configuration reference — where to log in, where to find each setting, and exactly what to enter.',
+    subsections: [
+      {
+        title: '2.1 Services Overview',
+        table: {
+          headers: ['Service', 'Login URL', 'Role in system'],
+          rows: [
+            ['Render', 'dashboard.render.com', 'Hosts the Frontend (React app) and Backend (Node.js API)'],
+            ['Supabase', 'app.supabase.com', 'Cloud PostgreSQL database — stores all data'],
+            ['GitHub', 'github.com', 'Source code storage + triggers auto-deploy on Render on every push'],
+            ['Brevo', 'app.brevo.com', 'Sends all outbound emails from the system'],
+            ['PDFShift', 'pdfshift.io/dashboard', 'Generates PDF documents (delivery notes, invoices)'],
+            ['cron-job.org', 'console.cron-job.org', 'Sends a ping every 5 min to keep Render awake'],
+          ]
+        }
+      },
+
+      {
+        title: '2.2 Render — Full Configuration Guide',
+        content: 'Render hosts the entire cloud system. There are two services: worldsecure-frontend (Static Site) and worldsecure-backend (Web Service).',
+        steps: [
+          { step: 'Login', title: 'Open dashboard.render.com', desc: 'Sign in with your Render account. You will see a list of your services on the Dashboard.' },
+        ]
+      },
+      {
+        title: '2.2.1 How to Create the Frontend Static Site',
+        content: 'Do this only when setting up from scratch. If the service already exists, skip to 2.2.3.',
+        steps: [
+          { step: 'Step 1', title: 'Click "New +"', desc: 'Top-right button on the Render Dashboard → select "Static Site" from the dropdown' },
+          { step: 'Step 2', title: 'Connect GitHub', desc: 'Click "Connect account" → authorize Render to access your GitHub → select the repository: crm-project' },
+          { step: 'Step 3', title: 'Fill in the settings:', desc: 'Name: worldsecure-frontend | Branch: vercel-fix | Root Directory: frontend | Build Command: npm run build | Publish Directory: frontend/build' },
+          { step: 'Step 4', title: 'Click "Create Static Site"', desc: 'Render will run the first build. Watch the Logs tab — build takes ~2-3 minutes.' },
+          { step: 'Step 5', title: 'Add Custom Domain', desc: 'After build succeeds: Settings tab → Custom Domains → Add: app.world-secure.com → follow Render\'s DNS instructions' },
+        ]
+      },
+      {
+        title: '2.2.2 How to Create the Backend Web Service',
+        content: 'Do this only when setting up from scratch. If the service already exists, skip to 2.2.3.',
+        steps: [
+          { step: 'Step 1', title: 'Click "New +"', desc: 'Render Dashboard → select "Web Service"' },
+          { step: 'Step 2', title: 'Select repository: crm-project' },
+          { step: 'Step 3', title: 'Fill in the settings:', desc: 'Name: worldsecure-backend | Branch: vercel-fix | Root Directory: backend-cloud | Build Command: npm install | Start Command: node server-cloud.js' },
+          { step: 'Step 4', title: 'Select Instance Type: Free', desc: 'Scroll down to "Instance Type" → select "Free". Note: free tier sleeps after 15 min inactivity — cron-job.org prevents this.' },
+          { step: 'Step 5', title: 'Add Environment Variables', desc: 'Before clicking Create — scroll to "Environment Variables" and add all 5 variables from section 2.2.3 below' },
+          { step: 'Step 6', title: 'Click "Create Web Service"' },
+        ]
+      },
+      {
+        title: '2.2.3 Environment Variables — Where to Set Them',
+        content: 'Path: dashboard.render.com → click "worldsecure-backend" → left sidebar → "Environment" → "Environment Variables" → click "Add Environment Variable" for each:',
+        table: {
+          headers: ['Variable Name', 'Where to get the value', 'What to enter'],
+          rows: [
+            ['DATABASE_URL', 'app.supabase.com → click your project → left sidebar → Settings (⚙️) → Database → scroll to "Connection String" → select "URI" tab → click Copy', 'Paste the full URI string. Format: postgresql://postgres:[password]@[host]:5432/postgres'],
+            ['BREVO_API_KEY', 'app.brevo.com → click your profile icon (top-right) → SMTP & API → API Keys tab → copy the key (or click "Create a new API key")', 'Paste the key. Format: xkeysib-...'],
+            ['PDFSHIFT_API_KEY', 'pdfshift.io → login → Dashboard → top of page shows "Your API Key" → click Copy', 'Paste the key'],
+            ['JWT_SECRET', 'Generate yourself — any random string of 32+ characters. Example: use a password generator.', 'IMPORTANT: once set, never change this value — it will log out all users'],
+            ['NODE_ENV', 'Type manually', 'production (lowercase exactly)'],
+          ]
+        },
+        warning: 'After adding or changing any environment variable: Render automatically redeploys the backend. Watch the Logs tab and verify: "Server running on port..." appears — this means the backend started successfully.'
+      },
+      {
+        title: '2.2.4 How to View Logs on Render',
+        steps: [
+          { step: 'Step 1', title: 'Open dashboard.render.com → click the service name (e.g. worldsecure-backend)' },
+          { step: 'Step 2', title: 'Click "Logs" in the left sidebar', desc: 'Shows real-time output from server-cloud.js — errors, startup messages, API calls' },
+          { step: 'Step 3', title: 'Look for these key messages:', desc: '"Server running on port 10000" = backend started OK | "Database connected" = Supabase connection OK | Any red text = error to investigate' },
+        ]
+      },
+      {
+        title: '2.2.5 How to Manually Deploy or Restart',
+        steps: [
+          { step: 'Manual Deploy', title: 'dashboard.render.com → click service → top-right "Manual Deploy" button → "Deploy latest commit"', desc: 'Use this if a push to GitHub did not trigger auto-deploy' },
+          { step: 'Restart', title: 'dashboard.render.com → click service → top-right 3-dot menu (⋮) → "Restart service"', desc: 'Use this after fixing a database sequence issue — restart runs fixSequences() automatically on startup' },
+        ]
+      },
+
+      {
+        title: '2.3 GitHub — Full Configuration Guide',
+        content: 'GitHub stores all the source code. Every push to the vercel-fix branch automatically triggers a new deploy on Render.',
+        steps: [
+          { step: 'Login', title: 'Open github.com', desc: 'Sign in with your GitHub account. The repository is: crm-project (private).' },
+        ]
+      },
+      {
+        title: '2.3.1 Daily Git Workflow — Step by Step',
+        content: 'Open PowerShell or Command Prompt on the local machine:',
+        steps: [
+          { step: 'Step 1', title: 'Navigate to project folder', desc: 'Type: cd C:\\Users\\amit\\crm-project → press Enter' },
+          { step: 'Step 2', title: 'Check what changed', desc: 'Type: git status → press Enter. Shows files in red (changed but not staged) and green (staged and ready to commit)' },
+          { step: 'Step 3', title: 'Stage the files you want to deploy', desc: 'For specific files: git add frontend/src/pages/Products.js — For ALL changed files: git add .' },
+          { step: 'Step 4', title: 'Write a commit message', desc: 'Type: git commit -m "fix: description of what you changed" → press Enter. Prefix rules: fix: = bug fix, feat: = new feature, chore: = maintenance' },
+          { step: 'Step 5', title: 'Push to GitHub', desc: 'Type: git push origin vercel-fix → press Enter. GitHub receives the code → sends webhook to Render → Render starts auto-deploy' },
+          { step: 'Step 6', title: 'Verify deploy on Render', desc: 'Open dashboard.render.com → click the service → Logs tab → wait for "Build successful" and "Your service is live"' },
+        ],
+        warning: 'ALWAYS push to vercel-fix — never to main. The main branch is not connected to any deployment.'
+      },
+      {
+        title: '2.3.2 Useful Git Commands',
+        table: {
+          headers: ['Command', 'When to use it', 'What it does'],
+          rows: [
+            ['git status', 'Before staging files', 'Shows which files changed since last commit'],
+            ['git log --oneline -10', 'To review history', 'Shows last 10 commits — useful to verify a push went through'],
+            ['git diff frontend/src/pages/Products.js', 'Before committing', 'Shows exact line-by-line changes in a specific file'],
+            ['git checkout -- frontend/src/pages/Products.js', 'To undo changes', 'Discards ALL unsaved changes to a file — CANNOT be undone'],
+            ['git pull origin vercel-fix', 'If someone else made changes', 'Downloads latest code from GitHub to local machine'],
+            ['git commit --allow-empty -m "trigger redeploy"', 'To force a redeploy', 'Creates an empty commit — triggers Render deploy without any code change'],
+          ]
+        }
+      },
+      {
+        title: '2.3.3 How to Re-Connect Render to GitHub (if needed)',
+        content: 'The connection is already configured. Only follow these steps if setting up a new Render account or new repository:',
+        steps: [
+          { step: 'Step 1', title: 'dashboard.render.com → New + → Web Service (or Static Site)' },
+          { step: 'Step 2', title: 'Click "Connect GitHub"', desc: 'Authorize Render to access your GitHub account → select repository: crm-project' },
+          { step: 'Step 3', title: 'Set Branch to: vercel-fix', desc: 'This is critical — do not use main' },
+          { step: 'Step 4', title: 'Fill in Root Directory, Build Command, Start Command', desc: 'As per sections 2.2.1 and 2.2.2 above' },
+          { step: 'Step 5', title: 'Add all Environment Variables', desc: 'As per section 2.2.3 above — do this BEFORE clicking Create' },
+        ]
+      },
+
+      {
+        title: '2.4 Supabase — Full Configuration Guide',
+        content: 'Supabase is the cloud PostgreSQL database. All cloud data is stored here.',
+        steps: [
+          { step: 'Login', title: 'Open app.supabase.com', desc: 'Sign in → on the dashboard you will see the project: WorldSecure. Click on it to open.' },
+        ]
+      },
+      {
+        title: '2.4.1 How to Find the Database Connection String',
+        content: 'The connection string (DATABASE_URL) is needed in Render Environment Variables:',
+        steps: [
+          { step: 'Step 1', title: 'Open app.supabase.com → click the WorldSecure project' },
+          { step: 'Step 2', title: 'Click the ⚙️ Settings icon', desc: 'In the left sidebar, near the bottom → click "Settings"' },
+          { step: 'Step 3', title: 'Click "Database"', desc: 'In the Settings submenu on the left' },
+          { step: 'Step 4', title: 'Scroll down to "Connection String"', desc: 'You will see tabs: URI | PSQL | JDBC | Dotenv — select "URI"' },
+          { step: 'Step 5', title: 'Click the Copy button', desc: 'The string starts with: postgresql://postgres.[project-ref]:[password]@aws-0-eu-central-1.pooler.supabase.com:6543/postgres' },
+          { step: 'Step 6', title: 'Paste this value as DATABASE_URL in Render Environment Variables', desc: 'See section 2.2.3 for how to set it in Render' },
+        ],
+        warning: 'The connection string contains the database password. Never share it or commit it to GitHub.'
+      },
+      {
+        title: '2.4.2 How to View and Query Tables',
+        steps: [
+          { step: 'Step 1', title: 'app.supabase.com → WorldSecure project → left sidebar → "Table Editor"', desc: 'Shows all tables. Click any table to view its data.' },
+          { step: 'Step 2', title: 'For advanced queries: left sidebar → "SQL Editor"', desc: 'Type any SQL and click Run. Examples:' },
+          { step: 'Query 1', title: 'View all users:', desc: 'SELECT * FROM users;' },
+          { step: 'Query 2', title: 'Reset a sequence after sync error:', desc: "SELECT setval('products_id_seq', (SELECT MAX(id) FROM products));" },
+          { step: 'Query 3', title: 'Check all sequences:', desc: "SELECT sequence_name, last_value FROM information_schema.sequences JOIN pg_sequences ON sequencename = sequence_name;" },
+        ]
+      },
+      {
+        title: '2.4.3 Supabase — Critical Rules',
+        steps: [
+          { step: '⚠️', title: 'NEVER enable Row Level Security (RLS)', desc: 'Path: Table Editor → click a table → "RLS disabled" badge — leave it disabled. Enabling RLS without correct policies will block server-cloud.js from reading any data.' },
+          { step: '⚠️', title: 'If you get "duplicate key" errors', desc: 'Go to Render → restart the worldsecure-backend service. On startup, fixSequences() runs automatically and resets all sequences to MAX(id).' },
+          { step: '✅', title: 'Check database logs for errors', desc: 'app.supabase.com → WorldSecure project → left sidebar → Logs → Postgres. Shows slow queries and SQL errors.' },
+          { step: '✅', title: 'Free tier warning', desc: 'Supabase free tier pauses the project after 7 days of no activity. Normal system use prevents this. If the project is paused: app.supabase.com → click the project → click "Restore project".' },
+        ]
+      },
+
+      {
+        title: '2.5 Brevo — Full Configuration Guide',
+        content: 'Brevo sends all outbound emails from the system (delivery notes, proforma invoices, support notifications).',
+        steps: [
+          { step: 'Login', title: 'Open app.brevo.com', desc: 'Sign in with the WorldSecure account.' },
+        ]
+      },
+      {
+        title: '2.5.1 How to Find or Create the API Key',
+        steps: [
+          { step: 'Step 1', title: 'Click your profile icon (top-right corner of app.brevo.com)' },
+          { step: 'Step 2', title: 'Click "SMTP & API" in the dropdown menu' },
+          { step: 'Step 3', title: 'Click the "API Keys" tab', desc: 'You will see existing API keys. The active key for this system is listed here.' },
+          { step: 'Step 4', title: 'To copy an existing key:', desc: 'Click the eye icon (👁) next to the key → copy the value' },
+          { step: 'Step 5', title: 'To create a new key:', desc: 'Click "Create a new API key" → enter a name (e.g. "WorldSecure CRM") → click Generate → COPY THE KEY IMMEDIATELY — it is shown only once' },
+          { step: 'Step 6', title: 'Paste the key in Render', desc: 'dashboard.render.com → worldsecure-backend → Environment → BREVO_API_KEY → Edit → paste → Save' },
+        ]
+      },
+      {
+        title: '2.5.2 How to Verify Domain Authentication (DKIM)',
+        content: 'DKIM ensures emails from info@world-secure.com are not marked as spam. Status should always be "Authenticated ✓":',
+        steps: [
+          { step: 'Step 1', title: 'app.brevo.com → left sidebar → "Senders & IPs"' },
+          { step: 'Step 2', title: 'Click the "Domains" tab' },
+          { step: 'Step 3', title: 'Check world-secure.com shows: ● Authenticated', desc: 'If it shows "Not authenticated" → the DKIM DNS records in Cloudflare are wrong or set to Proxied. See section 2.5.3.' },
+          { step: 'Step 4', title: 'To verify the sender:', desc: 'Click the "Senders" tab → WorldSecure LTD <info@world-secure.com> should show: ● Verified | DKIM: world-secure.com ✓ | DMARC: configured ✓' },
+        ]
+      },
+      {
+        title: '2.5.3 DKIM DNS Records in Cloudflare',
+        content: 'These 4 records must exist in Cloudflare DNS for world-secure.com and must be DNS only (grey cloud — NOT proxied):',
+        table: {
+          headers: ['Type', 'Name', 'Content', 'Proxy status'],
+          rows: [
+            ['CNAME', 'brevo1._domainkey', 'b1.world-secure-com.dkim.brevo.com', '🔘 DNS only (grey)'],
+            ['CNAME', 'brevo2._domainkey', 'b2.world-secure-com.dkim.brevo.com', '🔘 DNS only (grey)'],
+            ['TXT', '@', 'brevo-code:2190f025e2fe0ebad2f73b58952c908a', '🔘 DNS only (grey)'],
+            ['TXT', '_dmarc', 'v=DMARC1; p=none; rua=mailto:rua@dmarc.brevo.com', '🔘 DNS only (grey)'],
+          ]
+        },
+        warning: 'If brevo1._domainkey or brevo2._domainkey are set to Proxied (orange cloud), DKIM will fail and emails will be rejected or marked as spam. Always keep these DNS only.'
+      },
+      {
+        title: '2.5.4 How to Check Sent Emails',
+        steps: [
+          { step: 'Step 1', title: 'app.brevo.com → left sidebar → "Transactional"' },
+          { step: 'Step 2', title: 'Click "Email Logs"', desc: 'Shows every email sent — with recipient, subject, status (Sent/Delivered/Bounced), and timestamp' },
+          { step: 'Step 3', title: 'If an email shows "Bounced":', desc: 'The recipient email address is invalid or their server rejected it. Check the email address in the system.' },
+        ]
+      },
+
+      {
+        title: '2.6 PDFShift — Configuration Guide',
+        content: 'PDFShift converts HTML to PDF. Used for: Delivery Notes, Receipt Notes, Proforma Invoices.',
+        steps: [
+          { step: 'Login', title: 'Open pdfshift.io/dashboard', desc: 'Sign in with the WorldSecure account.' },
+          { step: 'API Key', title: 'Find your API key', desc: 'It is displayed at the top of the Dashboard page. Click Copy → paste in Render as PDFSHIFT_API_KEY (see section 2.2.3).' },
+          { step: 'Usage', title: 'Monitor usage', desc: 'Dashboard → Usage tab. Free tier allows 50 PDF conversions/month. If limit is reached, PDFs will fail to generate — upgrade the plan or wait until next month.' },
+        ]
+      },
+
+      {
+        title: '2.7 cron-job.org — Configuration Guide',
+        content: 'cron-job.org sends a GET request to the Render backend every 5 minutes to prevent it from sleeping (Render free tier sleeps after 15 min inactivity).',
+        steps: [
+          { step: 'Login', title: 'Open console.cron-job.org', desc: 'Sign in with the WorldSecure account.' },
+          { step: 'Step 1', title: 'View the existing job', desc: 'Dashboard shows the job: WorldSecure Keep-Alive. Check that Status is "Enabled" (green).' },
+          { step: 'Step 2', title: 'Click the job name to view settings:', desc: 'URL: https://worldsecure-backend.onrender.com/api/ping | Schedule: Every 5 minutes | Method: GET | Expected: 200 OK' },
+          { step: 'Step 3', title: 'Check execution history', desc: 'Click "Execution Log" tab — every line should show HTTP 200. If you see errors, the backend may be down.' },
+        ],
+        tip: 'To create a new keep-alive job (if setting up from scratch): console.cron-job.org → New cronjob → Enter URL → set schedule to: */5 * * * * (every 5 minutes) → Save and Enable.'
+      },
+    ]
   },
   {
     title: '3. Project File Structure',
@@ -174,13 +428,18 @@ const sections = [
     subsections: [
       {
         title: '6.1 Auto-Deploy to Cloud',
+        content: 'Every push to vercel-fix on GitHub triggers an automatic deploy on Render. The full flow:',
         steps: [
-          { step: 'Step 1', title: 'Make code changes locally' },
-          { step: 'Step 2', title: 'git add [files]' },
-          { step: 'Step 3', title: 'git commit -m "description"' },
-          { step: 'Step 4', title: 'git push origin vercel-fix' },
-          { step: 'Step 5', title: 'Render auto-deploys', desc: 'Render detects the push → builds and deploys automatically (~2-3 min). Monitor in Render Dashboard.' },
-        ]
+          { step: 'Step 1', title: 'Edit code locally', desc: 'Make changes in C:\\Users\\amit\\crm-project' },
+          { step: 'Step 2', title: 'git add [files]', desc: 'Stage specific files — or use git add . for all changes' },
+          { step: 'Step 3', title: 'git commit -m "description"', desc: 'Use clear prefixes: feat: (new feature), fix: (bug fix), chore: (maintenance)' },
+          { step: 'Step 4', title: 'git push origin vercel-fix', desc: 'Pushes code to GitHub → GitHub triggers a webhook to Render' },
+          { step: 'Step 5', title: 'Render detects the push', desc: 'Both Frontend and Backend services redeploy automatically (~2-3 min each)' },
+          { step: 'Step 6', title: 'Monitor deploy', desc: 'Render Dashboard → select service → Logs tab — watch for: "Build successful" and "Your service is live"' },
+          { step: 'Step 7', title: 'Verify on app.world-secure.com', desc: 'Open the app and confirm changes are visible' },
+        ],
+        tip: 'If auto-deploy did not trigger: Render Dashboard → Manual Deploy → Deploy latest commit.',
+        warning: 'Frontend and Backend deploy independently. If you changed both server-cloud.js and a React page, watch both service logs.'
       },
       {
         title: '6.2 Running Locally',
@@ -235,18 +494,44 @@ const sections = [
     title: '8. Environment Variables',
     subsections: [
       {
-        title: '8.1 Backend (Render — server-cloud.js)',
+        title: '8.1 Backend — Cloud (Render)',
+        content: 'Where to configure: Render Dashboard → worldsecure-backend → Environment → Environment Variables',
         table: {
-          headers: ['Variable', 'Service', 'Description'],
+          headers: ['Variable', 'Where to get the value', 'Description'],
           rows: [
-            ['DATABASE_URL', 'Supabase', 'PostgreSQL connection string'],
-            ['BREVO_API_KEY', 'Brevo', 'API key for sending emails'],
-            ['PDFSHIFT_API_KEY', 'PDFShift', 'API key for PDF generation'],
-            ['JWT_SECRET', 'Internal', 'Token encryption key'],
-            ['NODE_ENV', 'Internal', 'Set to: production'],
+            ['DATABASE_URL', 'Supabase → Project Settings → Database → Connection String → URI', 'Full PostgreSQL connection string — format: postgresql://user:pass@host:5432/dbname'],
+            ['BREVO_API_KEY', 'Brevo → Account (top-right) → API Keys → Generate or copy existing', 'Used by server-cloud.js to send emails via Brevo SMTP API'],
+            ['PDFSHIFT_API_KEY', 'pdfshift.io/dashboard → API Key section', 'Used to generate PDF documents (delivery notes, proforma invoices)'],
+            ['JWT_SECRET', 'Set once — any random string of 32+ characters', 'Signs and verifies user login tokens — changing this logs out all users'],
+            ['NODE_ENV', 'Type manually: production', 'Activates production mode in server-cloud.js'],
           ]
         },
-        warning: 'Never commit API keys to git. Always use environment variables. The .env file must be listed in .gitignore.'
+        warning: 'Never commit .env files to git. Verify .gitignore contains: .env, backend/.env, backend-cloud/.env'
+      },
+      {
+        title: '8.2 Backend — Local (.env file)',
+        content: 'File location: C:\\Users\\amit\\crm-project\\backend\\.env',
+        table: {
+          headers: ['Variable', 'Value', 'Description'],
+          rows: [
+            ['REACT_APP_API_URL', 'http://localhost:3001', 'Points frontend to local backend'],
+            ['DATABASE_URL', 'Same Supabase URI as cloud', 'Used by sync-to-cloud.js to connect to Supabase'],
+            ['BREVO_API_KEY', 'Same as cloud', 'Used if sending emails from local machine'],
+            ['PDFSHIFT_API_KEY', 'Same as cloud', 'Used if generating PDFs from local machine'],
+            ['JWT_SECRET', 'Same value as cloud — MUST MATCH', 'Must be identical to cloud — otherwise cloud-generated tokens will be invalid locally'],
+          ]
+        }
+      },
+      {
+        title: '8.3 Frontend — Local (.env file)',
+        content: 'File location: C:\\Users\\amit\\crm-project\\frontend\\.env',
+        table: {
+          headers: ['Variable', 'Value', 'Description'],
+          rows: [
+            ['REACT_APP_API_URL', 'http://localhost:3001', 'Points React dev server to local backend API — MUST be on line 1 with no blank lines or spaces before it'],
+          ]
+        },
+        warning: 'This file must contain ONLY the one line above. Any blank line or space at the top causes the "allowedHosts" startup error.'
       }
     ]
   },
@@ -455,7 +740,8 @@ const sections = [
   // ── PART II: User Manual ────────────────────────────────────────────────────
   {
     title: '13. Sales Module — Deal Management',
-    content: 'The Sales module manages the full sales cycle from quote creation to deal closure. Access: click SALES in the top navigation bar.',
+    nav: '📍 Navigation: Top bar → SALES',
+    content: 'The Sales module manages the full sales cycle from quote creation to deal closure.',
     subsections: [
       {
         title: '13.1 Sales Management Screen',
@@ -471,6 +757,7 @@ const sections = [
       },
       {
         title: '13.2 Creating a New Quote',
+        nav: '📍 Navigation: SALES → Quotes List → "New Quote" button (top of screen)',
         steps: [
           { step: 'Step 1', title: 'Click "New Quote"', desc: 'Blue button at the top of the screen' },
           { step: 'Step 2', title: 'Select Currency', desc: 'Choose deal currency (EUR, USD, Shekel, AOA, KES, etc.). This determines the Base Currency in Additional Costs — choose carefully.' },
@@ -484,6 +771,7 @@ const sections = [
       },
       {
         title: '13.3 Approving a Quote',
+        nav: '📍 Navigation: SALES → Quotes List → Actions column → "Approve" button',
         steps: [
           { step: 'Step 1', title: 'Click "Approve"', desc: 'In the Actions column of the quote row' },
           { step: 'Step 2', title: 'Status changes to Approved (green)', desc: 'The Manage Stages button becomes active. Only after Approve can you proceed with the deal workflow.' },
@@ -491,6 +779,7 @@ const sections = [
       },
       {
         title: '13.4 Managing Deal Stages',
+        nav: '📍 Navigation: SALES → Quotes List → Actions column → "Manage Stages" button (available after Approve)',
         content: 'Clicking Manage Stages opens a window with 9 sequential stages. Each stage unlocks after the previous one is completed:',
         table: {
           headers: ['#', 'Stage', 'Required Action', 'Description'],
@@ -526,36 +815,41 @@ const sections = [
   },
   {
     title: '14. Support Module — Case Management',
+    nav: '📍 Navigation: Top bar → SUPPORT → Support Management',
     content: 'The Support module manages all customer support cases from opening to resolution. Every interaction with a customer must be documented in the case timeline.',
     subsections: [
       {
         title: '14.1 Support Management Screen',
-        content: 'Access: click SUPPORT. The main screen shows All Tickets with columns: Ticket #, Customer, Subject, Priority, Status, Date, Actions.',
+        content: 'Access: click SUPPORT in the top navigation bar. The main screen shows All Tickets with columns: Ticket #, Customer, Subject, Priority, Status, Date, Actions. Click "Case Management" in the Actions column to open and manage a case.',
         table: {
-          headers: ['Status', 'Meaning'],
+          headers: ['Status', 'When to use', 'What happens'],
           rows: [
-            ['Open', 'New case — just created, not yet being handled'],
-            ['In Progress', 'Case is being actively worked on'],
-            ['Awaiting Customer', 'Waiting for a response from the customer'],
-            ['Closed', 'Case fully resolved and closed'],
+            ['Open', 'Set automatically when a new ticket is created', 'Case appears in the ticket list — not yet assigned or worked on'],
+            ['In Progress', 'When you start actively working on the case', 'Signals to the team that this case is being handled'],
+            ['Awaiting Customer', 'When you have contacted the customer and are waiting for their response', 'A required dialog opens: select Communication Channel (Phone/Email/SMS), enter a Note of what was requested, and optionally set an Expected Reply date. Everything is logged automatically in the Timeline.'],
+            ['Closed', 'When the issue is fully resolved', 'Requires a resolution comment before closing. Case is archived.'],
+            ['Cancelled', 'When the case is no longer relevant (duplicate, error, customer withdrew)', 'Case is closed without resolution — use sparingly and always add a comment explaining why.'],
           ]
-        }
+        },
+        note: 'IMPORTANT: When the customer responds after "Awaiting Customer" — change the status back to "In Progress" immediately. Leaving a case as "Awaiting Customer" after the customer has replied gives a false picture of the workload to the entire team.'
       },
       {
         title: '14.2 Opening a New Support Case',
+        nav: '📍 Navigation: SUPPORT → Support Management → "Open New Ticket" button (top of screen)',
         steps: [
-          { step: 'Step 1', title: 'Click "Open New Ticket"' },
-          { step: 'Step 2', title: 'Select Customer', desc: 'Required' },
+          { step: 'Step 1', title: 'Click "Open New Ticket"', desc: 'Blue button at the top of the Support Management screen' },
+          { step: 'Step 2', title: 'Select Customer', desc: 'Required — choose from the dropdown' },
           { step: 'Step 3', title: 'Select Product', desc: 'Required — the product related to the issue' },
           { step: 'Step 4', title: 'Enter Subject', desc: 'Required — brief description (max 80 characters)' },
           { step: 'Step 5', title: 'Add Description', desc: 'Detailed explanation of the problem (recommended)' },
           { step: 'Step 6', title: 'Set Priority', desc: 'Low / Medium / High / Urgent' },
-          { step: 'Step 7', title: 'Set Status', desc: 'Usually "Open" for new cases' },
-          { step: 'Step 8', title: 'Click "Save"', desc: 'Ticket created with a unique TKT number' },
-        ]
+          { step: 'Step 7', title: 'Click "Save"', desc: 'Ticket is created with a unique TKT number and Status is automatically set to Open' },
+        ],
+        note: 'Status cannot be changed during ticket creation — it is automatically set to Open. To change the status, open the case via "Case Management" after it has been created.'
       },
       {
         title: '14.3 Documenting Customer Interactions',
+        nav: '📍 Navigation: SUPPORT → Support Management → Actions column → "Case Management" → scroll down to "ADD COMMENT" section',
         warning: 'Every interaction with the customer MUST be documented in the case. This includes phone calls, emails, WhatsApp messages, and any other communication. A case without documentation is incomplete.',
         steps: [
           { step: 'Step 1', title: 'Open the case via "Case Management"' },
@@ -567,6 +861,7 @@ const sections = [
       },
       {
         title: '14.4 Setting Status to "Awaiting Customer"',
+        nav: '📍 Navigation: SUPPORT → Support Management → "Case Management" → Ticket Details section → Status dropdown → select "Awaiting Customer"',
         intro: 'When you contact the customer and are waiting for their response:',
         steps: [
           { step: 'Step 1', title: 'Change Status to "Awaiting Customer"', desc: 'A dialog box opens automatically' },
@@ -579,18 +874,22 @@ const sections = [
       },
       {
         title: '14.5 Sending a Product from a Case',
-        intro: 'When a defective product needs to be replaced:',
+        nav: '📍 Navigation: SUPPORT → Support Management → "Case Management" → "Send Product" button',
+        intro: 'When a defective or missing product needs to be replaced, use the Send Product workflow. This connects Support directly to the Warehouse:',
         steps: [
-          { step: 'Step 1', title: 'Click "Send Product"', desc: 'A dispatch request is sent to the Warehouse' },
-          { step: 'Step 2', title: 'Warehouse receives an alert', desc: 'The warehouse team prepares and ships the product' },
-          { step: 'Step 3', title: 'Warehouse confirms dispatch', desc: 'An automatic alert is sent back to Support' },
-          { step: 'Step 4', title: 'Support receives the alert', desc: 'Shows product name, quantity, delivery note reference, and date' },
-          { step: 'Step 5', title: 'Acknowledge the alert', desc: 'Confirm receipt of the dispatch notification in the case' },
+          { step: 'Step 1', title: 'Click "Send Product"', desc: 'Inside the case (Case Management). Select the product and quantity, then confirm. A dispatch request is immediately sent to the Warehouse module.' },
+          { step: 'Step 2', title: 'Warehouse receives an alert on their Dashboard', desc: 'The warehouse operator sees the dispatch request on the Warehouse Dashboard. They prepare the product and create an Outbound transaction with a Delivery Note.' },
+          { step: 'Step 3', title: 'Warehouse confirms dispatch', desc: 'After the product is shipped, the warehouse operator marks the dispatch as confirmed. An automatic alert is sent back to the Support module.' },
+          { step: 'Step 4', title: 'Support receives an alert on their Dashboard', desc: 'The Support Dashboard shows a new notification with: product name, quantity, delivery note reference number, and dispatch date.' },
+          { step: 'Step 5', title: 'Support acknowledges the alert', desc: 'Open the case and confirm receipt of the dispatch notification. This closes the alert and logs the acknowledgment in the case Timeline.' },
+          { step: 'Step 6', title: 'Document customer confirmation', desc: 'When the customer confirms they received the product — add a comment in the case: e.g. "Customer confirmed receipt of replacement unit on [date]."' },
         ],
-        tip: 'The entire process is logged automatically in the History / Timeline.'
+        tip: 'The entire process — request, dispatch, confirmation, and acknowledgment — is automatically logged in the History / Timeline of the case with full details and timestamps. No manual documentation is needed for the dispatch itself.',
+        warning: 'Always check that the Warehouse has sufficient stock before clicking Send Product. Coordinate with the warehouse team if stock is low.'
       },
       {
         title: '14.6 Closing a Case',
+        nav: '📍 Navigation: SUPPORT → Support Management → "Case Management" → Ticket Details → Status dropdown → "Closed" → Save',
         steps: [
           { step: 'Step 1', title: 'Verify the issue is fully resolved' },
           { step: 'Step 2', title: 'Add a resolution comment', desc: 'e.g. "Issue resolved — replacement unit shipped and confirmed received."' },
@@ -615,10 +914,12 @@ const sections = [
   },
   {
     title: '15. Warehouse Module',
-    content: 'The Warehouse module manages all physical inventory movements. Access: click WAREHOUSE in the top navigation bar. The sidebar contains: Dashboard, Inbound, Outbound, and Warehouse Reports.',
+    nav: '📍 Navigation: Top bar → WAREHOUSE',
+    content: 'The Warehouse module manages all physical inventory movements. The sidebar contains: Dashboard, Inbound, Outbound, and Warehouse Reports.',
     subsections: [
       {
         title: '15.1 Inbound — Receiving Goods',
+        nav: '📍 Navigation: WAREHOUSE → Sidebar → Inbound → "New Inbound" button (top right)',
         intro: 'Record every delivery received from a supplier as a new Inbound transaction.',
         steps: [
           { step: 'Step 1', title: 'Click "New Inbound"', desc: 'Blue button at the top right of the Inbound screen' },
@@ -626,22 +927,26 @@ const sections = [
           { step: 'Step 3', title: 'Select Supplier', desc: 'Choose from the dropdown list' },
           { step: 'Step 4', title: 'Add Items', desc: 'Select product → enter quantity → click "Add Item". Repeat for each product.' },
           { step: 'Step 5', title: 'General Notes', desc: 'Optional notes about the delivery' },
-          { step: 'Step 6', title: 'Generate Receipt Note', desc: 'Check "Generate receipt note after saving" to create a receipt PDF automatically' },
-          { step: 'Step 7', title: 'Click "Save Transaction"', desc: 'Stock levels are updated automatically' },
+          { step: 'Step 6', title: 'Add QR Code', desc: 'Optional — select a QR code to attach to the receipt note' },
+          { step: 'Step 7', title: 'Generate Receipt Note', desc: 'Check "Generate receipt note after saving" — the system will automatically generate a receipt PDF immediately after clicking Save' },
+          { step: 'Step 8', title: 'Click "Save Transaction"', desc: 'Stock levels are updated automatically. If Generate Receipt Note was checked, the PDF is created immediately.' },
         ],
         tip: 'After saving, click "Receipt Note" in the Actions column to view and print the receipt document.'
       },
       {
         title: '15.2 Outbound — Shipping Goods',
+        nav: '📍 Navigation: WAREHOUSE → Sidebar → Outbound → "New Outbound" button (top right)',
         intro: 'Record every shipment leaving the warehouse.',
         steps: [
           { step: 'Step 1', title: 'Click "New Outbound"', desc: 'Blue button at the top right of the Outbound screen' },
           { step: 'Step 2', title: 'Select Customer Type', desc: 'Registered or Unregistered' },
           { step: 'Step 3', title: 'Select Customer', desc: 'Choose from the dropdown list' },
-          { step: 'Step 4', title: 'Set Status', desc: 'Pending / In Progress / Shipped' },
+          { step: 'Step 4', title: 'Set Status', desc: 'Pending / Ready / Shipped / Delivered' },
           { step: 'Step 5', title: 'Add Items', desc: 'Select product → enter quantity → click "Add Item". Available stock is shown next to each product.' },
           { step: 'Step 6', title: 'Packaging', desc: 'Choose: No packaging / Carton Packaging / Pallet Division' },
-          { step: 'Step 7', title: 'Click "Save Transaction"', desc: 'Stock levels are reduced automatically' },
+          { step: 'Step 7', title: 'Add QR Code', desc: 'Optional — select a QR code to attach to the delivery note' },
+          { step: 'Step 8', title: 'Generate Delivery Note', desc: 'Check "Generate delivery note after saving" — the system will automatically generate a delivery note PDF immediately after clicking Save' },
+          { step: 'Step 9', title: 'Click "Save Transaction"', desc: 'Stock levels are reduced automatically. If Generate Delivery Note was checked, the PDF is created immediately.' },
         ],
         tip: 'After saving, click "Delivery Note" to view, print or email the delivery note.',
         warning: 'Always check available stock before creating an outbound. Never ship more than what is in stock.'
@@ -657,15 +962,29 @@ const sections = [
           ]
         },
         note: 'Pallet Division is only available after completing Carton Packaging.'
+      },
+      {
+        title: '15.4 Outbound Statuses',
+        table: {
+          headers: ['Status', 'Meaning'],
+          rows: [
+            ['Pending', 'Transaction created, goods not yet prepared'],
+            ['Ready', 'Goods are packed and ready for shipment'],
+            ['Shipped', 'Goods have been shipped to the customer'],
+            ['Delivered', 'Goods have been delivered and confirmed by customer'],
+          ]
+        }
       }
     ]
   },
   {
     title: '16. Admin Module',
-    content: 'The Admin module is accessible to Admin users only. It contains all system configuration and master data management. Access: click ADMIN in the top navigation bar.',
+    nav: '📍 Navigation: Top bar → ADMIN',
+    content: 'The Admin module is accessible to Admin users only. It contains all system configuration and master data management.',
     subsections: [
       {
         title: '16.1 Products',
+        nav: '📍 Navigation: ADMIN → Sidebar → Products → "Add Product" button',
         content: 'Shows the full product catalog: SKU, Name, Category, Quantity, Unit, Suppliers, Manufacturers. Each product has Edit, Discontinue, and Delete actions.',
         steps: [
           { step: 'Step 1', title: 'Click "Add Product"' },
@@ -697,6 +1016,7 @@ const sections = [
       },
       {
         title: '16.4 Settings',
+        nav: '📍 Navigation: ADMIN → Sidebar → Settings',
         table: {
           headers: ['Section', 'Description'],
           rows: [
@@ -712,11 +1032,13 @@ const sections = [
       },
       {
         title: '16.5 Users',
+        nav: '📍 Navigation: ADMIN → Sidebar → Users',
         content: 'Manage all system user accounts. Fields: Username, Password, Role (Admin / Sales / Support / Worker), Language (EN / HE / PT).',
         warning: 'Only Admins can create or modify user accounts. Keep user credentials secure and do not share passwords between users.'
       },
       {
         title: '16.6 Activity Log',
+        nav: '📍 Navigation: ADMIN → Sidebar → Activity Log',
         content: 'Records every action performed in the system by all users: User name, Action type (created/updated/deleted/login), Module, Timestamp, Details.',
         tip: 'Use the Activity Log to investigate unexpected changes to data, verify who made a specific change, or review user activity.'
       }
@@ -728,6 +1050,7 @@ const sections = [
 function SectionBlock({ sec, isMobile, styles }) {
   return (
     <div>
+      {sec.nav && <div style={styles.nav}>{sec.nav}</div>}
       {sec.content && <p style={styles.content}>{sec.content}</p>}
       {sec.intro && <p style={styles.intro}>{sec.intro}</p>}
       {sec.warning && !sec.steps && <div style={styles.warning}>⚠️ {sec.warning}</div>}
@@ -761,6 +1084,7 @@ export default function AdminGuide() {
     subsectionTitle: { fontWeight: 700, color: '#2E75B6', fontSize: '0.95rem', margin: '1rem 0 0.4rem 0', paddingLeft: '0.3rem', borderLeft: '3px solid #2E75B6' },
     sectionBody: { padding: isMobile ? '0.75rem' : '1.2rem' },
     content: { color: '#444', fontSize: '0.95rem', margin: '0 0 0.5rem 0' },
+    nav: { background: '#EEF4FF', border: '1px solid #BDD0FF', borderRadius: '6px', padding: '0.45rem 0.8rem', marginBottom: '0.8rem', fontSize: '0.82rem', color: '#2E5AB6', fontWeight: 600 },
     intro: { color: '#444', marginBottom: '0.8rem', fontSize: '0.95rem' },
     stepRow: { display: 'flex', gap: '0.8rem', marginBottom: '0.6rem', alignItems: 'flex-start' },
     stepBadge: { background: '#2E75B6', color: '#fff', borderRadius: '6px', padding: '0.2rem 0.6rem', fontSize: '0.8rem', fontWeight: 700, whiteSpace: 'nowrap', marginTop: '2px', flexShrink: 0 },
