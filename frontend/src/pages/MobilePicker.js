@@ -95,11 +95,11 @@ function MobilePicker({ options = [], value, onChange, placeholder = 'Select...'
     <div ref={containerRef} style={{ position: 'relative', width: '100%' }}>
       {/* Trigger */}
       <div onClick={handleOpen}
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.75rem', border: '1px solid #d1d5db', borderRadius: '6px', background: disabled ? '#f3f4f6' : 'white', cursor: disabled ? 'default' : 'pointer', fontSize: '0.9rem', minHeight: isMobile ? '48px' : '38px', userSelect: 'none' }}>
-        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: selectedLabel ? '#111' : '#9ca3af' }}>
+        style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '0.5rem 0.75rem', border: '1px solid #d1d5db', borderRadius: '6px', background: disabled ? '#f3f4f6' : 'white', cursor: disabled ? 'default' : 'pointer', fontSize: '0.9rem', minHeight: isMobile ? '48px' : '38px', userSelect: 'none' }}>
+        <span style={{ flex: 1, color: selectedLabel ? '#111' : '#9ca3af', whiteSpace: isMobile ? 'normal' : 'nowrap', overflow: isMobile ? 'visible' : 'hidden', textOverflow: isMobile ? 'clip' : 'ellipsis', lineHeight: '1.4', wordBreak: isMobile ? 'break-word' : 'normal' }}>
           {selectedLabel || placeholder}
         </span>
-        <span style={{ color: '#9ca3af', fontSize: '0.7rem', marginLeft: '0.5rem' }}>{open ? '▲' : '▼'}</span>
+        <span style={{ color: '#9ca3af', fontSize: '0.7rem', marginLeft: '0.5rem', flexShrink: 0, paddingTop: '2px' }}>{open ? '▲' : '▼'}</span>
       </div>
 
       {/* DESKTOP: Dropdown — position absolute בתוך הקונטיינר */}
