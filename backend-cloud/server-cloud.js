@@ -3822,14 +3822,15 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
   const doneFilter = force ? '1=1' : '(translation_done IS NULL OR translation_done=0 OR name_he = name OR name_pt = name)';
 
   try {
-    // Migration — הוסף עמודת translation_done לכל 4 הטבלאות
-    await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS translation_done INTEGER DEFAULT 0');
-    await query('ALTER TABLE subcategories ADD COLUMN IF NOT EXISTS translation_done INTEGER DEFAULT 0');
-    await query('ALTER TABLE variant_attribute_types ADD COLUMN IF NOT EXISTS translation_done INTEGER DEFAULT 0');
-    await query('ALTER TABLE product_type_codes ADD COLUMN IF NOT EXISTS translation_done INTEGER DEFAULT 0');
+    // Migration — הוסף עמודת translation_done לכל הטבלאות הרלוונטיות
+    await query('ALTER TABLE products ADD COLUMN IF NOT EXISTS translation_done INTEGER DEFAULT 0').catch(() => {});
+    await query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS translation_done INTEGER DEFAULT 0').catch(() => {});
+    await query('ALTER TABLE subcategories ADD COLUMN IF NOT EXISTS translation_done INTEGER DEFAULT 0').catch(() => {});
+    await query('ALTER TABLE variant_attribute_types ADD COLUMN IF NOT EXISTS translation_done INTEGER DEFAULT 0').catch(() => {});
+    await query('ALTER TABLE product_type_codes ADD COLUMN IF NOT EXISTS translation_done INTEGER DEFAULT 0').catch(() => {});
 
     // ── 1. PRODUCTS ──────────────────────────────────────────────────────────
-    const { rows } = await query("SELECT id, name, parent_id FROM products WHERE (name_he IS NULL OR name_he = '') OR (name_pt IS NULL OR name_pt = '')");
+    const { rows } = await query("SELECT id, name, parent_id FROM products WHERE (name_he IS NULL OR name_he = '' OR name_he = name) OR (name_pt IS NULL OR name_pt = '' OR name_pt = name)");
     const parents  = rows.filter(r => !r.parent_id);
     const variants = rows.filter(r =>  r.parent_id);
 
@@ -3838,9 +3839,9 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
         const t = await callAnthropicAPI(
           'Translate this product name. Return ONLY a JSON object: {"he":"...","pt":"..."}\n\nProduct name: ' + product.name
         );
-        await query('UPDATE products SET name_he=$1, name_pt=$2 WHERE id=$3', [t.he, t.pt, product.id]);
+        await query('UPDATE products SET name_he=$1, name_pt=$2, translation_done=1 WHERE id=$3', [t.he, t.pt, product.id]);
         details.products++; count++;
-        await delay(600);
+        await delay(200);
       } catch (e) { console.error('product translate failed:', product.id, e.message); }
     }
 
@@ -3851,14 +3852,14 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
         if (parentRow?.name_he && parentRow?.name_pt) {
           const baseName = rows.find(r => r.id === variant.parent_id)?.name || '';
           const label = variant.name.replace(baseName, '').trim();
-          await query('UPDATE products SET name_he=$1, name_pt=$2 WHERE id=$3',
+          await query('UPDATE products SET name_he=$1, name_pt=$2, translation_done=1 WHERE id=$3',
             [parentRow.name_he + (label ? ' ' + label : ''), parentRow.name_pt + (label ? ' ' + label : ''), variant.id]);
         } else {
           const t = await callAnthropicAPI(
             'Translate this product name. Return ONLY a JSON object: {"he":"...","pt":"..."}\n\nProduct name: ' + variant.name
           );
-          await query('UPDATE products SET name_he=$1, name_pt=$2 WHERE id=$3', [t.he, t.pt, variant.id]);
-          await delay(600);
+          await query('UPDATE products SET name_he=$1, name_pt=$2, translation_done=1 WHERE id=$3', [t.he, t.pt, variant.id]);
+          await delay(200);
         }
         details.products++; count++;
       } catch (e) { console.error('variant translate failed:', variant.id, e.message); }
@@ -3875,7 +3876,7 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
         );
         await query('UPDATE categories SET name_he=$1, name_pt=$2, translation_done=1 WHERE id=$3', [t.he, t.pt, row.id]);
         details.categories++; count++;
-        await delay(600);
+        await delay(200);
       } catch (e) { console.error('category translate failed:', row.id, e.message); }
     }
 
@@ -3890,7 +3891,7 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
         );
         await query('UPDATE subcategories SET name_he=$1, name_pt=$2, translation_done=1 WHERE id=$3', [t.he, t.pt, row.id]);
         details.subcategories++; count++;
-        await delay(600);
+        await delay(200);
       } catch (e) { console.error('subcategory translate failed:', row.id, e.message); }
     }
 
@@ -3905,7 +3906,7 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
         );
         await query('UPDATE variant_attribute_types SET name_he=$1, name_pt=$2, translation_done=1 WHERE id=$3', [t.he, t.pt, row.id]);
         details.attributes++; count++;
-        await delay(600);
+        await delay(200);
       } catch (e) { console.error('attr type translate failed:', row.id, e.message); }
     }
 
@@ -3920,7 +3921,7 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
         );
         await query('UPDATE product_type_codes SET name_he=$1, name_pt=$2, translation_done=1 WHERE id=$3', [t.he, t.pt, row.id]);
         details.productTypes++; count++;
-        await delay(600);
+        await delay(200);
       } catch (e) { console.error('product type translate failed:', row.id, e.message); }
     }
 

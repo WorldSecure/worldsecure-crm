@@ -1147,14 +1147,15 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
   const doneFilter = force ? '1=1' : '(translation_done IS NULL OR translation_done=0)';
 
   try {
-    // Migration — הוסף עמודת translation_done לכל 4 הטבלאות
+    // Migration — הוסף עמודת translation_done לכל הטבלאות הרלוונטיות
+    await dbRun('ALTER TABLE products ADD COLUMN translation_done INTEGER DEFAULT 0').catch(() => {});
     await dbRun('ALTER TABLE categories ADD COLUMN translation_done INTEGER DEFAULT 0').catch(() => {});
     await dbRun('ALTER TABLE subcategories ADD COLUMN translation_done INTEGER DEFAULT 0').catch(() => {});
     await dbRun('ALTER TABLE variant_attribute_types ADD COLUMN translation_done INTEGER DEFAULT 0').catch(() => {});
     await dbRun('ALTER TABLE product_type_codes ADD COLUMN translation_done INTEGER DEFAULT 0').catch(() => {});
 
     // ── 1. PRODUCTS ──────────────────────────────────────────────────────────
-    const productRows = await dbAll("SELECT id, name, parent_id FROM products WHERE (name_he IS NULL OR name_he = '') OR (name_pt IS NULL OR name_pt = '')");
+    const productRows = await dbAll("SELECT id, name, parent_id FROM products WHERE (name_he IS NULL OR name_he = '' OR name_he = name) OR (name_pt IS NULL OR name_pt = '' OR name_pt = name)");
     const parents  = productRows.filter(r => !r.parent_id);
     const variants = productRows.filter(r =>  r.parent_id);
 
@@ -1163,9 +1164,9 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
         const t = await callAnthropicAPI(
           'Translate this product name. Return ONLY a JSON object: {"he":"...","pt":"..."}\n\nProduct name: ' + product.name
         );
-        await dbRun('UPDATE products SET name_he=?, name_pt=? WHERE id=?', [t.he, t.pt, product.id]);
+        await dbRun('UPDATE products SET name_he=?, name_pt=?, translation_done=1 WHERE id=?', [t.he, t.pt, product.id]);
         details.products++; count++;
-        await delay(600);
+        await delay(200);
       } catch (e) { console.error('product translate failed:', product.id, e.message); }
     }
 
@@ -1177,14 +1178,14 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
         if (parentRow && parentRow.name_he && parentRow.name_pt) {
           const baseName = productRows.find(r => r.id === variant.parent_id) ? productRows.find(r => r.id === variant.parent_id).name : '';
           const label    = variant.name.replace(baseName, '').trim();
-          await dbRun('UPDATE products SET name_he=?, name_pt=? WHERE id=?',
+          await dbRun('UPDATE products SET name_he=?, name_pt=?, translation_done=1 WHERE id=?',
             [parentRow.name_he + (label ? ' ' + label : ''), parentRow.name_pt + (label ? ' ' + label : ''), variant.id]);
         } else {
           const t = await callAnthropicAPI(
             'Translate this product name. Return ONLY a JSON object: {"he":"...","pt":"..."}\n\nProduct name: ' + variant.name
           );
-          await dbRun('UPDATE products SET name_he=?, name_pt=? WHERE id=?', [t.he, t.pt, variant.id]);
-          await delay(600);
+          await dbRun('UPDATE products SET name_he=?, name_pt=?, translation_done=1 WHERE id=?', [t.he, t.pt, variant.id]);
+          await delay(200);
         }
         details.products++; count++;
       } catch (e) { console.error('variant translate failed:', variant.id, e.message); }
@@ -1201,7 +1202,7 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
         );
         await dbRun("UPDATE categories SET name_he=?, name_pt=?, translation_done=1, updated_at=datetime('now') WHERE id=?", [t.he, t.pt, row.id]);
         details.categories++; count++;
-        await delay(600);
+        await delay(200);
       } catch (e) { console.error('category translate failed:', row.id, e.message); }
     }
 
@@ -1216,7 +1217,7 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
         );
         await dbRun("UPDATE subcategories SET name_he=?, name_pt=?, translation_done=1, updated_at=datetime('now') WHERE id=?", [t.he, t.pt, row.id]);
         details.subcategories++; count++;
-        await delay(600);
+        await delay(200);
       } catch (e) { console.error('subcategory translate failed:', row.id, e.message); }
     }
 
@@ -1232,7 +1233,7 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
         );
         await dbRun("UPDATE variant_attribute_types SET name_he=?, name_pt=?, translation_done=1, updated_at=datetime('now') WHERE id=?", [t.he, t.pt, row.id]);
         details.attributes++; count++;
-        await delay(600);
+        await delay(200);
       } catch (e) { console.error('attr type translate failed:', row.id, e.message); }
     }
 
@@ -1248,7 +1249,7 @@ app.post('/api/products/translate-existing', authenticateToken, async (req, res)
         );
         await dbRun("UPDATE product_type_codes SET name_he=?, name_pt=?, translation_done=1, updated_at=datetime('now') WHERE id=?", [t.he, t.pt, row.id]);
         details.productTypes++; count++;
-        await delay(600);
+        await delay(200);
       } catch (e) { console.error('product type translate failed:', row.id, e.message); }
     }
 
