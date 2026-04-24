@@ -189,8 +189,8 @@ async function syncEntityToCloud(entityName, sql, updatedAtField = null) {
       const haswhere = sql.toLowerCase().includes(' where ');
       // השתמש ב-datetime() כדי לנרמל formats שונים (ISO עם T/Z, ו-SQLite עם space)
       const deltaSql = haswhere
-        ? sql + ` AND (${updatedAtField} IS NULL OR datetime(${updatedAtField}) > datetime(?))`
-        : sql + ` WHERE (${updatedAtField} IS NULL OR datetime(${updatedAtField}) > datetime(?))`;
+        ? sql + ` AND datetime(${updatedAtField}) > datetime(?)`
+        : sql + ` WHERE datetime(${updatedAtField}) > datetime(?)`;
       rows = await sqliteAll(deltaSql, [lastSync]);
     } else {
       // סינק ראשון — שלח הכל
