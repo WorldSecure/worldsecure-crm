@@ -2551,6 +2551,7 @@ app.post('/api/sync/inbound', authenticateToken, async (req, res) => {
 
   const client = await pool.connect();
   try {
+    await client.query("SET statement_timeout = '30s'");
     await client.query('BEGIN');
 
     for (const t of transactions) {
@@ -2613,6 +2614,7 @@ app.post('/api/sync/outbound', authenticateToken, async (req, res) => {
 
   const client = await pool.connect();
   try {
+    await client.query("SET statement_timeout = '30s'");
     await client.query('BEGIN');
 
     for (const t of transactions) {
@@ -2707,6 +2709,7 @@ app.post('/api/sync/support', authenticateToken, async (req, res) => {
 
   const client = await pool.connect();
   try {
+    await client.query("SET statement_timeout = '30s'");
     await client.query('BEGIN');
 
     for (const t of tickets) {
@@ -2999,6 +3002,7 @@ app.post('/api/sync/:entity', authenticateToken, async (req, res) => {
 
   const client = await pool.connect();
   try {
+    await client.query("SET statement_timeout = '30s'");
     await client.query('BEGIN');
 
     if (entity === 'categories') {

@@ -1549,15 +1549,26 @@ async function syncNotificationAcksToCloud() {
 }
 
 
+let isSyncing = false;
+
 async function syncAll() {
-  // שלב 1: משוך מחיקות מהענן תחילה — כך קטגוריות שנמחקו בענן יוסרו מקומית
-  //         לפני ששולחים את הנתונים המקומיים חזרה לענן (מניעת "החייאה")
-  await pullDeletionsFromCloud();
-  // שלב 2: שלח נתונים מקומיים לענן — כולל מחיקות מקומיות.
-  //         הענן מוגן: קטגוריות ב-pending_deletions לא יקבלו UPSERT (תוקן ב-server-cloud.js)
-  await syncLocalToCloud();
-  // שלב 3: משוך נתונים מהענן — קטגוריות שנמחקו כבר הוסרו בשני הכיוונים
-  await syncCloudToLocal();
+  if (isSyncing) {
+    log('⏭  Sync skipped — previous sync still running');
+    return;
+  }
+  isSyncing = true;
+  try {
+    // שלב 1: משוך מחיקות מהענן תחילה — כך קטגוריות שנמחקו בענן יוסרו מקומית
+    //         לפני ששולחים את הנתונים המקומיים חזרה לענן (מניעת "החייאה")
+    await pullDeletionsFromCloud();
+    // שלב 2: שלח נתונים מקומיים לענן — כולל מחיקות מקומיות.
+    //         הענן מוגן: קטגוריות ב-pending_deletions לא יקבלו UPSERT (תוקן ב-server-cloud.js)
+    await syncLocalToCloud();
+    // שלב 3: משוך נתונים מהענן — קטגוריות שנמחקו כבר הוסרו בשני הכיוונים
+    await syncCloudToLocal();
+  } finally {
+    isSyncing = false;
+  }
 }
 
 async function main() {
