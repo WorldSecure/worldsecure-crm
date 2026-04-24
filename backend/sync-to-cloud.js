@@ -140,7 +140,7 @@ async function syncLocalToCloud() {
     await syncInboundToCloud();
     await syncOutboundToCloud();
     await syncDeletedProductsToCloud();
-    await syncEntityToCloud('products',   "SELECT id, sku, name, name_he, name_pt, description, category_id, subcategory_id, supplier_id, manufacturer_id, price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at, is_parent, variant_attrs, parent_id, is_active, product_type_code, MAX(COALESCE(meta_updated_at,'1970-01-01'), COALESCE(quantity_updated_at,'1970-01-01')) as _last_updated FROM products GROUP BY id", '_last_updated');
+    await syncEntityToCloud('products',   'SELECT id, sku, name, name_he, name_pt, description, category_id, subcategory_id, supplier_id, manufacturer_id, price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at, is_parent, variant_attrs, parent_id, is_active, product_type_code FROM products', 'meta_updated_at');
     await syncEntityToCloud('suppliers',  'SELECT id, name, address, phone, email, tax_id, country, contact_person, notes, created_at, updated_at FROM suppliers', 'updated_at');
     await syncEntityToCloud('manufacturers', 'SELECT id, name, address, phone, email, tax_id, country, contact_person, notes, created_at, updated_at FROM manufacturers', 'updated_at');
     await syncSupportToCloud();
@@ -303,25 +303,12 @@ async function syncInboundToCloud() {
     await sqliteRun('DELETE FROM deleted_inbound').catch(() => {});
     log(`  ↳ inbound deletions pushed to cloud: ${deletedInbound.length}`);
   }
-  const lastSyncInbound = await getLastSyncAt('inbound');
-  const transactions = lastSyncInbound
-    ? await sqliteAll(`SELECT it.*, u.username FROM inbound_transactions it LEFT JOIN users u ON it.user_id = u.id WHERE it.transaction_date >= ? ORDER BY it.id`, [lastSyncInbound])
-    : await sqliteAll('SELECT it.*, u.username FROM inbound_transactions it LEFT JOIN users u ON it.user_id = u.id ORDER BY it.id');
-  // items — רק עבור transactions שנשלחות
-  const txIds = transactions.map(t => t.id);
-  const items = txIds.length > 0
-    ? await sqliteAll(`SELECT * FROM inbound_items WHERE transaction_id IN (${txIds.map(() => '?').join(',')}) ORDER BY id`, txIds)
-    : [];
-  const localIds = (await sqliteAll('SELECT id FROM inbound_transactions ORDER BY id')).map(t => t.id);
-  if (transactions.length === 0) {
-    log(`  ↳ inbound: no changes since last sync — skipped`);
-  } else {
-    const result = await apiRequest('POST', '/api/sync/inbound', { transactions, items, localIds });
-    if (result.status === 200) {
-      log(`  ↳ inbound: ${transactions.length} transactions synced`);
-      await setLastSyncAt('inbound', new Date().toISOString());
-    } else log(`  ⚠ inbound: ${JSON.stringify(result.body)}`);
-  }
+  const transactions = await sqliteAll('SELECT it.*, u.username FROM inbound_transactions it LEFT JOIN users u ON it.user_id = u.id ORDER BY it.id');
+  const items = await sqliteAll('SELECT * FROM inbound_items ORDER BY id');
+  const localIds = transactions.map(t => t.id);
+  const result = await apiRequest('POST', '/api/sync/inbound', { transactions, items, localIds });
+  if (result.status === 200) log(`  ↳ inbound: ${transactions.length} transactions synced`);
+  else log(`  ⚠ inbound: ${JSON.stringify(result.body)}`);
 }
 
 async function syncOutboundToCloud() {
@@ -344,24 +331,12 @@ async function syncOutboundToCloud() {
     await sqliteRun('DELETE FROM deleted_outbound').catch(() => {});
     log(`  ↳ outbound deletions pushed to cloud: ${deletedOutbound.length}`);
   }
-  const lastSyncOutbound = await getLastSyncAt('outbound');
-  const transactions = lastSyncOutbound
-    ? await sqliteAll(`SELECT ot.*, u.username FROM outbound_transactions ot LEFT JOIN users u ON ot.user_id = u.id WHERE ot.transaction_date >= ? ORDER BY ot.id`, [lastSyncOutbound])
-    : await sqliteAll('SELECT ot.*, u.username FROM outbound_transactions ot LEFT JOIN users u ON ot.user_id = u.id ORDER BY ot.id');
-  const txIdsOut = transactions.map(t => t.id);
-  const items = txIdsOut.length > 0
-    ? await sqliteAll(`SELECT * FROM outbound_items WHERE transaction_id IN (${txIdsOut.map(() => '?').join(',')}) ORDER BY id`, txIdsOut)
-    : [];
-  const localIds = (await sqliteAll('SELECT id FROM outbound_transactions ORDER BY id')).map(t => t.id);
-  if (transactions.length === 0) {
-    log(`  ↳ outbound: no changes since last sync — skipped`);
-  } else {
-    const result = await apiRequest('POST', '/api/sync/outbound', { transactions, items, localIds });
-    if (result.status === 200) {
-      log(`  ↳ outbound: ${transactions.length} transactions synced`);
-      await setLastSyncAt('outbound', new Date().toISOString());
-    } else log(`  ⚠ outbound: ${JSON.stringify(result.body)}`);
-  }
+  const transactions = await sqliteAll('SELECT ot.*, u.username FROM outbound_transactions ot LEFT JOIN users u ON ot.user_id = u.id ORDER BY ot.id');
+  const items = await sqliteAll('SELECT * FROM outbound_items ORDER BY id');
+  const localIds = transactions.map(t => t.id);
+  const result = await apiRequest('POST', '/api/sync/outbound', { transactions, items, localIds });
+  if (result.status === 200) log(`  ↳ outbound: ${transactions.length} transactions synced`);
+  else log(`  ⚠ outbound: ${JSON.stringify(result.body)}`);
 }
 
 async function syncSupportToCloud() {
@@ -435,7 +410,7 @@ async function syncProductsFromCloud() {
   await sqliteRun('ALTER TABLE products ADD COLUMN variant_attrs TEXT').catch(() => {});
   await sqliteRun('ALTER TABLE products ADD COLUMN parent_id INTEGER').catch(() => {});
 
-  const normalizeTs = (v) => v ? String(v).replace(' ', 'T').slice(0, 19) : '';
+  const normalizeTs = (v) => v ? new Date(String(v).replace(' ', 'T')).getTime() : 0;
 
   // טען רשימת מוצרים שנמחקו מקומית — לא להחזירם
   await sqliteRun('CREATE TABLE IF NOT EXISTS deleted_products (id INTEGER PRIMARY KEY, deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP)').catch(() => {});
@@ -519,7 +494,7 @@ async function syncCustomersFromCloud() {
   if (result.status !== 200) { log(`  ⚠ pull customers: ${JSON.stringify(result.body)}`); return; }
   const rows = result.body || [];
   await sqliteRun('ALTER TABLE customers ADD COLUMN updated_at TEXT').catch(() => {});
-  const normalizeTs = (v) => v ? String(v).replace(' ', 'T').slice(0, 19) : '';
+  const normalizeTs = (v) => v ? new Date(String(v).replace(' ', 'T')).getTime() : 0;
   let count = 0;
   for (const r of rows) {
     const existing = await sqliteGet('SELECT id, updated_at FROM customers WHERE id=?', [r.id]).catch(() => null);
@@ -547,7 +522,7 @@ async function syncSuppliersFromCloud() {
   if (result.status !== 200) { log(`  ⚠ pull suppliers: ${JSON.stringify(result.body)}`); return; }
   const rows = result.body || [];
   await sqliteRun('ALTER TABLE suppliers ADD COLUMN updated_at TEXT').catch(() => {});
-  const normalizeTs = (v) => v ? String(v).replace(' ', 'T').slice(0, 19) : '';
+  const normalizeTs = (v) => v ? new Date(String(v).replace(' ', 'T')).getTime() : 0;
   let count = 0;
   for (const r of rows) {
     const existing = await sqliteGet('SELECT id, updated_at FROM suppliers WHERE id=?', [r.id]).catch(() => null);
@@ -580,7 +555,7 @@ async function syncManufacturersFromCloud() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at TEXT
   )`).catch(() => {});
   await sqliteRun('ALTER TABLE manufacturers ADD COLUMN updated_at TEXT').catch(() => {});
-  const normalizeTs = (v) => v ? String(v).replace(' ', 'T').slice(0, 19) : '';
+  const normalizeTs = (v) => v ? new Date(String(v).replace(' ', 'T')).getTime() : 0;
   let count = 0;
   for (const r of rows) {
     const existing = await sqliteGet('SELECT id, updated_at FROM manufacturers WHERE id=?', [r.id]).catch(() => null);
@@ -719,7 +694,7 @@ async function syncCategoriesFromCloud() {
   // migration
   await sqliteRun('ALTER TABLE categories ADD COLUMN updated_at TEXT').catch(() => {});
   await sqliteRun('ALTER TABLE categories ADD COLUMN code TEXT').catch(() => {});
-  const normalizeTs = (v) => v ? String(v).replace(' ', 'T').slice(0, 19) : '';
+  const normalizeTs = (v) => v ? new Date(String(v).replace(' ', 'T')).getTime() : 0;
   let count = 0;
 
   // בנה Set של IDs בענן
@@ -788,7 +763,7 @@ async function syncSubcategoriesFromCloud() {
   )`).catch(() => {});
   await sqliteRun('ALTER TABLE subcategories ADD COLUMN updated_at TEXT').catch(() => {});
   await sqliteRun('ALTER TABLE subcategories ADD COLUMN code TEXT').catch(() => {});
-  const normalizeTs = (v) => v ? String(v).replace(' ', 'T').slice(0, 19) : '';
+  const normalizeTs = (v) => v ? new Date(String(v).replace(' ', 'T')).getTime() : 0;
   let count = 0;
 
   // בנה Set של IDs בענן
@@ -1641,6 +1616,8 @@ async function syncAll() {
   await syncCloudToLocal();
 }
 
+const SYNC_VERSION = '5'; // העלה מספר זה בכל פעם שרוצים לאפס את sync_state
+
 async function main() {
   log('🚀 WorldSecure Sync Service v4 starting...');
   log(`   SQLite: ${SQLITE_PATH}`);
@@ -1649,6 +1626,15 @@ async function main() {
   if (!CLOUD_SYNC_TOKEN) {
     log('❌ CLOUD_SYNC_TOKEN is missing in .env!');
     process.exit(1);
+  }
+
+  // אם גרסת הסינק השתנתה — אפס את sync_state כדי לשלוח הכל מחדש
+  await sqliteRun('CREATE TABLE IF NOT EXISTS sync_meta (key TEXT PRIMARY KEY, value TEXT)').catch(() => {});
+  const versionRow = await sqliteGet('SELECT value FROM sync_meta WHERE key=?', ['sync_version']).catch(() => null);
+  if (!versionRow || versionRow.value !== SYNC_VERSION) {
+    await sqliteRun('DELETE FROM sync_state').catch(() => {});
+    await sqliteRun('INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?,?)', ['sync_version', SYNC_VERSION]).catch(() => {});
+    log(`🔄 sync_state reset — full sync will run (version ${SYNC_VERSION})`);
   }
 
   // migration: סמן רשומות ב-deleted_* הישנות כ-is_deleted=1
