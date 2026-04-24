@@ -1268,7 +1268,9 @@ app.put('/api/inbound/:id', authenticateToken, async (req, res) => {
       'UPDATE inbound_transactions SET supplier_id=$1, supplier_type=$2, casual_supplier_name=$3, notes=$4, qr_code_id=$5 WHERE id=$6',
       [supplier_id, supplier_type, casual_supplier_name, notes, qr_code_id||null, id]
     );
-    // 4. הוסף items חדשים + עדכן מלאי
+    // 4. Reset sequence לפני INSERT כדי למנוע duplicate key
+    await client.query(`SELECT setval('inbound_items_id_seq', COALESCE((SELECT MAX(id) FROM inbound_items), 1))`);
+    // 5. הוסף items חדשים + עדכן מלאי
     for (const item of items) {
       await client.query(
         'INSERT INTO inbound_items (transaction_id, product_id, quantity, notes) VALUES ($1,$2,$3,$4)',
@@ -1339,7 +1341,9 @@ app.put('/api/outbound/:id', authenticateToken, async (req, res) => {
       'UPDATE outbound_transactions SET customer_id=$1, customer_type=$2, casual_customer_name=$3, notes=$4, status=$5, qr_code_id=$6 WHERE id=$7',
       [customer_id, customer_type, casual_customer_name, notes, status||'pending', qr_code_id||null, id]
     );
-    // 5. הוסף items חדשים + הורד ממלאי
+    // 5. Reset sequence לפני INSERT כדי למנוע duplicate key
+    await client.query(`SELECT setval('outbound_items_id_seq', COALESCE((SELECT MAX(id) FROM outbound_items), 1))`);
+    // 6. הוסף items חדשים + הורד ממלאי
     for (const item of items) {
       await client.query(
         `INSERT INTO outbound_items (transaction_id, product_id, quantity, use_packaging, items_per_carton, carton_weight, num_cartons, use_pallets, cartons_per_pallet, pallet_dimensions, pallet_weight, num_pallets) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
@@ -2564,8 +2568,17 @@ app.post('/api/sync/inbound', authenticateToken, async (req, res) => {
     }
 
     // הכנס רק items של עסקאות שנשלחו מהמקומי (localIds)
-    // מנע כפל של items של עסקאות שנוצרו בענן
+    // מחק תחילה את כל items קיימים עבור אותן transactions — מונע כפל בכל מצב
     const localIdSet = new Set((localIds||[]).map(Number));
+    if (localIdSet.size > 0) {
+      const localIdsArr = Array.from(localIdSet);
+      await client.query(
+        `DELETE FROM inbound_items WHERE transaction_id = ANY($1::int[])`,
+        [localIdsArr]
+      );
+    }
+    // Reset sequence אחרי DELETE + לפני INSERT עם id מפורש
+    await client.query(`SELECT setval('inbound_items_id_seq', COALESCE((SELECT MAX(id) FROM inbound_items), 1))`);
     for (const item of (items||[])) {
       if (!localIdSet.has(Number(item.transaction_id))) continue;
       await client.query(`
@@ -2576,6 +2589,8 @@ app.post('/api/sync/inbound', authenticateToken, async (req, res) => {
         [item.id, item.transaction_id, item.product_id, item.quantity, item.notes||null]
       );
     }
+    // Reset sequence שוב אחרי INSERT עם id מפורש
+    await client.query(`SELECT setval('inbound_items_id_seq', COALESCE((SELECT MAX(id) FROM inbound_items), 1))`);
 
     // הכמות מתעדכנת ע"י sync/products בלבד
 
@@ -2617,7 +2632,17 @@ app.post('/api/sync/outbound', authenticateToken, async (req, res) => {
     }
 
     // הכנס רק items של עסקאות שנשלחו מהמקומי (localIds)
+    // מחק תחילה את כל items קיימים עבור אותן transactions — מונע כפל בכל מצב
     const localIdSetOut = new Set((localIds||[]).map(Number));
+    if (localIdSetOut.size > 0) {
+      const localIdsArrOut = Array.from(localIdSetOut);
+      await client.query(
+        `DELETE FROM outbound_items WHERE transaction_id = ANY($1::int[])`,
+        [localIdsArrOut]
+      );
+    }
+    // Reset sequence אחרי DELETE + לפני INSERT עם id מפורש
+    await client.query(`SELECT setval('outbound_items_id_seq', COALESCE((SELECT MAX(id) FROM outbound_items), 1))`);
     for (const item of (items||[])) {
       if (!localIdSetOut.has(Number(item.transaction_id))) continue;
       await client.query(`
@@ -2634,6 +2659,8 @@ app.post('/api/sync/outbound', authenticateToken, async (req, res) => {
          item.pallet_dimensions||null, item.pallet_weight||null, item.num_pallets||null]
       );
     }
+    // Reset sequence שוב אחרי INSERT עם id מפורש
+    await client.query(`SELECT setval('outbound_items_id_seq', COALESCE((SELECT MAX(id) FROM outbound_items), 1))`);
 
     // מחיקות מטופלות דרך pending_deletions - לא מוחקים עסקאות שנוצרו בענן
 
