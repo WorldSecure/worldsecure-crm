@@ -713,24 +713,30 @@ function Products() {
     e.preventDefault();
     
     try {
-      // תרגום אוטומטי אם השם השתנה או מוצר חדש
+      // תרגום אוטומטי אם:
+      // 1. מוצר חדש
+      // 2. השם השתנה
+      // 3. מוצר קיים שעדיין לא תורגם (name_he === name או name_pt === name)
       let name_he = editingProduct?.name_he || null;
       let name_pt = editingProduct?.name_pt || null;
-      let name_en = formData.name; // ברירת מחדל - name הוא אנגלית
+      let name_en = formData.name;
       const nameChanged = !editingProduct || editingProduct.name !== formData.name;
+      const notTranslated = editingProduct && (
+        !editingProduct.name_he || editingProduct.name_he === editingProduct.name ||
+        !editingProduct.name_pt || editingProduct.name_pt === editingProduct.name
+      );
 
-      if (nameChanged) {
+      if (nameChanged || notTranslated) {
         try {
           const transRes = await axios.post('/api/products/translate', {
             name: formData.name,
-            sourceLang: language  // שולח את שפת המערכת הנוכחית
+            sourceLang: language
           });
           name_he = transRes.data.he || null;
           name_pt = transRes.data.pt || null;
           name_en = transRes.data.en || formData.name;
         } catch (e) {
           console.warn('Translation failed, saving without translation');
-          // שמור את השם בשדה הנכון לפי שפת המקור
           if (language === 'he') name_he = formData.name;
           if (language === 'pt') name_pt = formData.name;
         }
