@@ -124,14 +124,14 @@ async function syncLocalToCloud() {
   try {
     await syncUsersToCloud();
     await syncQrToCloud();
-    await syncEntityToCloud('categories',    'SELECT id, name, name_he, name_pt, description, code, updated_at FROM categories WHERE is_deleted IS NULL OR is_deleted=0');
+    await syncEntityToCloud('categories',    'SELECT id, name, name_he, name_pt, description, code, updated_at FROM categories WHERE is_deleted IS NULL OR is_deleted=0', 'updated_at');
     await syncDeletedCategoriesToCloud();
-    await syncEntityToCloud('subcategories', 'SELECT id, category_id, name, name_he, name_pt, code, updated_at FROM subcategories WHERE is_deleted IS NULL OR is_deleted=0');
+    await syncEntityToCloud('subcategories', 'SELECT id, category_id, name, name_he, name_pt, code, updated_at FROM subcategories WHERE is_deleted IS NULL OR is_deleted=0', 'updated_at');
     await syncDeletedSubcategoriesToCloud();
-    await syncEntityToCloud('customers',  'SELECT id, name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes, created_at, updated_at FROM customers');
-    await syncEntityToCloud('variant_attribute_types', 'SELECT id, name, name_he, name_pt, created_at FROM variant_attribute_types WHERE is_deleted IS NULL OR is_deleted=0');
+    await syncEntityToCloud('customers',  'SELECT id, name, contact_person, address, phone, email, tax_id, country, is_sensitive, notes, created_at, updated_at FROM customers', 'updated_at');
+    await syncEntityToCloud('variant_attribute_types', 'SELECT id, name, name_he, name_pt, created_at FROM variant_attribute_types WHERE is_deleted IS NULL OR is_deleted=0', 'created_at');
     await syncDeletedVariantAttrTypesToCloud();
-    await syncEntityToCloud('product_type_codes', 'SELECT id, code, name, name_he, name_pt, created_at FROM product_type_codes WHERE is_deleted IS NULL OR is_deleted=0');
+    await syncEntityToCloud('product_type_codes', 'SELECT id, code, name, name_he, name_pt, created_at FROM product_type_codes WHERE is_deleted IS NULL OR is_deleted=0', 'created_at');
     await syncDeletedProductTypeCodesToCloud();
     await syncEmailSignaturesToCloud();
     await syncOutboundSignaturesToCloud();
@@ -140,9 +140,9 @@ async function syncLocalToCloud() {
     await syncInboundToCloud();
     await syncOutboundToCloud();
     await syncDeletedProductsToCloud();
-    await syncEntityToCloud('products',   'SELECT id, sku, name, name_he, name_pt, description, category_id, subcategory_id, supplier_id, manufacturer_id, price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at, is_parent, variant_attrs, parent_id, is_active, product_type_code FROM products');
-    await syncEntityToCloud('suppliers',  'SELECT id, name, address, phone, email, tax_id, country, contact_person, notes, created_at, updated_at FROM suppliers');
-    await syncEntityToCloud('manufacturers', 'SELECT id, name, address, phone, email, tax_id, country, contact_person, notes, created_at, updated_at FROM manufacturers');
+    await syncEntityToCloud('products',   "SELECT id, sku, name, name_he, name_pt, description, category_id, subcategory_id, supplier_id, manufacturer_id, price, currency, unit, quantity, min_quantity, quantity_updated_at, meta_updated_at, is_parent, variant_attrs, parent_id, is_active, product_type_code, MAX(COALESCE(meta_updated_at,'1970-01-01'), COALESCE(quantity_updated_at,'1970-01-01')) as _last_updated FROM products GROUP BY id", '_last_updated');
+    await syncEntityToCloud('suppliers',  'SELECT id, name, address, phone, email, tax_id, country, contact_person, notes, created_at, updated_at FROM suppliers', 'updated_at');
+    await syncEntityToCloud('manufacturers', 'SELECT id, name, address, phone, email, tax_id, country, contact_person, notes, created_at, updated_at FROM manufacturers', 'updated_at');
     await syncSupportToCloud();
     await syncWarehouseAlertsToCloud();
     await syncNotificationAcksToCloud();
@@ -160,11 +160,55 @@ async function syncSettings() {
   else log(`  ⚠ settings: ${JSON.stringify(result.body)}`);
 }
 
-async function syncEntityToCloud(entityName, sql) {
-  const rows = await sqliteAll(sql);
-  const result = await apiRequest('POST', `/api/sync/${entityName}`, { rows });
-  if (result.status === 200) log(`  ↳ ${entityName}: ${rows.length} synced`);
-  else log(`  ⚠ ${entityName}: ${JSON.stringify(result.body)}`);
+// ── sync_state table: שומר last_sync_at לכל ישות ──────────────────────────
+async function getLastSyncAt(entityName) {
+  await sqliteRun(`CREATE TABLE IF NOT EXISTS sync_state (entity TEXT PRIMARY KEY, last_sync_at TEXT)`).catch(() => {});
+  const row = await sqliteGet('SELECT last_sync_at FROM sync_state WHERE entity=?', [entityName]).catch(() => null);
+  return row ? row.last_sync_at : null;
+}
+
+async function setLastSyncAt(entityName, ts) {
+  await sqliteRun(
+    `INSERT INTO sync_state (entity, last_sync_at) VALUES (?,?) ON CONFLICT(entity) DO UPDATE SET last_sync_at=excluded.last_sync_at`,
+    [entityName, ts]
+  ).catch(() => {});
+}
+
+// updatedAtField — שם העמודה שמייצגת מתי הרשומה עודכנה לאחרונה
+// אם null — שולח הכל תמיד (לישויות קטנות/ללא timestamp)
+async function syncEntityToCloud(entityName, sql, updatedAtField = null) {
+  let rows;
+
+  if (updatedAtField) {
+    const lastSync = await getLastSyncAt(entityName);
+    if (lastSync) {
+      // שלח רק רשומות שהשתנו מאז הסינק האחרון
+      const haswhere = sql.toLowerCase().includes(' where ');
+      const deltaSql = haswhere
+        ? sql + \` AND (\${updatedAtField} IS NULL OR \${updatedAtField} > ?)\`
+        : sql + \` WHERE (\${updatedAtField} IS NULL OR \${updatedAtField} > ?)\`;
+      rows = await sqliteAll(deltaSql, [lastSync]);
+    } else {
+      // סינק ראשון — שלח הכל
+      rows = await sqliteAll(sql);
+    }
+  } else {
+    rows = await sqliteAll(sql);
+  }
+
+  if (rows.length === 0) {
+    log(\`  ↳ \${entityName}: no changes since last sync — skipped\`);
+    if (updatedAtField) await setLastSyncAt(entityName, new Date().toISOString());
+    return;
+  }
+
+  const result = await apiRequest('POST', \`/api/sync/\${entityName}\`, { rows });
+  if (result.status === 200) {
+    log(\`  ↳ \${entityName}: \${rows.length} synced\`);
+    if (updatedAtField) await setLastSyncAt(entityName, new Date().toISOString());
+  } else {
+    log(\`  ⚠ \${entityName}: \${JSON.stringify(result.body)}\`);
+  }
 }
 
 async function syncDeletedProductsToCloud() {
@@ -259,12 +303,25 @@ async function syncInboundToCloud() {
     await sqliteRun('DELETE FROM deleted_inbound').catch(() => {});
     log(`  ↳ inbound deletions pushed to cloud: ${deletedInbound.length}`);
   }
-  const transactions = await sqliteAll('SELECT it.*, u.username FROM inbound_transactions it LEFT JOIN users u ON it.user_id = u.id ORDER BY it.id');
-  const items        = await sqliteAll('SELECT * FROM inbound_items ORDER BY id');
-  const localIds     = transactions.map(t => t.id);
-  const result = await apiRequest('POST', '/api/sync/inbound', { transactions, items, localIds });
-  if (result.status === 200) log(`  ↳ inbound: ${transactions.length} transactions synced`);
-  else log(`  ⚠ inbound: ${JSON.stringify(result.body)}`);
+  const lastSyncInbound = await getLastSyncAt('inbound');
+  const transactions = lastSyncInbound
+    ? await sqliteAll(\`SELECT it.*, u.username FROM inbound_transactions it LEFT JOIN users u ON it.user_id = u.id WHERE it.transaction_date >= ? ORDER BY it.id\`, [lastSyncInbound])
+    : await sqliteAll('SELECT it.*, u.username FROM inbound_transactions it LEFT JOIN users u ON it.user_id = u.id ORDER BY it.id');
+  // items — רק עבור transactions שנשלחות
+  const txIds = transactions.map(t => t.id);
+  const items = txIds.length > 0
+    ? await sqliteAll(\`SELECT * FROM inbound_items WHERE transaction_id IN (\${txIds.map(() => '?').join(',')}) ORDER BY id\`, txIds)
+    : [];
+  const localIds = (await sqliteAll('SELECT id FROM inbound_transactions ORDER BY id')).map(t => t.id);
+  if (transactions.length === 0) {
+    log(\`  ↳ inbound: no changes since last sync — skipped\`);
+  } else {
+    const result = await apiRequest('POST', '/api/sync/inbound', { transactions, items, localIds });
+    if (result.status === 200) {
+      log(\`  ↳ inbound: \${transactions.length} transactions synced\`);
+      await setLastSyncAt('inbound', new Date().toISOString());
+    } else log(\`  ⚠ inbound: \${JSON.stringify(result.body)}\`);
+  }
 }
 
 async function syncOutboundToCloud() {
@@ -287,23 +344,42 @@ async function syncOutboundToCloud() {
     await sqliteRun('DELETE FROM deleted_outbound').catch(() => {});
     log(`  ↳ outbound deletions pushed to cloud: ${deletedOutbound.length}`);
   }
-  const transactions = await sqliteAll('SELECT ot.*, u.username FROM outbound_transactions ot LEFT JOIN users u ON ot.user_id = u.id ORDER BY ot.id');
-  const items        = await sqliteAll('SELECT * FROM outbound_items ORDER BY id');
-  const localIds     = transactions.map(t => t.id);
-  const result = await apiRequest('POST', '/api/sync/outbound', { transactions, items, localIds });
-  if (result.status === 200) log(`  ↳ outbound: ${transactions.length} transactions synced`);
-  else log(`  ⚠ outbound: ${JSON.stringify(result.body)}`);
+  const lastSyncOutbound = await getLastSyncAt('outbound');
+  const transactions = lastSyncOutbound
+    ? await sqliteAll(\`SELECT ot.*, u.username FROM outbound_transactions ot LEFT JOIN users u ON ot.user_id = u.id WHERE ot.transaction_date >= ? ORDER BY ot.id\`, [lastSyncOutbound])
+    : await sqliteAll('SELECT ot.*, u.username FROM outbound_transactions ot LEFT JOIN users u ON ot.user_id = u.id ORDER BY ot.id');
+  const txIdsOut = transactions.map(t => t.id);
+  const items = txIdsOut.length > 0
+    ? await sqliteAll(\`SELECT * FROM outbound_items WHERE transaction_id IN (\${txIdsOut.map(() => '?').join(',')}) ORDER BY id\`, txIdsOut)
+    : [];
+  const localIds = (await sqliteAll('SELECT id FROM outbound_transactions ORDER BY id')).map(t => t.id);
+  if (transactions.length === 0) {
+    log(\`  ↳ outbound: no changes since last sync — skipped\`);
+  } else {
+    const result = await apiRequest('POST', '/api/sync/outbound', { transactions, items, localIds });
+    if (result.status === 200) {
+      log(\`  ↳ outbound: \${transactions.length} transactions synced\`);
+      await setLastSyncAt('outbound', new Date().toISOString());
+    } else log(\`  ⚠ outbound: \${JSON.stringify(result.body)}\`);
+  }
 }
 
 async function syncSupportToCloud() {
-  const tickets  = await sqliteAll(`
-    SELECT t.*,
-      u1.username as owner_name_resolved,
-      u2.username as created_by_name
-    FROM support_tickets t
-    LEFT JOIN users u1 ON t.owner_id = u1.id
-    LEFT JOIN users u2 ON t.created_by = u2.id
-    ORDER BY t.id`);
+  const lastSyncSupport = await getLastSyncAt('support');
+  const tickets  = await sqliteAll(
+    lastSyncSupport
+      ? `SELECT t.*, u1.username as owner_name_resolved, u2.username as created_by_name
+         FROM support_tickets t
+         LEFT JOIN users u1 ON t.owner_id = u1.id
+         LEFT JOIN users u2 ON t.created_by = u2.id
+         WHERE t.updated_at >= ? ORDER BY t.id`
+      : `SELECT t.*, u1.username as owner_name_resolved, u2.username as created_by_name
+         FROM support_tickets t
+         LEFT JOIN users u1 ON t.owner_id = u1.id
+         LEFT JOIN users u2 ON t.created_by = u2.id
+         ORDER BY t.id`,
+    lastSyncSupport ? [lastSyncSupport] : []
+  );
   // החלף owner_name בשם המעודכן מה-JOIN
   tickets.forEach(t => {
     if (t.owner_name_resolved) t.owner_name = t.owner_name_resolved;
@@ -319,6 +395,10 @@ async function syncSupportToCloud() {
   const history = historyRaw;
   // שלח רשימת IDs שנמחקו מקומית (לא את כל ה-IDs הקיימים!)
   const deletedIds = await sqliteAll('SELECT ticket_id FROM deleted_support_tickets').catch(() => []);
+  if (tickets.length === 0 && deletedIds.length === 0) {
+    log(`  ↳ support: no changes since last sync — skipped`);
+    return;
+  }
   const result = await apiRequest('POST', '/api/sync/support', {
     tickets,
     history,
@@ -328,6 +408,7 @@ async function syncSupportToCloud() {
     // נקה את טבלת המחיקות המקומית לאחר סינק מוצלח
     await sqliteRun('DELETE FROM deleted_support_tickets').catch(() => {});
     log(`  ↳ support: ${tickets.length} tickets synced`);
+    await setLastSyncAt('support', new Date().toISOString());
   } else {
     log(`  ⚠ support: ${JSON.stringify(result.body)}`);
   }
@@ -1549,26 +1630,15 @@ async function syncNotificationAcksToCloud() {
 }
 
 
-let isSyncing = false;
-
 async function syncAll() {
-  if (isSyncing) {
-    log('⏭  Sync skipped — previous sync still running');
-    return;
-  }
-  isSyncing = true;
-  try {
-    // שלב 1: משוך מחיקות מהענן תחילה — כך קטגוריות שנמחקו בענן יוסרו מקומית
-    //         לפני ששולחים את הנתונים המקומיים חזרה לענן (מניעת "החייאה")
-    await pullDeletionsFromCloud();
-    // שלב 2: שלח נתונים מקומיים לענן — כולל מחיקות מקומיות.
-    //         הענן מוגן: קטגוריות ב-pending_deletions לא יקבלו UPSERT (תוקן ב-server-cloud.js)
-    await syncLocalToCloud();
-    // שלב 3: משוך נתונים מהענן — קטגוריות שנמחקו כבר הוסרו בשני הכיוונים
-    await syncCloudToLocal();
-  } finally {
-    isSyncing = false;
-  }
+  // שלב 1: משוך מחיקות מהענן תחילה — כך קטגוריות שנמחקו בענן יוסרו מקומית
+  //         לפני ששולחים את הנתונים המקומיים חזרה לענן (מניעת "החייאה")
+  await pullDeletionsFromCloud();
+  // שלב 2: שלח נתונים מקומיים לענן — כולל מחיקות מקומיות.
+  //         הענן מוגן: קטגוריות ב-pending_deletions לא יקבלו UPSERT (תוקן ב-server-cloud.js)
+  await syncLocalToCloud();
+  // שלב 3: משוך נתונים מהענן — קטגוריות שנמחקו כבר הוסרו בשני הכיוונים
+  await syncCloudToLocal();
 }
 
 async function main() {
