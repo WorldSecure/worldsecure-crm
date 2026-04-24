@@ -185,8 +185,8 @@ async function syncEntityToCloud(entityName, sql, updatedAtField = null) {
       // שלח רק רשומות שהשתנו מאז הסינק האחרון
       const haswhere = sql.toLowerCase().includes(' where ');
       const deltaSql = haswhere
-        ? sql + \` AND (\${updatedAtField} IS NULL OR \${updatedAtField} > ?)\`
-        : sql + \` WHERE (\${updatedAtField} IS NULL OR \${updatedAtField} > ?)\`;
+        ? sql + ` AND (${updatedAtField} IS NULL OR ${updatedAtField} > ?)`
+        : sql + ` WHERE (${updatedAtField} IS NULL OR ${updatedAtField} > ?)`;
       rows = await sqliteAll(deltaSql, [lastSync]);
     } else {
       // סינק ראשון — שלח הכל
@@ -197,17 +197,17 @@ async function syncEntityToCloud(entityName, sql, updatedAtField = null) {
   }
 
   if (rows.length === 0) {
-    log(\`  ↳ \${entityName}: no changes since last sync — skipped\`);
+    log(`  ↳ ${entityName}: no changes since last sync — skipped`);
     if (updatedAtField) await setLastSyncAt(entityName, new Date().toISOString());
     return;
   }
 
-  const result = await apiRequest('POST', \`/api/sync/\${entityName}\`, { rows });
+  const result = await apiRequest('POST', `/api/sync/${entityName}`, { rows });
   if (result.status === 200) {
-    log(\`  ↳ \${entityName}: \${rows.length} synced\`);
+    log(`  ↳ ${entityName}: ${rows.length} synced`);
     if (updatedAtField) await setLastSyncAt(entityName, new Date().toISOString());
   } else {
-    log(\`  ⚠ \${entityName}: \${JSON.stringify(result.body)}\`);
+    log(`  ⚠ ${entityName}: ${JSON.stringify(result.body)}`);
   }
 }
 
@@ -305,22 +305,22 @@ async function syncInboundToCloud() {
   }
   const lastSyncInbound = await getLastSyncAt('inbound');
   const transactions = lastSyncInbound
-    ? await sqliteAll(\`SELECT it.*, u.username FROM inbound_transactions it LEFT JOIN users u ON it.user_id = u.id WHERE it.transaction_date >= ? ORDER BY it.id\`, [lastSyncInbound])
+    ? await sqliteAll(`SELECT it.*, u.username FROM inbound_transactions it LEFT JOIN users u ON it.user_id = u.id WHERE it.transaction_date >= ? ORDER BY it.id`, [lastSyncInbound])
     : await sqliteAll('SELECT it.*, u.username FROM inbound_transactions it LEFT JOIN users u ON it.user_id = u.id ORDER BY it.id');
   // items — רק עבור transactions שנשלחות
   const txIds = transactions.map(t => t.id);
   const items = txIds.length > 0
-    ? await sqliteAll(\`SELECT * FROM inbound_items WHERE transaction_id IN (\${txIds.map(() => '?').join(',')}) ORDER BY id\`, txIds)
+    ? await sqliteAll(`SELECT * FROM inbound_items WHERE transaction_id IN (${txIds.map(() => '?').join(',')}) ORDER BY id`, txIds)
     : [];
   const localIds = (await sqliteAll('SELECT id FROM inbound_transactions ORDER BY id')).map(t => t.id);
   if (transactions.length === 0) {
-    log(\`  ↳ inbound: no changes since last sync — skipped\`);
+    log(`  ↳ inbound: no changes since last sync — skipped`);
   } else {
     const result = await apiRequest('POST', '/api/sync/inbound', { transactions, items, localIds });
     if (result.status === 200) {
-      log(\`  ↳ inbound: \${transactions.length} transactions synced\`);
+      log(`  ↳ inbound: ${transactions.length} transactions synced`);
       await setLastSyncAt('inbound', new Date().toISOString());
-    } else log(\`  ⚠ inbound: \${JSON.stringify(result.body)}\`);
+    } else log(`  ⚠ inbound: ${JSON.stringify(result.body)}`);
   }
 }
 
@@ -346,21 +346,21 @@ async function syncOutboundToCloud() {
   }
   const lastSyncOutbound = await getLastSyncAt('outbound');
   const transactions = lastSyncOutbound
-    ? await sqliteAll(\`SELECT ot.*, u.username FROM outbound_transactions ot LEFT JOIN users u ON ot.user_id = u.id WHERE ot.transaction_date >= ? ORDER BY ot.id\`, [lastSyncOutbound])
+    ? await sqliteAll(`SELECT ot.*, u.username FROM outbound_transactions ot LEFT JOIN users u ON ot.user_id = u.id WHERE ot.transaction_date >= ? ORDER BY ot.id`, [lastSyncOutbound])
     : await sqliteAll('SELECT ot.*, u.username FROM outbound_transactions ot LEFT JOIN users u ON ot.user_id = u.id ORDER BY ot.id');
   const txIdsOut = transactions.map(t => t.id);
   const items = txIdsOut.length > 0
-    ? await sqliteAll(\`SELECT * FROM outbound_items WHERE transaction_id IN (\${txIdsOut.map(() => '?').join(',')}) ORDER BY id\`, txIdsOut)
+    ? await sqliteAll(`SELECT * FROM outbound_items WHERE transaction_id IN (${txIdsOut.map(() => '?').join(',')}) ORDER BY id`, txIdsOut)
     : [];
   const localIds = (await sqliteAll('SELECT id FROM outbound_transactions ORDER BY id')).map(t => t.id);
   if (transactions.length === 0) {
-    log(\`  ↳ outbound: no changes since last sync — skipped\`);
+    log(`  ↳ outbound: no changes since last sync — skipped`);
   } else {
     const result = await apiRequest('POST', '/api/sync/outbound', { transactions, items, localIds });
     if (result.status === 200) {
-      log(\`  ↳ outbound: \${transactions.length} transactions synced\`);
+      log(`  ↳ outbound: ${transactions.length} transactions synced`);
       await setLastSyncAt('outbound', new Date().toISOString());
-    } else log(\`  ⚠ outbound: \${JSON.stringify(result.body)}\`);
+    } else log(`  ⚠ outbound: ${JSON.stringify(result.body)}`);
   }
 }
 
