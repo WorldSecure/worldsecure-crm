@@ -168,9 +168,12 @@ async function getLastSyncAt(entityName) {
 }
 
 async function setLastSyncAt(entityName, ts) {
+  // שמור בפורמט SQLite: "YYYY-MM-DD HH:MM:SS" (ללא T וללא Z)
+  // כדי שהשוואה עם updated_at ב-SQLite תעבוד נכון
+  const sqliteTs = new Date(ts).toISOString().replace('T', ' ').replace('Z', '').slice(0, 19);
   await sqliteRun(
     `INSERT INTO sync_state (entity, last_sync_at) VALUES (?,?) ON CONFLICT(entity) DO UPDATE SET last_sync_at=excluded.last_sync_at`,
-    [entityName, ts]
+    [entityName, sqliteTs]
   ).catch(() => {});
 }
 
@@ -477,16 +480,19 @@ async function syncProductsFromCloud() {
          p.product_type_code||null,
          finalQty, finalQtyTs, p.id]
       ).catch(() => {});
-    } else {
-      // מקומי עדכן meta אחרון — עדכן רק כמות
+      count++;
+    } else if (useCloudQty) {
+      // מקומי עדכן meta אחרון — עדכן רק כמות אם השתנתה
       await sqliteRun(
         'UPDATE products SET quantity=?, quantity_updated_at=? WHERE id=?',
         [finalQty, finalQtyTs, p.id]
       ).catch(() => {});
+      count++;
     }
-    count++;
+    // אם לא useCloudMeta ולא useCloudQty — לא השתנה כלום, דלג
   }
-  if (count > 0) log(`  ↳ products from cloud: ${count} synced`);
+  if (count > 0) log(`  ↳ products from cloud: ${count} updated`);
+  else log(`  ↳ products from cloud: no changes`);
 }
 
 async function syncCustomersFromCloud() {
@@ -591,14 +597,14 @@ async function syncVariantAttrTypesFromCloud() {
   let count = 0;
   for (const r of rows) {
     if (deletedVatIds.has(r.id)) continue;
-    const existing = await sqliteGet('SELECT id FROM variant_attribute_types WHERE id=?', [r.id]).catch(() => null);
+    const existing = await sqliteGet('SELECT id, name, name_he, name_pt FROM variant_attribute_types WHERE id=?', [r.id]).catch(() => null);
     if (!existing) {
       await sqliteRun(
         'INSERT OR IGNORE INTO variant_attribute_types (id, name, name_he, name_pt) VALUES (?,?,?,?)',
         [r.id, r.name, r.name_he||null, r.name_pt||null]
       ).catch(() => {});
       count++;
-    } else {
+    } else if (existing.name !== r.name || existing.name_he !== (r.name_he||null) || existing.name_pt !== (r.name_pt||null)) {
       await sqliteRun(
         'UPDATE variant_attribute_types SET name=?, name_he=?, name_pt=? WHERE id=?',
         [r.name, r.name_he||null, r.name_pt||null, r.id]
@@ -615,7 +621,8 @@ async function syncVariantAttrTypesFromCloud() {
       log(`  ↳ variant_attribute_type #${local.id} marked deleted (removed from cloud)`);
     }
   }
-  if (count > 0) log(`  ↳ variant_attribute_types from cloud: ${count} synced`);
+  if (count > 0) log(`  ↳ variant_attribute_types from cloud: ${count} updated`);
+  else log(`  ↳ variant_attribute_types from cloud: no changes`);
 }
 
 async function syncProductTypeCodesFromCloud() {
@@ -631,14 +638,14 @@ async function syncProductTypeCodesFromCloud() {
   let count = 0;
   for (const r of rows) {
     if (deletedPtcIds.has(r.id)) continue;
-    const existing = await sqliteGet('SELECT id FROM product_type_codes WHERE id=?', [r.id]).catch(() => null);
+    const existing = await sqliteGet('SELECT id, code, name, name_he, name_pt FROM product_type_codes WHERE id=?', [r.id]).catch(() => null);
     if (!existing) {
       await sqliteRun(
         'INSERT OR IGNORE INTO product_type_codes (id, code, name, name_he, name_pt) VALUES (?,?,?,?,?)',
         [r.id, r.code, r.name, r.name_he||null, r.name_pt||null]
       ).catch(() => {});
       count++;
-    } else {
+    } else if (existing.code !== r.code || existing.name !== r.name || existing.name_he !== (r.name_he||null) || existing.name_pt !== (r.name_pt||null)) {
       await sqliteRun(
         'UPDATE product_type_codes SET code=?, name=?, name_he=?, name_pt=? WHERE id=?',
         [r.code, r.name, r.name_he||null, r.name_pt||null, r.id]
@@ -655,7 +662,8 @@ async function syncProductTypeCodesFromCloud() {
       log(`  ↳ product_type_code #${local.id} marked deleted (removed from cloud)`);
     }
   }
-  if (count > 0) log(`  ↳ product_type_codes from cloud: ${count} synced`);
+  if (count > 0) log(`  ↳ product_type_codes from cloud: ${count} updated`);
+  else log(`  ↳ product_type_codes from cloud: no changes`);
 }
 
 async function syncCloudToLocal() {
