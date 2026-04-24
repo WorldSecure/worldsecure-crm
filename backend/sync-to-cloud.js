@@ -618,9 +618,13 @@ async function syncVariantAttrTypesFromCloud() {
   }
   // מחק מקומית רשומות שנמחקו בענן (ולא נמחקו מקומית כבר)
   const cloudIds = rows.map(r => r.id);
-  const localVatRows = await sqliteAll('SELECT id FROM variant_attribute_types WHERE is_deleted IS NULL OR is_deleted=0').catch(() => []);
+  const localVatRows = await sqliteAll('SELECT id, created_at FROM variant_attribute_types WHERE is_deleted IS NULL OR is_deleted=0').catch(() => []);
+  const lastSyncVat = await getLastSyncAt('variant_attribute_types');
   for (const local of localVatRows) {
     if (!cloudIds.includes(local.id)) {
+      if (lastSyncVat && local.created_at && new Date(local.created_at).getTime() > new Date(lastSyncVat).getTime()) {
+        continue;
+      }
       await sqliteRun(`UPDATE variant_attribute_types SET is_deleted=1, deleted_synced=1, updated_at=datetime('now') WHERE id=?`, [local.id]).catch(() => {});
       log(`  ↳ variant_attribute_type #${local.id} marked deleted (removed from cloud)`);
     }
@@ -659,9 +663,13 @@ async function syncProductTypeCodesFromCloud() {
   }
   // מחק מקומית רשומות שנמחקו בענן (ולא נמחקו מקומית כבר)
   const cloudIds = rows.map(r => r.id);
-  const localPtcRows = await sqliteAll('SELECT id FROM product_type_codes WHERE is_deleted IS NULL OR is_deleted=0').catch(() => []);
+  const localPtcRows = await sqliteAll('SELECT id, created_at FROM product_type_codes WHERE is_deleted IS NULL OR is_deleted=0').catch(() => []);
+  const lastSyncPtc = await getLastSyncAt('product_type_codes');
   for (const local of localPtcRows) {
     if (!cloudIds.includes(local.id)) {
+      if (lastSyncPtc && local.created_at && new Date(local.created_at).getTime() > new Date(lastSyncPtc).getTime()) {
+        continue;
+      }
       await sqliteRun(`UPDATE product_type_codes SET is_deleted=1, deleted_synced=1, updated_at=datetime('now') WHERE id=?`, [local.id]).catch(() => {});
       log(`  ↳ product_type_code #${local.id} marked deleted (removed from cloud)`);
     }
@@ -746,10 +754,15 @@ async function syncCategoriesFromCloud() {
   }
 
   // מחק מקומית קטגוריות שכבר לא קיימות בענן
-  const localRows = await sqliteAll('SELECT id FROM categories WHERE is_deleted IS NULL OR is_deleted=0').catch(() => []);
+  // אבל לא אם נוצרו מקומית לאחרונה ועדיין לא הספיקו לעלות לענן
+  const localRows = await sqliteAll('SELECT id, created_at FROM categories WHERE is_deleted IS NULL OR is_deleted=0').catch(() => []);
+  const lastSyncCat = await getLastSyncAt('categories');
   for (const local of localRows) {
     if (!cloudIds.has(local.id) && !deletedLocalIds.has(local.id)) {
-      // קטגוריה קיימת מקומית אבל לא בענן — נמחקה בענן, סמן כ-is_deleted
+      // אם נוצר לאחר הסינק האחרון — עדיין לא הספיק לעלות לענן, לא למחוק
+      if (lastSyncCat && local.created_at && new Date(local.created_at).getTime() > new Date(lastSyncCat).getTime()) {
+        continue; // מקומי חדש שעוד לא עלה — דלג
+      }
       await sqliteRun(`UPDATE subcategories SET is_deleted=1, deleted_synced=1, updated_at=datetime('now') WHERE category_id=?`, [local.id]).catch(() => {});
       await sqliteRun(`UPDATE categories SET is_deleted=1, deleted_synced=1, updated_at=datetime('now') WHERE id=?`, [local.id]).catch(() => {});
       log(`  ↳ category #${local.id} marked deleted (removed from cloud)`);
@@ -815,9 +828,13 @@ async function syncSubcategoriesFromCloud() {
   }
 
   // מחק מקומית סאב-קטגוריות שכבר לא קיימות בענן
-  const localSubRows = await sqliteAll('SELECT id FROM subcategories WHERE is_deleted IS NULL OR is_deleted=0').catch(() => []);
+  const localSubRows = await sqliteAll('SELECT id, created_at FROM subcategories WHERE is_deleted IS NULL OR is_deleted=0').catch(() => []);
+  const lastSyncSub = await getLastSyncAt('subcategories');
   for (const local of localSubRows) {
     if (!cloudIds.has(local.id) && !deletedLocalSubIds.has(local.id)) {
+      if (lastSyncSub && local.created_at && new Date(local.created_at).getTime() > new Date(lastSyncSub).getTime()) {
+        continue;
+      }
       await sqliteRun(`UPDATE subcategories SET is_deleted=1, deleted_synced=1, updated_at=datetime('now') WHERE id=?`, [local.id]).catch(() => {});
       log(`  ↳ subcategory #${local.id} marked deleted (removed from cloud)`);
     }
