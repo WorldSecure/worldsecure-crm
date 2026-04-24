@@ -187,9 +187,10 @@ async function syncEntityToCloud(entityName, sql, updatedAtField = null) {
     if (lastSync) {
       // שלח רק רשומות שהשתנו מאז הסינק האחרון
       const haswhere = sql.toLowerCase().includes(' where ');
+      // השתמש ב-datetime() כדי לנרמל formats שונים (ISO עם T/Z, ו-SQLite עם space)
       const deltaSql = haswhere
-        ? sql + ` AND (${updatedAtField} IS NULL OR ${updatedAtField} > ?)`
-        : sql + ` WHERE (${updatedAtField} IS NULL OR ${updatedAtField} > ?)`;
+        ? sql + ` AND (${updatedAtField} IS NULL OR datetime(${updatedAtField}) > datetime(?))`
+        : sql + ` WHERE (${updatedAtField} IS NULL OR datetime(${updatedAtField}) > datetime(?))`;
       rows = await sqliteAll(deltaSql, [lastSync]);
     } else {
       // סינק ראשון — שלח הכל
@@ -350,7 +351,7 @@ async function syncSupportToCloud() {
          FROM support_tickets t
          LEFT JOIN users u1 ON t.owner_id = u1.id
          LEFT JOIN users u2 ON t.created_by = u2.id
-         WHERE t.updated_at >= ? ORDER BY t.id`
+         WHERE datetime(t.updated_at) >= datetime(?) ORDER BY t.id`
       : `SELECT t.*, u1.username as owner_name_resolved, u2.username as created_by_name
          FROM support_tickets t
          LEFT JOIN users u1 ON t.owner_id = u1.id
@@ -521,6 +522,7 @@ async function syncCustomersFromCloud() {
     }
   }
   if (count > 0) log(`  ↳ customers from cloud: ${count} updated`);
+  else log(`  ↳ customers from cloud: no changes`);
 }
 
 async function syncSuppliersFromCloud() {
@@ -549,6 +551,7 @@ async function syncSuppliersFromCloud() {
     }
   }
   if (count > 0) log(`  ↳ suppliers from cloud: ${count} updated`);
+  else log(`  ↳ suppliers from cloud: no changes`);
 }
 
 async function syncManufacturersFromCloud() {
@@ -582,6 +585,7 @@ async function syncManufacturersFromCloud() {
     }
   }
   if (count > 0) log(`  ↳ manufacturers from cloud: ${count} updated`);
+  else log(`  ↳ manufacturers from cloud: no changes`);
 }
 
 async function syncVariantAttrTypesFromCloud() {
@@ -753,6 +757,7 @@ async function syncCategoriesFromCloud() {
   }
 
   if (count > 0) log(`  ↳ categories from cloud: ${count} updated`);
+  else log(`  ↳ categories from cloud: no changes`);
 }
 
 async function syncSubcategoriesFromCloud() {
@@ -819,6 +824,7 @@ async function syncSubcategoriesFromCloud() {
   }
 
   if (count > 0) log(`  ↳ subcategories from cloud: ${count} updated`);
+  else log(`  ↳ subcategories from cloud: no changes`);
 }
 
 // ── Inbound מהענן ─────────────────────────────────────────────────────────────
@@ -850,6 +856,7 @@ async function syncInboundFromCloud() {
   }
 
   if (count > 0) log(`  ↳ inbound from cloud: ${count} transactions`);
+  else log(`  ↳ inbound from cloud: no changes`);
 }
 
 // ── Outbound מהענן ────────────────────────────────────────────────────────────
@@ -1030,6 +1037,7 @@ async function syncSupportFromCloud() {
   }
 
   if (count > 0) log(`  ↳ support from cloud: ${count} tickets`);
+  else log(`  ↳ support from cloud: no changes`);
 }
 
 // ── PDF documents מהענן ───────────────────────────────────────────────────────
