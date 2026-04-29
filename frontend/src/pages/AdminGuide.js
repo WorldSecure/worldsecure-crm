@@ -519,8 +519,8 @@ const sections = [
       headers: ['Name', 'Role', 'Access', 'Notes'],
       rows: [
         ['Amit', 'Admin', 'All modules', 'System owner'],
-        ['Silvio', 'Worker / Sales', 'Sales + Support', 'Cloud user'],
-        ['Duli', 'Worker', 'Support', 'Cloud user'],
+        ['Silvio', 'Worker', 'Warehouse + Customer Service', 'Cloud user'],
+        ['Duli', 'Worker', 'Warehouse + Customer Service', 'Cloud user'],
       ]
     }
   },
