@@ -357,6 +357,107 @@ const sections = [
         ],
         tip: 'To create a new keep-alive job (if setting up from scratch): console.cron-job.org → New cronjob → Enter URL → set schedule to: */5 * * * * (every 5 minutes) → Save and Enable.'
       },
+      {
+        title: '2.8 Common Issues per Service',
+        content: 'Quick reference for the most frequent problems encountered with each external service:'
+      },
+      {
+        title: '2.8.1 Render — Common Issues',
+        table: {
+          headers: ['Symptom', 'Cause', 'Solution'],
+          rows: [
+            ['Service shows "Deploying" forever', 'Build error in code', 'Render Dashboard → service → Logs tab → read the error → fix in code → git push origin vercel-fix'],
+            ['Backend starts but immediately crashes', 'Missing Environment Variable or wrong DATABASE_URL', 'Render Dashboard → service → Environment → verify all 5 variables are set. Check Logs for the specific error.'],
+            ['Auto-deploy not triggered after git push', 'GitHub webhook disconnected', 'Render Dashboard → service → Settings → Build & Deploy → verify GitHub connection → click "Reconnect"'],
+            ['First request after idle takes 30+ seconds', 'Free tier spins down after 15 min inactivity', 'Normal. cron-job.org ping prevents this. If cron is off: console.cron-job.org → enable the job.'],
+            ['"Service is live" but changes not visible', 'Browser cache or Cloudflare CDN cache', 'Hard refresh: Ctrl+Shift+R. Or Cloudflare → Caching → Purge Everything.'],
+            ['Free tier limit reached — service suspended', 'Render free tier has monthly usage limits', 'Render Dashboard → Billing → check usage. Upgrade to paid plan or wait for monthly reset.'],
+            ['Environment variable change not taking effect', 'Redeployment did not complete successfully', 'Render Dashboard → service → Logs → verify "Server running on port..." appears after redeploy.'],
+          ]
+        }
+      },
+      {
+        title: '2.8.2 GitHub — Common Issues',
+        table: {
+          headers: ['Symptom', 'Cause', 'Solution'],
+          rows: [
+            ['git push rejected: "non-fast-forward"', 'Remote has commits not in local', 'Run: git pull origin vercel-fix → resolve any conflicts → then git push origin vercel-fix'],
+            ['Author identity unknown — cannot commit', 'Git user not configured on this machine', 'Run: git config --global user.email "info@world-secure.com" && git config --global user.name "Amit Schlossberger"'],
+            ['git push asks for password repeatedly', 'Git credentials not cached', 'Run: git config --global credential.helper manager (Windows). Then push — enter credentials once.'],
+            ['Wrong branch pushed (pushed to main)', 'Used "git push" without specifying branch', 'Always use: git push origin vercel-fix. Never push to main.'],
+            ['Accidentally committed .env file', '.gitignore missing .env entry', 'Run: git rm --cached backend/.env → add .env to .gitignore → commit and push immediately. Rotate all API keys.'],
+            ['Render not auto-deploying despite push', 'Render webhook not connected to GitHub', 'Render Dashboard → service → Settings → GitHub connection → verify and reconnect if needed.'],
+          ]
+        }
+      },
+      {
+        title: '2.8.3 Supabase — Common Issues',
+        table: {
+          headers: ['Symptom', 'Cause', 'Solution'],
+          rows: [
+            ['Project is paused — all API calls fail', 'Supabase free tier pauses after 7 days no activity', 'app.supabase.com → click WorldSecure project → click "Restore project" → wait 2-3 minutes → restart Render backend.'],
+            ['duplicate key value violates unique constraint', 'PostgreSQL sequence out of sync after bulk import or sync', 'Render Dashboard → Restart worldsecure-backend. fixSequences() resets all sequences automatically on startup.'],
+            ['permission denied for table xxx', 'RLS (Row Level Security) accidentally enabled', 'app.supabase.com → Table Editor → click the table → click "RLS enabled" badge → disable RLS immediately.'],
+            ['Connection refused / cannot connect', 'DATABASE_URL wrong or Supabase project paused', 'Verify DATABASE_URL in Render ENV. Check Supabase project is active. Restart Render backend.'],
+            ['SSL connection error', 'Connection string uses wrong port or mode', 'Use URI mode from Supabase: Project Settings → Database → Connection String → URI tab. Never use individual host/user/pass.'],
+            ['Data visible in Supabase but not in app', 'App is using local SQLite, not cloud database', 'Confirm you are accessing app.world-secure.com (cloud), not localhost:3000 (local).'],
+            ['SQL query returns no results unexpectedly', 'RLS filtering rows invisibly', 'Check RLS is disabled on the table: Table Editor → table → verify "RLS disabled" badge.'],
+          ]
+        }
+      },
+      {
+        title: '2.8.4 Brevo — Common Issues',
+        table: {
+          headers: ['Symptom', 'Cause', 'Solution'],
+          rows: [
+            ['Emails not sent — no error in app', 'BREVO_API_KEY missing or invalid in Render ENV', 'app.brevo.com → SMTP & API → API Keys → copy active key → Render Dashboard → worldsecure-backend → Environment → update BREVO_API_KEY → Save.'],
+            ['Emails sent but going to spam', 'DKIM not authenticated', 'app.brevo.com → Senders & IPs → Domains → if "Not authenticated": check brevo1._domainkey and brevo2._domainkey in Cloudflare DNS are set to DNS only (grey cloud), not Proxied.'],
+            ['Domain shows "Not authenticated" in Brevo', 'DKIM CNAME records are Proxied in Cloudflare', 'Cloudflare → world-secure.com → DNS → find brevo1._domainkey → click orange cloud → change to grey (DNS only) → repeat for brevo2._domainkey → back in Brevo click "Authenticate".'],
+            ['"Bounced" emails in Brevo logs', 'Recipient email address is invalid', 'app.brevo.com → Transactional → Email Logs → check bounced email → verify the recipient address in the system.'],
+            ['API key shows "Forbidden" 403 error', 'API key was deleted or deactivated', 'app.brevo.com → SMTP & API → API Keys → create new key → update BREVO_API_KEY in Render ENV.'],
+            ['Daily sending limit reached', 'Brevo free tier has daily email limits', 'app.brevo.com → Dashboard → check daily limit usage. Upgrade plan or wait for daily reset.'],
+          ]
+        }
+      },
+      {
+        title: '2.8.5 PDFShift — Common Issues',
+        table: {
+          headers: ['Symptom', 'Cause', 'Solution'],
+          rows: [
+            ['PDF not generated — error in delivery note', 'PDFSHIFT_API_KEY missing or invalid', 'pdfshift.io/dashboard → copy API key → Render Dashboard → worldsecure-backend → Environment → update PDFSHIFT_API_KEY → Save.'],
+            ['Monthly conversion limit reached', 'Free tier: 50 PDF conversions/month', 'pdfshift.io/dashboard → Usage tab → check remaining. Upgrade plan if needed, or wait for monthly reset.'],
+            ['PDF generated but logo missing', 'Company logo not set in system Settings', 'App → Admin → Settings → upload company logo → Save → try generating PDF again.'],
+            ['PDF generated but content is wrong/old', 'Cached HTML being converted', 'This is a code issue — verify the HTML template in server-cloud.js is reading fresh data from database.'],
+          ]
+        }
+      },
+      {
+        title: '2.8.6 cron-job.org — Common Issues',
+        table: {
+          headers: ['Symptom', 'Cause', 'Solution'],
+          rows: [
+            ['Render backend sleeping despite cron job', 'Cron job disabled or URL wrong', 'console.cron-job.org → click the job → verify Status is "Enabled" and URL is https://worldsecure-backend.onrender.com/api/ping'],
+            ['Execution log shows HTTP errors (not 200)', 'Render backend is down or crashed', 'Render Dashboard → worldsecure-backend → Logs → check for startup errors. Restart if needed.'],
+            ['Cron job not running on schedule', 'Job was paused due to too many failures', 'console.cron-job.org → click job → Notifications tab → check failure alerts. Re-enable the job.'],
+            ['Lost access to cron-job.org account', 'Forgot credentials', 'Use "Forgot password" on console.cron-job.org. Create a new job with same settings if needed.'],
+          ]
+        }
+      },
+      {
+        title: '2.8.7 Cloudflare — Common Issues',
+        table: {
+          headers: ['Symptom', 'Cause', 'Solution'],
+          rows: [
+            ['www.world-secure.com not loading', 'CNAME record missing or wrong', 'Cloudflare → world-secure.com → DNS → verify "www" CNAME points to worldsecure-en.onrender.com and is Proxied (orange).'],
+            ['pt.world-secure.com or fr.world-secure.com shows 404', 'Worker not running or misconfigured', 'Cloudflare → Workers & Pages → worldsecure-proxy → check Deployments tab → redeploy latest version. Verify custom domains: pt.world-secure.com and fr.world-secure.com are attached.'],
+            ['SSL certificate error in browser', 'SSL/TLS mode set to Full instead of Flexible', 'Cloudflare → world-secure.com → SSL/TLS → Overview → change to Flexible. Do NOT use Full or Full (strict) with Render Static Sites.'],
+            ['Website shows old content after update', 'Cloudflare CDN cache serving old files', 'Cloudflare → world-secure.com → Caching → Purge Cache → Purge Everything.'],
+            ['Brevo DKIM not authenticating', 'brevo._domainkey records set to Proxied', 'Cloudflare → DNS → find brevo1._domainkey and brevo2._domainkey → change both to DNS only (grey cloud). Then re-authenticate in Brevo.'],
+            ['app.world-secure.com not loading (CRM)', 'CNAME for "app" missing or wrong', 'Cloudflare → DNS → verify "app" CNAME points to worldsecure-frontend.onrender.com and is Proxied (orange).'],
+            ['Changes to DNS not taking effect', 'Cloudflare propagation delay', 'Cloudflare DNS changes propagate within seconds. If still not working after 5 min: clear browser cache and try incognito window.'],
+          ]
+        }
+      },
     ]
   },
   {
@@ -541,42 +642,93 @@ const sections = [
       {
         title: '9.1 Frontend Won\'t Start (Local)',
         table: {
-          headers: ['Error', 'Solution'],
+          headers: ['Error / Symptom', 'Cause', 'Solution'],
           rows: [
-            ['allowedHosts[0] should be non-empty string', 'Check frontend/.env — delete any blank lines or spaces at the top of the file'],
-            ['Cannot connect to localhost:3001', 'Start backend/server.js first'],
-            ['Module not found', 'Run npm install in the frontend folder'],
+            ['allowedHosts[0] should be non-empty string', 'frontend/.env has blank line or space at top', 'Open frontend/.env — make sure REACT_APP_API_URL=http://localhost:3001 is the FIRST line with no blank lines or spaces before it'],
+            ['Cannot connect to localhost:3001', 'Backend not running', 'Open a terminal → cd crm-project\\backend → node server.js'],
+            ['Module not found: Can\'t resolve \'xxx\'', 'npm packages not installed', 'cd crm-project\\frontend → npm install'],
+            ['Port 3000 already in use', 'Another process using the port', 'Open Task Manager → find node.exe → End task. Then restart.'],
+            ['White screen / blank app', 'JavaScript error on load', 'Open browser DevTools (F12) → Console tab — check error message'],
           ]
         }
       },
       {
         title: '9.2 Sync Errors',
         table: {
-          headers: ['Error', 'Solution'],
+          headers: ['Error / Symptom', 'Cause', 'Solution'],
           rows: [
-            ['duplicate key value violates constraint', 'Restart Render service → fixSequences() runs automatically on startup'],
-            ['Render sleeping / timeout', 'Wait 30 seconds after first request — Render wakes up on free tier'],
-            ['Categories returning after deletion', 'Check deleted_entities in SQLite — entry must exist for the deleted record'],
+            ['duplicate key value violates unique constraint "inbound_items_pkey"', 'PostgreSQL sequence out of sync with actual MAX(id)', 'Render Dashboard → worldsecure-backend → top-right menu → Restart service. fixSequences() runs automatically on startup.'],
+            ['Sync skips many entities on first run (categories: no changes — skipped)', 'sync_state table has old timestamps from previous sync version', 'In sync-to-cloud.js, increase SYNC_VERSION number by 1 (e.g. from \'5\' to \'6\') — this resets sync_state on next startup'],
+            ['Newly created category/attribute disappears after sync', 'Race condition: CLOUD→LOCAL pull marks local new record as deleted before it reaches the cloud', 'This is fixed in v5+. If it happens: re-create the item locally and wait for next sync cycle.'],
+            ['Render sleeping / first request takes 30s', 'Render free tier spins down after 15 min inactivity', 'Normal behavior. cron-job.org ping prevents it. If cron is disabled: console.cron-job.org → verify job is Enabled.'],
+            ['Categories/customers/products not syncing to cloud after edit', 'meta_updated_at or updated_at not set on save', 'Check server.js — the PUT route must set meta_updated_at=datetime(\'now\') or updated_at=datetime(\'now\')'],
+            ['Translation changes not syncing to cloud', 'translate-existing does not update meta_updated_at', 'Fixed in latest server.js. If using old version: update translate route to set meta_updated_at on UPDATE.'],
+            ['sync_state reset — full sync will run on every startup', 'SYNC_VERSION in sync-to-cloud.js does not match stored version', 'Normal on first run after version change. If recurring: check sync_meta table in SQLite.'],
           ]
         }
       },
       {
-        title: '9.3 PWA Not Updating on Mobile',
-        steps: [
-          { step: 'Step 1', title: 'Open the PWA on the mobile device' },
-          { step: 'Step 2', title: 'Open browser settings → Site Settings → Clear Data' },
-          { step: 'Step 3', title: 'Reopen the app — the new version will load' },
-        ],
-        tip: 'Permanent fix: Update CACHE_NAME in service-worker.js before every significant deploy.'
+        title: '9.3 Cloud Database Issues (Supabase)',
+        table: {
+          headers: ['Error / Symptom', 'Cause', 'Solution'],
+          rows: [
+            ['duplicate key value violates unique constraint', 'PostgreSQL sequence behind actual MAX(id)', 'Render Dashboard → Restart worldsecure-backend. fixSequences() resets all sequences on startup.'],
+            ['Cannot edit Inbound/Outbound transaction in cloud — error on save', 'Same sequence issue — INSERT after DELETE fails', 'Restart Render backend. Then retry the edit.'],
+            ['Inbound/Outbound items doubled after editing locally then syncing', 'Edit failed in cloud (sequence error) + sync sent new items on top of old ones', 'Restart Render backend (fixes sequence). Then in Supabase SQL Editor: DELETE FROM inbound_items WHERE transaction_id=X; and re-sync.'],
+            ['Database project paused', 'Supabase free tier pauses after 7 days of no activity', 'app.supabase.com → click the WorldSecure project → click "Restore project" → wait 2-3 minutes'],
+            ['RLS policy error / permission denied', 'Row Level Security was accidentally enabled on a table', 'app.supabase.com → Table Editor → click the table → disable RLS immediately'],
+          ]
+        }
       },
       {
-        title: '9.4 Render Deploy Failed',
-        steps: [
-          { step: 'Step 1', title: 'Go to render.com → Select the service → Logs tab' },
-          { step: 'Step 2', title: 'Identify the error in the build/deploy logs' },
-          { step: 'Step 3', title: 'Common fix: verify all Environment Variables are correctly set' },
-          { step: 'Step 4', title: 'Trigger a Manual Deploy from the Render Dashboard after fixing' },
-        ]
+        title: '9.4 PWA / Mobile Issues',
+        table: {
+          headers: ['Symptom', 'Solution'],
+          rows: [
+            ['PWA shows old version after deploy', 'Open the PWA → browser settings → Site Settings → Clear Data → reopen'],
+            ['PWA not installable (no install prompt)', 'manifest.json or service-worker.js has an error. Check browser DevTools → Application tab → Manifest'],
+            ['Service Worker error: Failed to update (localhost)', 'Normal in development — service-worker.js only works in production build. Ignore this error.'],
+            ['App works on wifi but not on mobile data', 'API URL is localhost — make sure cloud users access app.world-secure.com, not localhost'],
+            ['Login works locally but fails in cloud PWA', 'JWT_SECRET mismatch between local .env and Render ENV variable', 'Verify JWT_SECRET is identical in backend/.env and in Render Environment Variables'],
+          ]
+        }
+      },
+      {
+        title: '9.5 Render Deploy Issues',
+        table: {
+          headers: ['Symptom', 'Cause', 'Solution'],
+          rows: [
+            ['Deploy stuck / never completes', 'Build error in code', 'Render Dashboard → service → Logs tab → read build output → fix the error → push again'],
+            ['Auto-deploy not triggered after git push', 'GitHub webhook disconnected from Render', 'Render Dashboard → service → Settings → Build & Deploy → verify GitHub repo and branch are correct'],
+            ['Backend starts but API returns 500 errors', 'Missing or wrong Environment Variable', 'Render Dashboard → service → Environment → check all 5 variables are set correctly'],
+            ['"Your service is live" but app shows old version', 'Browser cache or Cloudflare cache', 'Hard refresh (Ctrl+Shift+R) or Cloudflare Dashboard → Caching → Purge Everything'],
+            ['Backend crashes immediately after start', 'DATABASE_URL wrong or Supabase project paused', 'Check Render Logs for the error. Verify DATABASE_URL. Check if Supabase project is paused.'],
+          ]
+        }
+      },
+      {
+        title: '9.6 Email & PDF Issues',
+        table: {
+          headers: ['Symptom', 'Cause', 'Solution'],
+          rows: [
+            ['Emails not sending from system', 'BREVO_API_KEY missing or expired in Render ENV', 'app.brevo.com → SMTP & API → API Keys → verify key is active → update in Render ENV if needed'],
+            ['Emails going to spam', 'DKIM authentication broken', 'app.brevo.com → Senders & IPs → Domains → check world-secure.com shows Authenticated. If not: verify brevo1._domainkey and brevo2._domainkey in Cloudflare are DNS only (not Proxied).'],
+            ['PDF not generated — error on delivery note', 'PDFSHIFT_API_KEY missing or monthly limit reached', 'pdfshift.io/dashboard → check API key and usage. Update key in Render ENV if expired.'],
+            ['PDF generates but logo is missing', 'Logo not set in system Settings or wrong URL', 'Admin → Settings → upload company logo → save → try again'],
+          ]
+        }
+      },
+      {
+        title: '9.7 Translation Issues',
+        table: {
+          headers: ['Symptom', 'Cause', 'Solution'],
+          rows: [
+            ['Translate button shows 0 translated', 'Products have name_he = name (English copied as Hebrew)', 'Fixed in latest server.js — translate filter now catches name_he=name. If using old version: update translate-existing route filter.'],
+            ['Translation works locally but not in cloud', 'ANTHROPIC_API_KEY not set in Render ENV', 'Render Dashboard → worldsecure-backend → Environment → add ANTHROPIC_API_KEY with your Claude API key'],
+            ['Translated products not syncing to cloud', 'translate-existing did not update meta_updated_at', 'Fixed in latest server.js. If still occurring: in Supabase SQL Editor run: UPDATE products SET meta_updated_at=NOW() WHERE name_he != name AND name_he IS NOT NULL;'],
+            ['Translation times out in cloud (returns 0)', 'Too many products × API delay = Render timeout', 'Fixed in latest version (delay reduced to 200ms). Run translate in batches if needed.'],
+          ]
+        }
       }
     ]
   },
