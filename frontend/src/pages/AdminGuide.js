@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 
 function useIsMobile(breakpoint = 600) {
   const [isMobile, setIsMobile] = useState(() => {
@@ -1225,6 +1225,42 @@ function SectionBlock({ sec, isMobile, styles }) {
 
 export default function AdminGuide() {
   const isMobile = useIsMobile(600);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showTOC, setShowTOC] = useState(false);
+  const sectionRefs = useRef({});
+
+  // Build flat list of all sections and subsections for TOC and search
+  const allItems = [];
+  sections.forEach((sec, i) => {
+    allItems.push({ title: sec.title, id: `sec-${i}`, isMain: true });
+    if (sec.subsections) {
+      sec.subsections.forEach((sub, k) => {
+        allItems.push({ title: sub.title, id: `sec-${i}-sub-${k}`, isMain: false });
+      });
+    }
+  });
+
+  const scrollTo = (id) => {
+    const el = sectionRefs.current[id];
+    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    setShowTOC(false);
+  };
+
+  // Filter sections by search
+  const searchLower = searchQuery.toLowerCase();
+  const matchesSearch = (text) => !searchQuery || (text && text.toLowerCase().includes(searchLower));
+
+  const sectionMatches = (sec) => {
+    if (!searchQuery) return true;
+    if (matchesSearch(sec.title) || matchesSearch(sec.content) || matchesSearch(sec.intro) ||
+        matchesSearch(sec.note) || matchesSearch(sec.tip) || matchesSearch(sec.warning)) return true;
+    if (sec.steps && sec.steps.some(s => matchesSearch(s.title) || matchesSearch(s.desc))) return true;
+    if (sec.table && sec.table.rows && sec.table.rows.some(r => r.some(cell => matchesSearch(cell)))) return true;
+    if (sec.subsections && sec.subsections.some(sub => sectionMatches(sub))) return true;
+    return false;
+  };
+
+  const filteredSections = sections.filter(sectionMatches);
 
   const styles = {
     container: { maxWidth: '900px', margin: '0 auto', padding: isMobile ? '0.75rem' : '2rem', fontFamily: 'Arial, sans-serif', boxSizing: 'border-box' },
@@ -1250,41 +1286,148 @@ export default function AdminGuide() {
 
   return (
     <div style={styles.container}>
+      {/* Header */}
       <div style={styles.header}>
         <h1 style={styles.title}>📖 System User Guide</h1>
         <div style={{ fontSize: '0.8rem', color: '#888', fontStyle: 'italic' }}>Admin Reference — v1.0 · April 2026</div>
       </div>
 
+      {/* Search + TOC Bar */}
+      <div style={{ display: 'flex', gap: '0.6rem', marginBottom: '1.2rem', alignItems: 'center', flexWrap: 'wrap' }}>
+        {/* Search */}
+        <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>
+          <span style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)', color: '#999', fontSize: '0.95rem' }}>🔍</span>
+          <input
+            type="text"
+            placeholder="Search guide..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{ width: '100%', padding: '0.55rem 0.75rem 0.55rem 2.1rem', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '0.9rem', outline: 'none', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif' }}
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} style={{ position: 'absolute', right: '0.6rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#999', fontSize: '1rem', lineHeight: 1 }}>×</button>
+          )}
+        </div>
+
+        {/* TOC Button */}
+        <button
+          onClick={() => setShowTOC(!showTOC)}
+          style={{ padding: '0.55rem 1rem', background: showTOC ? '#1B3A6B' : '#fff', color: showTOC ? '#fff' : '#1B3A6B', border: '1px solid #1B3A6B', borderRadius: '8px', fontSize: '0.88rem', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'Arial, sans-serif' }}
+        >
+          📋 {showTOC ? 'Hide Contents' : 'Table of Contents'}
+        </button>
+      </div>
+
+      {/* Search result count */}
+      {searchQuery && (
+        <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.8rem', padding: '0.4rem 0.8rem', background: '#f8f9fa', borderRadius: '6px' }}>
+          {filteredSections.length === 0 ? '❌ No results found' : `✅ Found ${filteredSections.length} section${filteredSections.length !== 1 ? 's' : ''} matching "${searchQuery}"`}
+        </div>
+      )}
+
+      {/* Table of Contents Panel */}
+      {showTOC && (
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', marginBottom: '1.2rem', maxHeight: isMobile ? '60vh' : '70vh', overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.1)' }}>
+          <div style={{ background: '#1B3A6B', color: '#fff', padding: '0.7rem 1.2rem', fontWeight: 700, fontSize: '0.95rem', borderRadius: '10px 10px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>📋 Table of Contents</span>
+            <button onClick={() => setShowTOC(false)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.3rem', cursor: 'pointer', lineHeight: 1 }}>×</button>
+          </div>
+          {/* PART I */}
+          <div style={{ padding: '0.5rem 1rem 0.3rem', background: '#EEF4FF', fontSize: '0.78rem', fontWeight: 700, color: '#2E5AB6', textTransform: 'uppercase', letterSpacing: '0.05em' }}>PART I — IT Reference</div>
+          {allItems.filter(item => {
+            const idx = parseInt(item.id.split('-')[1]);
+            return idx < 13;
+          }).map(item => (
+            <button key={item.id} onClick={() => scrollTo(item.id)}
+              style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', padding: item.isMain ? '0.55rem 1.2rem' : '0.35rem 1.2rem 0.35rem 2.2rem', fontSize: item.isMain ? '0.88rem' : '0.82rem', color: item.isMain ? '#1B3A6B' : '#555', fontWeight: item.isMain ? 700 : 400, borderBottom: item.isMain ? '1px solid #f0f0f0' : 'none', fontFamily: 'Arial, sans-serif' }}
+              onMouseEnter={e => e.currentTarget.style.background = '#f0f4ff'}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}
+            >
+              {item.isMain ? item.title : `↳ ${item.title}`}
+            </button>
+          ))}
+          {/* PART II */}
+          <div style={{ padding: '0.5rem 1rem 0.3rem', background: '#E8F4FD', fontSize: '0.78rem', fontWeight: 700, color: '#2E75B6', textTransform: 'uppercase', letterSpacing: '0.05em' }}>PART II — User Manual</div>
+          {allItems.filter(item => {
+            const idx = parseInt(item.id.split('-')[1]);
+            return idx >= 13;
+          }).map(item => (
+            <button key={item.id} onClick={() => scrollTo(item.id)}
+              style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', padding: item.isMain ? '0.55rem 1.2rem' : '0.35rem 1.2rem 0.35rem 2.2rem', fontSize: item.isMain ? '0.88rem' : '0.82rem', color: item.isMain ? '#1B3A6B' : '#555', fontWeight: item.isMain ? 700 : 400, borderBottom: item.isMain ? '1px solid #f0f0f0' : 'none', fontFamily: 'Arial, sans-serif' }}
+              onMouseEnter={e => e.currentTarget.style.background = '#f0f4ff'}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}
+            >
+              {item.isMain ? item.title : `↳ ${item.title}`}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div style={styles.partBanner('#1B3A6B')}>PART I — System Reference Manual (IT)</div>
 
-      {sections.map((sec, i) => {
-        if (i === 13) {
+      {filteredSections.map((sec, i) => {
+        const origIdx = sections.indexOf(sec);
+        const id = `sec-${origIdx}`;
+        if (origIdx === 13) {
           return (
-            <React.Fragment key={i}>
+            <React.Fragment key={id}>
               <div style={styles.partBanner('#2E75B6')}>PART II — User Manual (All Users)</div>
-              <SectionCard sec={sec} isMobile={isMobile} styles={styles} />
+              <div ref={el => sectionRefs.current[id] = el}>
+                <SectionCard sec={sec} isMobile={isMobile} styles={styles} searchQuery={searchQuery} sectionRefs={sectionRefs} origIdx={origIdx} />
+              </div>
             </React.Fragment>
           );
         }
-        return <SectionCard key={i} sec={sec} isMobile={isMobile} styles={styles} />;
+        return (
+          <div key={id} ref={el => sectionRefs.current[id] = el}>
+            <SectionCard sec={sec} isMobile={isMobile} styles={styles} searchQuery={searchQuery} sectionRefs={sectionRefs} origIdx={origIdx} />
+          </div>
+        );
       })}
+
+      {filteredSections.length === 0 && searchQuery && (
+        <div style={{ textAlign: 'center', padding: '3rem', color: '#999', fontSize: '1rem' }}>
+          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🔍</div>
+          <div>No sections found for "<strong>{searchQuery}</strong>"</div>
+          <button onClick={() => setSearchQuery('')} style={{ marginTop: '1rem', padding: '0.5rem 1.2rem', background: '#2E75B6', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9rem' }}>Clear search</button>
+        </div>
+      )}
     </div>
   );
 }
 
-function SectionCard({ sec, isMobile, styles }) {
+function highlight(text, query) {
+  if (!query || !text) return text;
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return text;
+  return <span>{text.slice(0, idx)}<mark style={{ background: '#FFF176', borderRadius: '2px' }}>{text.slice(idx, idx + query.length)}</mark>{text.slice(idx + query.length)}</span>;
+}
+
+function SectionCard({ sec, isMobile, styles, searchQuery = '', sectionRefs = { current: {} }, origIdx = 0 }) {
+  const subsToShow = searchQuery
+    ? (sec.subsections || []).filter(sub => {
+        const q = searchQuery.toLowerCase();
+        return [sub.title, sub.content, sub.intro, sub.note, sub.tip, sub.warning].some(t => t && t.toLowerCase().includes(q)) ||
+          (sub.steps && sub.steps.some(s => [s.title, s.desc].some(t => t && t.toLowerCase().includes(q)))) ||
+          (sub.table && sub.table.rows && sub.table.rows.some(r => r.some(cell => cell && cell.toLowerCase().includes(q))));
+      })
+    : (sec.subsections || []);
+
   return (
     <div style={styles.section}>
       <h2 style={styles.sectionTitle}>{sec.title}</h2>
       <div style={styles.sectionBody}>
         <SectionBlock sec={sec} isMobile={isMobile} styles={styles} />
-        {sec.subsections && sec.subsections.map((sub, k) => (
-          <div key={k}>
-            <div style={styles.divider} />
-            <div style={styles.subsectionTitle}>{sub.title}</div>
-            <SectionBlock sec={sub} isMobile={isMobile} styles={styles} />
-          </div>
-        ))}
+        {subsToShow.map((sub, k) => {
+          const subId = `sec-${origIdx}-sub-${(sec.subsections || []).indexOf(sub)}`;
+          return (
+            <div key={k} ref={el => sectionRefs.current[subId] = el}>
+              <div style={styles.divider} />
+              <div style={styles.subsectionTitle}>{highlight(sub.title, searchQuery)}</div>
+              <SectionBlock sec={sub} isMobile={isMobile} styles={styles} />
+            </div>
+          );
+        })}
       </div>
     </div>
   );
