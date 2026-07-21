@@ -22,6 +22,7 @@ export const he = {
   register: 'הרשם',
   email: 'אימייל',
   password: 'סיסמה',
+  forgot_password_contact_admin: 'שכחת סיסמה? פנה למנהל המערכת לאיפוס.',
   username: 'שם משתמש',
   
   // Navigation

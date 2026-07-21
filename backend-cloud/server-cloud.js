@@ -84,11 +84,34 @@ const logTicketHistory = async (ticketId, userId, username, action, details = {}
 app.post('/api/auth/register', async (req, res) => {
   const { username, email, password, role } = req.body;
   try {
+    if (!username?.trim() || !email?.trim() || !password) {
+      return res.status(400).json({ error: 'Username, email and password are required' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
     const existing = await query('SELECT id FROM users WHERE email=$1', [email]);
     if (existing.rows.length) return res.status(400).json({ error: 'User already exists' });
 
     const countRes = await query('SELECT COUNT(*) as count FROM users');
     const isFirst  = parseInt(countRes.rows[0].count) === 0;
+
+    // ── SECURITY: registration is NOT public ──────────────────────────────────
+    // Only two cases are allowed:
+    //   1. Bootstrapping the very first user of an empty system (becomes admin).
+    //   2. A logged-in admin creating a user (token sent in Authorization header).
+    // Anything else is rejected — otherwise anyone on the internet could create
+    // themselves an account in the CRM.
+    if (!isFirst) {
+      const token = req.headers['authorization']?.split(' ')[1];
+      let caller = null;
+      if (token) { try { caller = jwt.verify(token, JWT_SECRET); } catch (e) { caller = null; } }
+      if (!caller || caller.role !== 'admin') {
+        return res.status(403).json({ error: 'Registration is disabled. Contact your administrator.' });
+      }
+    }
+
     const userRole = isFirst ? 'admin' : (role || 'worker');
     const hashed   = await bcrypt.hash(password, 10);
 

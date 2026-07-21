@@ -111,6 +111,13 @@ app.post('/api/auth/register', async (req, res) => {
   const { username, email, password, role } = req.body;
 
   try {
+    if (!username?.trim() || !email?.trim() || !password) {
+      return res.status(400).json({ error: 'Username, email and password are required' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
     // Check if user already exists
     db.get('SELECT * FROM users WHERE email = ?', [email], async (err, user) => {
       if (user) {
@@ -120,6 +127,19 @@ app.post('/api/auth/register', async (req, res) => {
       // Check if this is the first user
       db.get('SELECT COUNT(*) as count FROM users', [], async (err, result) => {
         const isFirstUser = result.count === 0;
+
+        // ── SECURITY: registration is NOT public ────────────────────────────
+        // Allowed only when bootstrapping the very first user, or when a
+        // logged-in admin creates a user (token in the Authorization header).
+        if (!isFirstUser) {
+          const token = req.headers['authorization']?.split(' ')[1];
+          let caller = null;
+          if (token) { try { caller = jwt.verify(token, JWT_SECRET); } catch (e) { caller = null; } }
+          if (!caller || caller.role !== 'admin') {
+            return res.status(403).json({ error: 'Registration is disabled. Contact your administrator.' });
+          }
+        }
+
         const userRole = isFirstUser ? 'admin' : (role || 'user');
         
         const hashedPassword = await bcrypt.hash(password, 10);

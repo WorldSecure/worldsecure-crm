@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../utils/AuthContext';
 import { useLanguage } from '../utils/LanguageContext';
 
@@ -90,11 +90,8 @@ function Login() {
         </form>
 
         <div className="auth-footer">
-          <p>
-            {t('register')}?{' '}
-            <Link to="/register" className="auth-link">
-              {t('register')}
-            </Link>
+          <p style={{ color: '#7f8c8d', fontSize: '0.9rem' }}>
+            {t('forgot_password_contact_admin')}
           </p>
         </div>
       </div>

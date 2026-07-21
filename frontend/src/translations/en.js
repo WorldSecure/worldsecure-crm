@@ -22,6 +22,7 @@ export const en = {
   register: 'Register',
   email: 'Email',
   password: 'Password',
+  forgot_password_contact_admin: 'Forgot your password? Contact your administrator for a reset.',
   username: 'Username',
   
   // Navigation

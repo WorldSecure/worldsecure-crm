@@ -7,7 +7,6 @@ import Layout from './components/Layout';
 import SalesLayout from './components/SalesLayout';
 import SupportLayout from './components/SupportLayout';
 import Login from './pages/Login';
-import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Products from './pages/Products';
 import Suppliers from './pages/Suppliers';
@@ -324,7 +323,6 @@ function AppRoutes() {
     return (
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
         <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
     );
@@ -400,7 +398,6 @@ function AppRoutes() {
           </Route>
 
           <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
         </Routes>
       </div>
     </div>

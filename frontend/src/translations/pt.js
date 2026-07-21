@@ -22,6 +22,7 @@ export const pt = {
   register: 'Registrar',
   email: 'Email',
   password: 'Senha',
+  forgot_password_contact_admin: 'Esqueceu a senha? Contacte o administrador para redefinir.',
   username: 'Nome de usuário',
   
   // Navigation
